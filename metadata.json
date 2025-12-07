@@ -1,0 +1,8 @@
+{
+  "name": "Elite Sprint Coach AI",
+  "description": "World Athletics Level V Intelligence for Sprinters. Mobile-first training planner, biomechanical analyzer, and performance tracker.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
