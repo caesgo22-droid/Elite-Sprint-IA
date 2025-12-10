@@ -2,13 +2,13 @@ import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { analyzeTechnique } from '../services/geminiService';
-import { calculateSprintMechanics } from '../utils/biomechanicsUtils';
+import { calculateSprintMechanics, estimateStrideParams } from '../utils/biomechanicsUtils';
 import { BiomechanicalAnalysis } from '../types';
-import { Loader2, AlertTriangle, CheckCircle, History, ScanLine, UploadCloud, Play, Download, Share, Zap } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle, History, ScanLine, UploadCloud, Play, Download, Share, Zap, Info, ToggleLeft, ToggleRight, Ruler } from 'lucide-react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 
 const VideoAnalyzer: React.FC = () => {
-  const { saveAnalysis, analysisHistory } = useApp();
+  const { saveAnalysis, analysisHistory, userProfile } = useApp();
   const [sessionAnalyses, setSessionAnalyses] = useState<BiomechanicalAnalysis[]>([]);
   const [loading, setLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -18,6 +18,17 @@ const VideoAnalyzer: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [poseLandmarker, setPoseLandmarker] = useState<PoseLandmarker | null>(null);
   const [measuredData, setMeasuredData] = useState<any>(null);
+  const [advancedMetrics, setAdvancedMetrics] = useState({ strideLen: '-', velocity: '-' });
+  
+  // Save to History Toggle
+  const [saveToHistory, setSaveToHistory] = useState(true);
+  
+  // Tooltip State
+  const [activeTooltip, setActiveTooltip] = useState<{title: string, text: string} | null>(null);
+
+  // Velocity Calculation Refs
+  const prevHipX = useRef<number | null>(null);
+  const prevTime = useRef<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -43,7 +54,10 @@ const VideoAnalyzer: React.FC = () => {
         setPreviewUrl(url);
         setSessionAnalyses([]);
         setIsVideo(file.type.startsWith('video/'));
-        setMeasuredData(null); 
+        setMeasuredData(null);
+        setAdvancedMetrics({ strideLen: '-', velocity: '-' });
+        prevHipX.current = null;
+        prevTime.current = null;
         setTimeout(() => { if(videoRef.current) { videoRef.current.load(); videoRef.current.currentTime = 0.1; } }, 500);
     }
   };
@@ -58,6 +72,7 @@ const VideoAnalyzer: React.FC = () => {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
       
+      // Precision Fix: Match canvas dimensions to video display size for accurate overlay
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       
@@ -91,6 +106,21 @@ const VideoAnalyzer: React.FC = () => {
 
           const mechanics = calculateSprintMechanics(landmarks);
           if(mechanics) setMeasuredData(mechanics);
+
+          // Calibrated Metrics (Velocity/Stride)
+          const advanced = estimateStrideParams(
+              landmarks, 
+              userProfile.height || 175, 
+              prevHipX.current, 
+              prevTime.current, 
+              startTimeMs
+          );
+          
+          setAdvancedMetrics({ strideLen: advanced.strideLen, velocity: advanced.velocity });
+          
+          // Update Refs
+          prevHipX.current = advanced.currentHipX;
+          prevTime.current = startTimeMs;
       }
   };
 
@@ -117,12 +147,16 @@ const VideoAnalyzer: React.FC = () => {
         }
         
         setStatusMessage("Consultando al Consejo de Expertos...");
-        const result = await analyzeTechnique(capturedImages, measuredData);
+        // FIX: Passing advancedMetrics to AI
+        const result = await analyzeTechnique(capturedImages, measuredData, advancedMetrics);
         
         if(result) {
              const analysis = { ...result, id: Date.now().toString(), type: 'Sequence' as const, thumbnail: `data:image/webp;base64,${capturedImages[1]}` };
              setSessionAnalyses(prev => [analysis, ...prev]);
-             saveAnalysis(analysis);
+             // Only save if toggle is ON
+             if (saveToHistory) {
+                 saveAnalysis(analysis);
+             }
         }
 
     } catch(e) { console.error(e); } finally { setLoading(false); }
@@ -132,6 +166,10 @@ const VideoAnalyzer: React.FC = () => {
       const text = `ANÁLISIS ELITE SPRINT AI\nFase: ${analysis.phaseDetected}\nScore: ${analysis.score}/100\nErrores: ${analysis.criticalErrors.join(', ')}\nCorrecciones: ${analysis.correctiveDrills.join(', ')}`;
       try { await navigator.clipboard.writeText(text); alert("Reporte copiado."); } catch(e) { console.error(e); }
   };
+
+  const InfoButton = ({ title, text }: { title: string, text: string }) => (
+      <button onClick={(e) => { e.stopPropagation(); setActiveTooltip({ title, text }); }} className="text-slate-400 hover:text-white ml-1 inline-flex"><Info size={10} /></button>
+  );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-16">
@@ -169,24 +207,31 @@ const VideoAnalyzer: React.FC = () => {
                 </div>
             ) : (
                 <div className="space-y-6">
-                    <div className="relative rounded-2xl overflow-hidden bg-black max-h-[60vh] mx-auto shadow-2xl border border-slate-800 ring-1 ring-white/10">
+                    <div className="relative rounded-2xl overflow-hidden bg-black max-h-[60vh] mx-auto shadow-2xl border border-slate-800 ring-1 ring-white/10 flex justify-center items-center bg-contain">
                         {isVideo ? (
-                            <video ref={videoRef} src={previewUrl} className="w-full h-auto" playsInline muted controls={false} onLoadedData={() => detectPose()} onSeeked={() => detectPose()} />
+                            <video ref={videoRef} src={previewUrl} className="w-full h-auto max-h-[60vh]" playsInline muted controls={false} onLoadedData={() => detectPose()} onSeeked={() => detectPose()} />
                         ) : <img src={previewUrl} className="w-full h-full object-contain" />}
                         <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-80" />
                         
-                        {/* DESKTOP HUD */}
+                        {/* DESKTOP HUD - Calibrated */}
                         {measuredData && (
-                            <div className="hidden md:grid absolute bottom-4 left-4 right-4 grid-cols-2 gap-2 pointer-events-none">
-                                <div className="bg-slate-950/80 backdrop-blur p-2 rounded-lg border border-slate-700">
-                                    <div className="text-[10px] text-slate-400 font-bold uppercase">Rodilla (Recobro)</div>
+                            <div className="hidden md:grid absolute bottom-4 left-4 right-4 grid-cols-4 gap-2 pointer-events-none">
+                                <div className="bg-slate-950/80 backdrop-blur p-2 rounded-lg border border-slate-700 pointer-events-auto">
+                                    <div className="text-[10px] text-slate-400 font-bold uppercase flex items-center">Rodilla <InfoButton title="Ángulo de Rodilla" text="Recobro óptimo < 60°."/></div>
                                     <div className={`text-sm font-mono font-bold ${measuredData.knee.color}`}>{measuredData.knee.value}</div>
-                                    <div className="text-[9px] text-white/70">{measuredData.knee.feedback}</div>
                                 </div>
-                                <div className="bg-slate-900/80 backdrop-blur p-2 rounded-lg border border-slate-700">
-                                    <div className="text-[10px] text-slate-400 font-bold uppercase">Cadera (Extensión)</div>
+                                <div className="bg-slate-950/80 backdrop-blur p-2 rounded-lg border border-slate-700 pointer-events-auto">
+                                    <div className="text-[10px] text-slate-400 font-bold uppercase flex items-center">Cadera <InfoButton title="Extensión de Cadera" text="Triple extensión > 165°."/></div>
                                     <div className={`text-sm font-mono font-bold ${measuredData.hip.color}`}>{measuredData.hip.value}</div>
-                                    <div className="text-[9px] text-white/70">{measuredData.hip.feedback}</div>
+                                </div>
+                                {/* NEW METRICS */}
+                                <div className="bg-slate-900/90 backdrop-blur p-2 rounded-lg border border-cyan-900/50 pointer-events-auto">
+                                    <div className="text-[10px] text-cyan-400 font-bold uppercase flex items-center">Velocidad <InfoButton title="Velocidad Est." text="Calculada usando tu altura como referencia de escala."/></div>
+                                    <div className="text-sm font-mono font-bold text-white">{advancedMetrics.velocity}</div>
+                                </div>
+                                <div className="bg-slate-900/90 backdrop-blur p-2 rounded-lg border border-cyan-900/50 pointer-events-auto">
+                                    <div className="text-[10px] text-cyan-400 font-bold uppercase flex items-center">Zancada <InfoButton title="Longitud Zancada" text="Distancia estimada entre tobillos."/></div>
+                                    <div className="text-sm font-mono font-bold text-white">{advancedMetrics.strideLen}</div>
                                 </div>
                             </div>
                         )}
@@ -196,23 +241,42 @@ const VideoAnalyzer: React.FC = () => {
                     {measuredData && (
                         <div className="md:hidden grid grid-cols-2 gap-2 animate-in fade-in">
                             <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
-                                <div className="text-[10px] text-slate-400 font-bold uppercase">Rodilla</div>
+                                <div className="text-[10px] text-slate-400 font-bold uppercase flex items-center justify-between">Rodilla <InfoButton title="Recobro" text="Busca talón al glúteo (<60°)."/></div>
                                 <div className={`text-xl font-bold ${measuredData.knee.color}`}>{measuredData.knee.value}</div>
-                                <div className="text-[10px] text-slate-300">{measuredData.knee.feedback}</div>
                             </div>
                             <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
-                                <div className="text-[10px] text-slate-400 font-bold uppercase">Cadera</div>
+                                <div className="text-[10px] text-slate-400 font-bold uppercase flex items-center justify-between">Cadera <InfoButton title="Extensión" text="Busca línea recta."/></div>
                                 <div className={`text-xl font-bold ${measuredData.hip.color}`}>{measuredData.hip.value}</div>
-                                <div className="text-[10px] text-slate-300">{measuredData.hip.feedback}</div>
+                            </div>
+                            {/* Mobile Advanced Metrics */}
+                            <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
+                                <div className="text-[10px] text-cyan-400 font-bold uppercase flex items-center justify-between"><Zap size={10}/> Velocidad</div>
+                                <div className="text-xl font-bold text-white font-mono">{advancedMetrics.velocity}</div>
+                            </div>
+                            <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
+                                <div className="text-[10px] text-cyan-400 font-bold uppercase flex items-center justify-between"><Ruler size={10}/> Zancada</div>
+                                <div className="text-xl font-bold text-white font-mono">{advancedMetrics.strideLen}</div>
                             </div>
                         </div>
                     )}
                     
-                    <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 flex gap-3 backdrop-blur-sm sticky bottom-20 z-10 shadow-lg">
-                        <button onClick={handleAutoSequence} disabled={loading || !poseLandmarker} className="flex-1 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 text-sm shadow-lg shadow-cyan-900/20 active:scale-95 transition-all">
-                            {loading ? <Loader2 className="animate-spin" /> : <ScanLine />} {loading ? statusMessage : '✨ Auto-Análisis Biomecánico'}
-                        </button>
-                        <a href={previewUrl} download="analysis.mp4" className="p-3 bg-slate-800 rounded-lg text-slate-300 hover:text-white border border-slate-700"><Download size={20}/></a>
+                    <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 flex flex-col gap-3 backdrop-blur-sm sticky bottom-20 z-10 shadow-lg">
+                        <div className="flex justify-between items-center px-1">
+                            <span className="text-xs text-slate-400 font-medium">Opciones de Análisis</span>
+                            <div 
+                                onClick={() => setSaveToHistory(!saveToHistory)} 
+                                className={`flex items-center gap-2 cursor-pointer transition-colors ${saveToHistory ? 'text-emerald-400' : 'text-slate-500'}`}
+                            >
+                                <span className="text-[10px] font-bold uppercase">{saveToHistory ? 'Guardar' : 'No Guardar'}</span>
+                                {saveToHistory ? <ToggleRight size={24}/> : <ToggleLeft size={24}/>}
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={handleAutoSequence} disabled={loading || !poseLandmarker} className="flex-1 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 text-sm shadow-lg shadow-cyan-900/20 active:scale-95 transition-all">
+                                {loading ? <Loader2 className="animate-spin" /> : <ScanLine />} {loading ? statusMessage : '✨ Auto-Análisis'}
+                            </button>
+                            <a href={previewUrl} download="analysis.mp4" className="p-3 bg-slate-800 rounded-lg text-slate-300 hover:text-white border border-slate-700"><Download size={20}/></a>
+                        </div>
                     </div>
                     
                     {sessionAnalyses.map((analysis) => (
@@ -230,6 +294,17 @@ const VideoAnalyzer: React.FC = () => {
                 </div>
             )}
            </>
+       )}
+
+       {/* Floating Tooltip */}
+       {activeTooltip && (
+            <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6 backdrop-blur-sm" onClick={() => setActiveTooltip(null)}>
+                <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+                    <h4 className="font-bold text-white mb-2">{activeTooltip.title}</h4>
+                    <p className="text-sm text-slate-300 leading-relaxed">{activeTooltip.text}</p>
+                    <button onClick={() => setActiveTooltip(null)} className="mt-4 w-full bg-slate-800 text-slate-300 py-2 rounded-lg text-sm font-bold">Entendido</button>
+                </div>
+            </div>
        )}
     </div>
   );

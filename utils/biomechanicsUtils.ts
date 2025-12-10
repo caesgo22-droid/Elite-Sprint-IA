@@ -16,6 +16,11 @@ interface MetricResult {
     feedback: string;
 }
 
+export interface AdvancedMetrics {
+    strideLength: string; // "2.10m"
+    velocity: string;     // "10.5 m/s"
+}
+
 // Interprets MediaPipe landmarks to get relevant Sprint Mechanics with Semantic Feedback
 export const calculateSprintMechanics = (landmarks: any): { knee: MetricResult, hip: MetricResult, torso: MetricResult, shin: MetricResult } | null => {
     const leftHip = landmarks[23];
@@ -80,5 +85,62 @@ export const calculateSprintMechanics = (landmarks: any): { knee: MetricResult, 
         hip: { value: `${hipRaw}°`, raw: hipRaw, status: hipStatus, color: hipColor, feedback: hipMsg },
         torso: { value: `${torsoRaw}°`, raw: torsoRaw, status: torsoStatus, color: torsoColor, feedback: torsoMsg },
         shin: { value: `${shinRaw.toFixed(1)}°`, raw: shinRaw, status: 'Acceptable', color: 'text-slate-300', feedback: 'Ataque' }
+    };
+};
+
+/**
+ * Calculates Scale based on user height and estimates Stride/Velocity
+ */
+export const estimateStrideParams = (
+    landmarks: any, 
+    userHeightCm: number,
+    prevHipX: number | null,
+    prevTime: number | null,
+    currentTime: number
+): { strideLen: string, velocity: string, currentHipX: number } => {
+    
+    const nose = landmarks[0];
+    const leftAnkle = landmarks[27];
+    const rightAnkle = landmarks[28];
+    const leftHip = landmarks[23];
+    const rightHip = landmarks[24];
+
+    if (!nose || !leftAnkle || !rightAnkle || !leftHip) return { strideLen: '-', velocity: '-', currentHipX: 0 };
+
+    // 1. Calculate Scale (Meters per Normalized Unit)
+    // Height in frame = Nose Y to Mid-Ankle Y
+    const midAnkleY = (leftAnkle.y + rightAnkle.y) / 2;
+    const heightInFrame = Math.abs(midAnkleY - nose.y); // Normalized 0-1
+    
+    if (heightInFrame < 0.1) return { strideLen: '-', velocity: '-', currentHipX: 0 }; // Too small/far
+
+    const realHeightM = userHeightCm / 100;
+    const scale = realHeightM / heightInFrame; // meters per unit
+
+    // 2. Stride Length (Distance betweeen Ankles X)
+    const strideDistNorm = Math.abs(leftAnkle.x - rightAnkle.x);
+    const strideM = strideDistNorm * scale * 1.8; // Factor 1.8 approximates full stride vs stance width
+    
+    // 3. Velocity (Hip Displacement)
+    const midHipX = (leftHip.x + rightHip.x) / 2;
+    let velocityMps = 0;
+
+    if (prevHipX !== null && prevTime !== null) {
+        const deltaX = Math.abs(midHipX - prevHipX); // Normalized displacement
+        const distM = deltaX * scale;
+        const deltaT = (currentTime - prevTime) / 1000; // Seconds
+        
+        if (deltaT > 0) {
+            velocityMps = distM / deltaT;
+        }
+    }
+
+    // Smoothing output (only show reasonable values)
+    const finalV = velocityMps > 0 && velocityMps < 13 ? velocityMps.toFixed(1) : '-';
+    
+    return {
+        strideLen: `${strideM.toFixed(2)}m`,
+        velocity: finalV === '-' ? '-' : `${finalV} m/s`,
+        currentHipX: midHipX
     };
 };

@@ -1,24 +1,32 @@
-
 export interface PersonalBest {
   time: string;
   date: string;
 }
 
 export interface Injury {
-  type: string; // 'Muscular', 'Articular', 'Tendinosa'
-  location: string; // 'Isquiotibiales', 'Rodilla', etc.
+  type: string;
+  location: string;
   severity: 'Leve' | 'Moderada' | 'Grave';
   status: 'Activa' | 'Recuperación' | 'Resuelta';
 }
 
+// NEW: Coach Interface
+export interface Coach {
+  id: string;
+  name: string;
+  role: 'Head Coach' | 'Assistant' | 'Physio' | 'Biomechanist' | 'Strength Coach' | 'Nutritionist';
+  email?: string;
+  phone?: string;
+  notes?: string;
+}
+
 export interface UserProfile {
   name: string;
-  // Biometrics
   age: number;
-  height: number; // cm
-  weight: number; // kg
-  restingHR?: number; // bpm
-  hrv?: number; // ms
+  height: number;
+  weight: number;
+  restingHR?: number;
+  hrv?: number;
   
   events: string[];
   pbs: {
@@ -27,15 +35,15 @@ export interface UserProfile {
     '400m': PersonalBest;
   };
   
-  // Experience & Context
   experienceLevel: 'Beginner' | 'Intermediate' | 'Advanced' | 'Elite';
   yearsExperience: number;
   
-  // Health
   injuries: Injury[];
   medicalConditions?: string;
   
-  // Availability
+  // NEW: Coaching Staff
+  coaches: Coach[];
+  
   trainingDays: string[]; 
   hoursPerDay: number;
   preferredTime: 'Morning' | 'Afternoon' | 'Evening';
@@ -45,10 +53,10 @@ export interface UserProfile {
 
 export interface SessionFeedback {
   completed: boolean;
-  rpe: number; // 1-10
-  painLevel: number; // 0-10
+  rpe: number;
+  painLevel: number;
   surface: 'Track' | 'Grass' | 'Road' | 'Gym' | 'Other';
-  duration: number; // minutes (New for ACWR)
+  duration: number;
   notes?: string;
   timestamp?: string;
 }
@@ -70,7 +78,7 @@ export interface TrainingPlan {
   phase: 'General Prep' | 'Specific Prep' | 'Pre-Comp' | 'Competition' | 'Transition';
   sessions: TrainingSession[];
   weeklyGoal: string;
-  rationale: string; // New: Justification per PDF
+  rationale: string;
   focusEvent?: string;
   archivedAt?: string;
   acwrStatus?: {
@@ -115,8 +123,6 @@ export interface ChatMessage {
   timestamp: number;
   isToolLog?: boolean;
 }
-
-// --- MASTERMIND & HAWK-EYE TYPES ---
 
 export interface Drill {
   name: string;

@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { UserProfile, TrainingPlan, PerformanceLog, ChatMessage, BiomechanicalAnalysis } from '../types';
 import { auth, saveUserProfile, saveTrainingPlan, addPerformanceLog, updatePerformanceLog, deletePerformanceLog, fetchUserData, saveAnalysisToHistory, getAnalysisHistory, isInitialized, archivePlan, getPlanHistory } from '../services/firebase';
@@ -27,7 +26,7 @@ interface AppContextType {
   setLastAnalysis: (analysis: BiomechanicalAnalysis) => void;
   analysisHistory: BiomechanicalAnalysis[];
   saveAnalysis: (analysis: BiomechanicalAnalysis) => void;
-  acwrStats: LoadStats | null; // GLOBAL OMNI-AWARENESS
+  acwrStats: LoadStats | null;
   planHistory: TrainingPlan[];
 }
 
@@ -45,6 +44,8 @@ const defaultProfile: UserProfile = {
   experienceLevel: 'Intermediate',
   yearsExperience: 2,
   injuries: [],
+  // NEW: Default coaches
+  coaches: [],
   trainingDays: ['Mon', 'Tue', 'Thu', 'Fri'],
   hoursPerDay: 2,
   preferredTime: 'Afternoon',
@@ -82,9 +83,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const data = await fetchUserData(currentUser.uid);
           if (data.profile) {
              const loadedProfile = data.profile as any;
-             if (loadedProfile.event && !loadedProfile.events) {
-                 loadedProfile.events = [loadedProfile.event];
-             }
+             // Migration helpers
+             if (loadedProfile.event && !loadedProfile.events) loadedProfile.events = [loadedProfile.event];
+             if (!loadedProfile.coaches) loadedProfile.coaches = []; // Ensure coaches exist
+             
              setUserProfile({ ...defaultProfile, ...loadedProfile });
           }
           if (data.currentPlan) setCurrentPlan(data.currentPlan);

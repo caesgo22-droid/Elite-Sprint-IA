@@ -96,20 +96,33 @@ export const generateTrainingPlan = async (
   try {
     const cnsScore = ((readiness.sleep) + (10 - readiness.fatigue) + (10 - readiness.soreness) + (10 - readiness.stress) + (readiness.hydration)) / 5; 
 
+    // Determine Phase based on Month (Simulation of Macrocycle)
     const currentMonth = new Date().getMonth(); 
     let phaseName = "General Prep";
     if (currentMonth >= 2 && currentMonth <= 4) phaseName = "Specific Prep"; 
     else if (currentMonth >= 5 && currentMonth <= 8) phaseName = "Competition"; 
-    else if (currentMonth >= 9) phaseName = "General Prep";
+    else if (currentMonth >= 9) phaseName = "General Prep"; // Fall/Winter
 
     const structure = getStructureForPhase(phaseName);
     
+    // Event Specific Logic (400m vs 100m)
     let eventSpecificInstruction = "";
     if (focusEvent === '400m') {
         eventSpecificInstruction = "ATLETA DE 400m: En fases Específicas/Pre-Comp, es CRÍTICO incluir Tolerancia al Lactato (Special Endurance II). Volúmenes más altos, pausas incompletas en sesiones lácticas.";
     } else {
         eventSpecificInstruction = "ATLETA DE 100/200m: Prioridad absoluta a la Calidad Neural, Potencia Aláctica y CNS. Pausas completas (1min x cada 10m recorridos) en sesiones de velocidad.";
     }
+
+    // Logic: Psych-Physiological Load Adjustment
+    let psychInstruction = "";
+    if (readiness.stress > 7) {
+        psychInstruction = "ALERTA PSICOLÓGICA: El atleta reporta ALTO ESTRÉS mental (>7/10). Reduce la complejidad técnica y el volumen neural. Prioriza trabajos cíclicos o recuperación activa para no saturar el CNS.";
+    }
+
+    // Staff Integration Logic
+    const staffContext = profile.coaches && profile.coaches.length > 0 
+        ? `EQUIPO TÉCNICO REGISTRADO: ${profile.coaches.map(c => `${c.name} (${c.role})`).join(', ')}. Si hay lesiones, cita las directrices que daría el Fisioterapeuta.`
+        : "Sin equipo técnico registrado. Actúa como Head Coach y Staff completo.";
 
     const prompt = `
       ROL: ENTRENADOR NIVEL 5 WORLD ATHLETICS (Elite Sprint Coach).
@@ -119,22 +132,25 @@ export const generateTrainingPlan = async (
       2. **VOLUMEN vs INTENSIDAD:** Gestiona la carga. Si ACWR > 1.3, reduce volumen un 20% pero mantén intensidad (Tapering/Deload).
       3. **ESPECIFICIDAD:** ${eventSpecificInstruction}
       4. **JUSTIFICACIÓN (RATIONALE):** Habla como un científico del deporte. Explica la fisiología detrás del plan.
+      5. **FACTOR PSICOLÓGICO:** ${psychInstruction}
 
       CONTEXTO DEL ATLETA:
       - Nombre: ${profile.name} (${profile.experienceLevel}, ${profile.yearsExperience} años)
       - Evento Foco: ${focusEvent}
       - PBs: 100m(${profile.pbs['100m'].time}), 200m(${profile.pbs['200m'].time}), 400m(${profile.pbs['400m'].time})
       - Lesiones: ${JSON.stringify(profile.injuries)}
+      - ${staffContext}
       
       ESTADO ACTUAL (MICRO):
       - CNS Readiness: ${cnsScore.toFixed(1)}/10
+      - Estrés Mental: ${readiness.stress}/10
       - ACWR Load: ${acwr ? `${acwr.ratio} (${acwr.status})` : "N/A"}
       - Fase Macrociclo: ${phaseName}
       
       ESTRUCTURA SUGERIDA (BASE):
       ${JSON.stringify(structure.weeklyStructure)}
       
-      Genera el Microciclo en JSON. La prioridad es la salud del atleta y la adaptación fisiológica correcta.
+      Genera el Microciclo en JSON. La prioridad es la salud del atleta, la adaptación fisiológica correcta y la gestión de la carga total (Vida + Entreno).
     `;
 
     const response = await ai.models.generateContent({
@@ -163,17 +179,25 @@ export const generateTrainingPlan = async (
   }
 };
 
-export const analyzeTechnique = async (images: string[], bioData: any = null): Promise<BiomechanicalAnalysis | null> => {
+export const analyzeTechnique = async (images: string[], bioData: any = null, advancedMetrics: any = null): Promise<BiomechanicalAnalysis | null> => {
   if (!ai) return null;
   try {
     const isSequence = images.length > 1;
     let promptText = "";
     
+    // Inject Advanced Metrics (Velocity/Stride) into Prompt
+    const advContext = advancedMetrics ? `
+    METRICAS AVANZADAS (Calibradas):
+    - Velocidad Est.: ${advancedMetrics.velocity} (Evalúa si es adecuada para el nivel)
+    - Longitud Zancada: ${advancedMetrics.strideLen} (Evalúa si hay overstriding)
+    ` : "";
+
     const bioContext = bioData ? `
     DATOS MEDIDOS (MediaPipe):
     - Rodilla: ${bioData.knee.value} (${bioData.knee.status})
     - Cadera: ${bioData.hip.value} (${bioData.hip.status})
     - Torso: ${bioData.torso.value} (${bioData.torso.status})
+    ${advContext}
     ` : "Estimación visual requerida.";
 
     if (isSequence) {
@@ -212,6 +236,11 @@ export const chatWithCoach = async (history: any[], message: string, context: an
   try {
     const prunedHistory = history.slice(-10);
     
+    // Staff Awareness in Chat
+    const staffContext = context.profile.coaches && context.profile.coaches.length > 0
+        ? `STAFF DEL ATLETA: ${context.profile.coaches.map((c: any) => `${c.name} (${c.role})`).join(', ')}. Alinea tus respuestas con su rol.`
+        : "";
+
     const systemPrompt = `
     IDENTIDAD: Entrenador Nivel 5 World Athletics.
     OBJETIVO: Maximizar rendimiento mediante ciencia aplicada.
@@ -220,11 +249,13 @@ export const chatWithCoach = async (history: any[], message: string, context: an
     - Atleta: ${context.profile.name} (${context.profile.events?.join('/')})
     - ACWR: ${context.acwr?.ratio || 'N/A'} (Gestión de Carga)
     - Plan: ${context.plan?.phase} - ${context.plan?.weeklyGoal}
+    - ${staffContext}
     
     DIRECTRICES:
     1. Si ACWR > 1.5, sugiere descanso activo o reducción de volumen.
     2. Usa terminología de élite (GCT, Stiffness, Rate of Force Development).
-    3. Sé conciso y directo.
+    3. Considera el factor psicológico (Estrés/Ansiedad) antes de sugerir cargas altas.
+    4. Sé conciso y directo.
     `;
 
     const chat = ai.chats.create({
