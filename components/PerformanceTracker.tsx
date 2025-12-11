@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { PerformanceLog } from '../types';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
-import { Plus, Trash2, Edit2, Save, X, Calculator, Timer, Activity, TrendingUp, Filter, Download } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, X, Calculator, Timer, Activity, TrendingUp, Filter, Download, MapPin, AlignLeft, Calendar } from 'lucide-react';
 
 const PerformanceTracker: React.FC = () => {
   const { logs, addLog, editLog, deleteLog, userProfile } = useApp();
@@ -136,10 +136,52 @@ const PerformanceTracker: React.FC = () => {
             {!showAddForm && <button onClick={() => setShowAddForm(true)} className="w-full py-3 border border-dashed border-slate-700 rounded-xl text-slate-400 hover:text-white flex items-center justify-center gap-2 text-sm"><Plus size={16}/> Agregar Nuevo Registro</button>}
             
             {showAddForm && (
-                <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 space-y-3">
-                    <div className="flex justify-between"><h3 className="text-slate-200">Nuevo Registro</h3><button onClick={resetForm}><X size={16}/></button></div>
-                    <div className="flex gap-2"><select value={event} onChange={(e) => setEvent(e.target.value as any)} className="bg-slate-950 border border-slate-700 rounded p-2 text-white"><option value="100m">100m</option><option value="200m">200m</option><option value="400m">400m</option></select><input type="text" placeholder="10.50" value={newTime} onChange={(e) => setNewTime(e.target.value)} className="bg-slate-950 border border-slate-700 rounded p-2 text-white w-full font-mono font-bold"/></div>
-                    <button onClick={handleSave} className="w-full bg-cyan-600 text-white rounded p-2"><Save size={16}/></button>
+                <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-5 space-y-4 animate-in fade-in slide-in-from-top-2">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+                        <h3 className="text-slate-200 font-bold">Nuevo Registro</h3>
+                        <button onClick={resetForm}><X size={16} className="text-slate-500 hover:text-white"/></button>
+                    </div>
+                    
+                    {/* Primary Info */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="text-xs text-slate-500 uppercase font-bold block mb-1">Evento</label>
+                            <select value={event} onChange={(e) => setEvent(e.target.value as any)} className="bg-slate-950 border border-slate-700 rounded-lg p-3 text-white w-full text-sm">
+                                <option value="100m">100m</option>
+                                <option value="200m">200m</option>
+                                <option value="400m">400m</option>
+                            </select>
+                        </div>
+                        <div>
+                             <label className="text-xs text-slate-500 uppercase font-bold block mb-1">Tiempo</label>
+                             <input type="text" placeholder="10.50" value={newTime} onChange={(e) => setNewTime(e.target.value)} className="bg-slate-950 border border-slate-700 rounded-lg p-3 text-white w-full font-mono font-bold text-sm" autoFocus/>
+                        </div>
+                    </div>
+
+                    {/* Secondary Info */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="text-xs text-slate-500 uppercase font-bold mb-1 flex items-center gap-1"><Calendar size={10}/> Fecha</label>
+                            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="bg-slate-950 border border-slate-700 rounded-lg p-2 text-white w-full text-xs"/>
+                        </div>
+                        <div>
+                            <label className="text-xs text-slate-500 uppercase font-bold mb-1 flex items-center gap-1"><MapPin size={10}/> Lugar</label>
+                            <input type="text" placeholder="Pista Auxiliar" value={location} onChange={(e) => setLocation(e.target.value)} className="bg-slate-950 border border-slate-700 rounded-lg p-2 text-white w-full text-xs"/>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-xs text-slate-500 uppercase font-bold mb-1 flex items-center gap-1"><AlignLeft size={10}/> Notas</label>
+                        <textarea placeholder="Sensaciones, viento, clima..." value={note} onChange={(e) => setNote(e.target.value)} className="bg-slate-950 border border-slate-700 rounded-lg p-2 text-white w-full text-xs h-16"/>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                        <select value={type} onChange={(e) => setType(e.target.value as any)} className="bg-slate-950 border border-slate-700 rounded-lg p-2 text-white text-xs">
+                            <option value="Training">Entreno</option>
+                            <option value="Competition">Competencia</option>
+                        </select>
+                        <button onClick={handleSave} className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg p-2 flex items-center justify-center gap-2"><Save size={16}/> Guardar</button>
+                    </div>
                 </div>
             )}
 

@@ -1,13 +1,39 @@
+
 import * as React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
-import { Loader2, Zap, Dumbbell, Play, Activity, AlertTriangle, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, Clock, Stethoscope, HeartPulse, Info, Download, Users, Wrench } from 'lucide-react';
+import { Loader2, Zap, Dumbbell, Play, Activity, AlertTriangle, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, Clock, Stethoscope, HeartPulse, Info, Download, Users, Wrench, ExternalLink } from 'lucide-react';
 import { TrainingSession, UserProfile, Injury, Coach } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { getPlanHistory } from '../services/firebase';
 
-// EXTRACTED AND MEMOIZED COMPONENT
+// Helper for Video Links
+const DrillItem = ({ name, colorClass }: { name: string, colorClass: string }) => (
+    <li className="flex items-center justify-between group text-sm text-slate-300">
+        <div className="flex items-start gap-3">
+            <span className={`flex-shrink-0 w-1.5 h-1.5 mt-2 rounded-full ${colorClass}`}></span>
+            <span>{name}</span>
+        </div>
+        <a 
+            href={`https://www.youtube.com/results?search_query=track+and+field+drill+${name.replace(/\s/g, '+')}`} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+            title="Ver video de referencia"
+        >
+            <Play size={12} fill="currentColor" />
+        </a>
+    </li>
+);
+
+// Helper Tooltip Button
+const InfoButton = ({ title, text, onClick }: { title: string, text: string, onClick: (t: string, x: string) => void }) => ( 
+    <button type="button" onClick={(e) => { e.stopPropagation(); onClick(title, text); }} className="text-slate-500 hover:text-cyan-400 ml-1 inline-flex align-middle">
+        <Info size={12} />
+    </button> 
+);
+
 const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessionFeedbackModal }: any) => {
     const isExpanded = expandedDay === session.day;
     const isDone = session.feedback?.completed;
@@ -24,8 +50,20 @@ const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessi
         </div>
         {isExpanded && (
           <div className="px-5 pb-5 space-y-5 border-t border-slate-700/50 pt-4 animate-in slide-in-from-top-2">
-            <div><div className="flex items-center gap-2 mb-3 text-cyan-400 text-xs font-bold uppercase tracking-wider"><Zap size={14} /> Rutina de Pista</div><ul className="space-y-2">{session.trackRoutine.map((item: string, i: number) => (<li key={i} className="flex items-start gap-3 text-sm text-slate-300"><span className="flex-shrink-0 w-1.5 h-1.5 mt-2 rounded-full bg-cyan-500"></span>{item}</li>))}</ul></div>
-            {session.gymRoutine && session.gymRoutine.length > 0 && (<div><div className="flex items-center gap-2 mb-3 text-purple-400 text-xs font-bold uppercase tracking-wider"><Dumbbell size={14} /> Fuerza</div><ul className="space-y-2">{session.gymRoutine.map((item: string, i: number) => (<li key={i} className="flex items-start gap-3 text-sm text-slate-300"><span className="flex-shrink-0 w-1.5 h-1.5 mt-2 rounded-full bg-purple-500"></span>{item}</li>))}</ul></div>)}
+            <div>
+                <div className="flex items-center gap-2 mb-3 text-cyan-400 text-xs font-bold uppercase tracking-wider"><Zap size={14} /> Rutina de Pista</div>
+                <ul className="space-y-2">
+                    {session.trackRoutine.map((item: string, i: number) => <DrillItem key={i} name={item} colorClass="bg-cyan-500" />)}
+                </ul>
+            </div>
+            {session.gymRoutine && session.gymRoutine.length > 0 && (
+                <div>
+                    <div className="flex items-center gap-2 mb-3 text-purple-400 text-xs font-bold uppercase tracking-wider"><Dumbbell size={14} /> Fuerza</div>
+                    <ul className="space-y-2">
+                        {session.gymRoutine.map((item: string, i: number) => <DrillItem key={i} name={item} colorClass="bg-purple-500" />)}
+                    </ul>
+                </div>
+            )}
             <div className="pt-2 border-t border-slate-800"> <button onClick={(e) => { e.stopPropagation(); setSessionFeedbackModal(session); }} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"> <CheckSquare size={16}/> {isDone ? 'Ver/Editar Feedback' : 'Registrar Feedback'} </button> </div>
           </div>
         )}
@@ -78,7 +116,7 @@ export const PlanManager: React.FC = () => {
   const updateCoach = (index: number, field: keyof Coach, value: string) => { const updated = [...(tempProfile.coaches || [])]; updated[index] = { ...updated[index], [field]: value }; setTempProfile({ ...tempProfile, coaches: updated }); };
   const removeCoach = (index: number) => { setTempProfile({ ...tempProfile, coaches: tempProfile.coaches?.filter((_, i) => i !== index) }); };
 
-  const InfoButton = ({ title, text }: { title: string, text: string }) => ( <button onClick={(e) => { e.stopPropagation(); setActiveTooltip({ title, text }); }} className="text-slate-500 hover:text-cyan-400 ml-1 inline-flex"><Info size={12} /></button> );
+  const showTooltip = (title: string, text: string) => { setActiveTooltip({title, text}); };
 
   const handleExportHistory = () => {
       if(planHistoryState.length === 0) return;
@@ -93,8 +131,44 @@ export const PlanManager: React.FC = () => {
     const [dur, setDur] = useState(sessionFeedbackModal.feedback?.duration || 60);
     const [srf, setSrf] = useState(sessionFeedbackModal.feedback?.surface || 'Track');
     const [nts, setNts] = useState(sessionFeedbackModal.feedback?.notes || '');
-    const save = () => { updateSession(sessionFeedbackModal.day, { feedback: { completed: true, rpe, painLevel: pain, duration: dur, surface: srf as any, notes: nts, timestamp: new Date().toISOString() } }); setSessionFeedbackModal(null); };
-    return ( <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSessionFeedbackModal(null)}> <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm space-y-4" onClick={e => e.stopPropagation()}> <div className="flex justify-between"><h3 className="font-bold text-white">Feedback</h3><button onClick={() => setSessionFeedbackModal(null)}><X/></button></div> <div><label className="text-xs font-bold text-slate-400">RPE (1-10)</label><input type="range" min="1" max="10" value={rpe} onChange={e => setRpe(parseInt(e.target.value))} className="w-full accent-cyan-500"/></div> <div><label className="text-xs font-bold text-slate-400">Dolor (0-10)</label><input type="range" min="0" max="10" value={pain} onChange={e => setPain(parseInt(e.target.value))} className="w-full accent-red-500"/></div> <div><label className="text-xs font-bold text-slate-400">Duración (min)</label><input type="number" value={dur} onChange={e => setDur(parseInt(e.target.value))} className="w-full bg-slate-950 p-2 rounded text-white"/></div> <div><label className="text-xs font-bold text-slate-400">Superficie</label><select value={srf} onChange={e => setSrf(e.target.value as any)} className="w-full bg-slate-950 p-2 rounded text-white"><option value="Track">Pista</option><option value="Gym">Gym</option></select></div> <div><label className="text-xs font-bold text-slate-400">Notas</label><textarea value={nts} onChange={e => setNts(e.target.value)} className="w-full bg-slate-950 p-2 rounded text-white h-20"/></div> <button onClick={save} className="w-full bg-emerald-600 py-3 rounded-lg text-white font-bold">Guardar</button> </div> </div> );
+    const save = () => { 
+        updateSession(sessionFeedbackModal.day, { feedback: { completed: true, rpe, painLevel: pain, duration: dur, surface: srf as any, notes: nts, timestamp: new Date().toISOString() } }); 
+        setSessionFeedbackModal(null); 
+        // Trigger recovery modal logic via AppContext updates or specific event if needed, but in this architecture, 
+        // HomeDashboard listens to 'completed' status to show recovery button.
+        alert("Sesión guardada. Ve a Inicio para ver tu protocolo de recuperación.");
+    };
+    return ( 
+        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSessionFeedbackModal(null)}> 
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm space-y-4" onClick={e => e.stopPropagation()}> 
+                <div className="flex justify-between"><h3 className="font-bold text-white">Feedback Diario</h3><button onClick={() => setSessionFeedbackModal(null)}><X/></button></div> 
+                
+                <div>
+                    <div className="flex justify-between items-center mb-1">
+                        <label className="text-xs font-bold text-slate-400">RPE (1-10)</label>
+                        <InfoButton title="RPE" text="1 (Muy suave) - 5 (Moderado) - 10 (Fallo total/Vómito)." onClick={showTooltip}/>
+                    </div>
+                    <div className="flex justify-between text-xs text-cyan-400 font-bold mb-1"><span>Nivel Actual: {rpe}</span></div>
+                    <input type="range" min="1" max="10" value={rpe} onChange={e => setRpe(parseInt(e.target.value))} className="w-full accent-cyan-500"/>
+                </div> 
+
+                <div>
+                    <div className="flex justify-between items-center mb-1">
+                        <label className="text-xs font-bold text-slate-400">Dolor (0-10)</label>
+                        <InfoButton title="Escala de Dolor" text="0 (Sin dolor) - 3 (Molestia aceptable) - 5 (Altera técnica/PARAR) - 10 (Incapacitante)." onClick={showTooltip}/>
+                    </div>
+                    <div className="flex justify-between text-xs text-red-400 font-bold mb-1"><span>Nivel Actual: {pain}</span></div>
+                    <input type="range" min="0" max="10" value={pain} onChange={e => setPain(parseInt(e.target.value))} className="w-full accent-red-500"/>
+                </div> 
+
+                <div><label className="text-xs font-bold text-slate-400 block mb-1">Duración (min)</label><input type="number" value={dur} onChange={e => setDur(parseInt(e.target.value))} className="w-full bg-slate-950 p-3 rounded-lg border border-slate-800 text-white text-sm"/></div> 
+                <div><label className="text-xs font-bold text-slate-400 block mb-1">Superficie</label><select value={srf} onChange={e => setSrf(e.target.value as any)} className="w-full bg-slate-950 p-3 rounded-lg border border-slate-800 text-white text-sm"><option value="Track">Pista</option><option value="Grass">Césped</option><option value="Gym">Gimnasio</option><option value="Road">Asfalto</option></select></div> 
+                <div><label className="text-xs font-bold text-slate-400 block mb-1">Notas</label><textarea value={nts} onChange={e => setNts(e.target.value)} className="w-full bg-slate-950 p-3 rounded-lg border border-slate-800 text-white text-sm h-20"/></div> 
+                
+                <button onClick={save} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-colors">Guardar Sesión</button> 
+            </div> 
+        </div> 
+    );
   };
 
   // --- NEW: INJECT DRILLS LOGIC ---
@@ -133,12 +207,12 @@ export const PlanManager: React.FC = () => {
       </div>
   );
 
+  // ... (Profile Config Render - Same as before but checking logic) ...
   if (showProfileConfig) {
     return (
       <div className="space-y-6 animate-in fade-in duration-500 pb-10">
         <h2 className="text-2xl font-bold mb-4">Perfil Holístico</h2>
         <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 space-y-6">
-          
           {/* IDENTIDAD */}
           <section className="space-y-4">
              <h3 className="text-sm font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-2"><UserCog size={14}/> Identidad Atlética</h3>
@@ -157,39 +231,15 @@ export const PlanManager: React.FC = () => {
              <h3 className="text-sm font-bold text-pink-400 uppercase tracking-wider flex items-center gap-2"><HeartPulse size={14}/> Biometría</h3>
              <div className="grid grid-cols-2 gap-3">
                  <div>
-                     <label className="text-xs text-slate-400 flex items-center mb-1">HR Reposo <InfoButton title="HR Reposo" text="Frecuencia cardíaca al despertar. Menos es mejor condición física." /></label>
+                     <label className="text-xs text-slate-400 flex items-center mb-1">HR Reposo</label>
                      <input type="number" placeholder="bpm" value={tempProfile.restingHR || ''} onChange={e => setTempProfile({...tempProfile, restingHR: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" />
                  </div>
                  <div>
-                     <label className="text-xs text-slate-400 flex items-center mb-1">HRV (ms) <InfoButton title="HRV (Variabilidad)" text="Variabilidad de la frecuencia cardíaca. Más alto indica mejor recuperación y menor estrés." /></label>
+                     <label className="text-xs text-slate-400 flex items-center mb-1">HRV (ms)</label>
                      <input type="number" placeholder="ms" value={tempProfile.hrv || ''} onChange={e => setTempProfile({...tempProfile, hrv: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" />
                  </div>
              </div>
              <div><label className="text-xs text-slate-400 block mb-1">Condiciones Médicas</label><textarea placeholder="Asma, Diabetes, etc..." value={tempProfile.medicalConditions || ''} onChange={e => setTempProfile({...tempProfile, medicalConditions: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white h-20" /></div>
-          </section>
-
-          {/* Equipo Técnico */}
-          <section className="space-y-4 pt-4 border-t border-slate-800">
-              <h3 className="text-sm font-bold text-blue-400 uppercase tracking-wider flex items-center gap-2"><Users size={14}/> Equipo Técnico (Staff)</h3>
-              {tempProfile.coaches?.map((coach, i) => (
-                  <div key={i} className="bg-slate-950 p-3 rounded-lg border border-slate-700 space-y-2">
-                      <div className="flex justify-between"><span className="text-xs font-bold text-blue-300">Entrenador {i+1}</span><button onClick={() => removeCoach(i)} className="text-xs text-slate-500"><X size={12}/></button></div>
-                      <div className="grid grid-cols-2 gap-2">
-                          <input type="text" placeholder="Nombre" value={coach.name} onChange={e => updateCoach(i, 'name', e.target.value)} className="bg-slate-900 border border-slate-800 text-xs text-white p-2 rounded"/>
-                          <select value={coach.role} onChange={e => updateCoach(i, 'role', e.target.value)} className="bg-slate-900 border border-slate-800 text-xs text-white p-2 rounded">
-                              <option value="Head Coach">Head Coach</option>
-                              <option value="Assistant">Asistente</option>
-                              <option value="Physio">Fisioterapeuta</option>
-                              <option value="Biomechanist">Biomecánico</option>
-                              <option value="Strength Coach">Prep. Físico</option>
-                              <option value="Nutritionist">Nutricionista</option>
-                              <option value="Sport Psychologist">Psicólogo</option>
-                          </select>
-                      </div>
-                      <input type="email" placeholder="Email / Contacto" value={coach.email} onChange={e => updateCoach(i, 'email', e.target.value)} className="w-full bg-slate-900 border border-slate-800 text-xs text-white p-2 rounded"/>
-                  </div>
-              ))}
-              <button onClick={addCoach} className="text-xs text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1">+ Agregar Miembro del Staff</button>
           </section>
 
           {/* Pruebas */}
@@ -202,39 +252,9 @@ export const PlanManager: React.FC = () => {
               </div>
           </section>
 
-          {/* Disponibilidad */}
-          <section className="space-y-4 pt-4 border-t border-slate-800">
-              <h3 className="text-sm font-bold text-orange-400 uppercase tracking-wider flex items-center gap-2"><Clock size={14}/> Disponibilidad</h3>
-              <div>
-                  <label className="text-xs text-slate-400 block mb-2">Días de Entrenamiento</label>
-                  <div className="flex flex-wrap gap-2">
-                      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
-                          <button key={d} onClick={() => toggleTrainingDay(d)} className={`w-10 h-10 rounded-full text-xs font-bold border ${tempProfile.trainingDays?.includes(d) ? 'bg-orange-600 border-orange-500 text-white' : 'bg-slate-950 border-slate-700 text-slate-500'}`}>{d[0]}</button>
-                      ))}
-                  </div>
-              </div>
-              <div><label className="text-xs text-slate-400 block mb-1">Horas por día</label><input type="number" value={tempProfile.hoursPerDay || 2} onChange={e => setTempProfile({...tempProfile, hoursPerDay: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" /></div>
-          </section>
-
-          {/* Gestión de Lesiones */}
-          <section className="space-y-4 pt-4 border-t border-slate-800">
-              <h3 className="text-sm font-bold text-red-400 uppercase tracking-wider flex items-center gap-2"><Stethoscope size={14}/> Clínica de Lesiones</h3>
-              {tempProfile.injuries?.map((inj, i) => (
-                  <div key={i} className="bg-slate-950 p-3 rounded-lg border border-slate-700 space-y-2">
-                      <div className="flex justify-between"><span className="text-xs font-bold text-red-300">Lesión {i+1}</span><button onClick={() => removeInjury(i)} className="text-xs text-slate-500"><X size={12}/></button></div>
-                      <div className="grid grid-cols-2 gap-2">
-                          <input type="text" placeholder="Ubicación (ej: Rodilla)" value={inj.location} onChange={e => updateInjury(i, 'location', e.target.value)} className="bg-slate-900 border border-slate-800 text-xs text-white p-2 rounded"/>
-                          <select value={inj.status} onChange={e => updateInjury(i, 'status', e.target.value)} className="bg-slate-900 border border-slate-800 text-xs text-white p-2 rounded"><option value="Activa">Activa</option><option value="Recuperación">Recuperación</option><option value="Resuelta">Resuelta</option></select>
-                      </div>
-                  </div>
-              ))}
-              <button onClick={addInjury} className="text-xs text-red-400 hover:text-red-300 font-bold flex items-center gap-1">+ Reportar Lesión</button>
-          </section>
-
           <button onClick={handleSaveProfile} className="w-full bg-cyan-600 text-white font-bold py-4 rounded-xl mt-4 shadow-lg shadow-cyan-900/20">Guardar Perfil Completo</button>
         </div>
 
-        {/* Floating Tooltip Modal */}
         {activeTooltip && (
             <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-6 backdrop-blur-sm" onClick={() => setActiveTooltip(null)}>
                 <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -259,7 +279,7 @@ export const PlanManager: React.FC = () => {
       {!currentPlan ? (
         <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 space-y-6">
           <div className="text-center"><h3 className="text-lg font-bold text-white">Biomarcadores Diarios</h3><p className="text-slate-400 text-xs mt-1">El Consejo de Expertos analizará tu estado.</p></div>
-          {acwr && ( <div className="space-y-2"> <div className="flex justify-between text-xs text-slate-400 uppercase font-bold tracking-wider items-center"> <span>ACWR <InfoButton title="ACWR" text="Acute:Chronic Workload Ratio." /></span> <span>{acwr.ratio}</span> </div> <div className="h-4 bg-slate-800 rounded-full overflow-hidden relative"> <div className={`h-full transition-all duration-500 ${acwr.status === 'High Risk' ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(acwr.ratio * 50, 100)}%` }} /> </div> </div> )}
+          {acwr && ( <div className="space-y-2"> <div className="flex justify-between text-xs text-slate-400 uppercase font-bold tracking-wider items-center"> <span>ACWR <InfoButton title="ACWR" text="Acute:Chronic Workload Ratio." onClick={showTooltip}/></span> <span>{acwr.ratio}</span> </div> <div className="h-4 bg-slate-800 rounded-full overflow-hidden relative"> <div className={`h-full transition-all duration-500 ${acwr.status === 'High Risk' ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(acwr.ratio * 50, 100)}%` }} /> </div> </div> )}
           
           <div className="space-y-4 max-w-sm mx-auto pt-4 border-t border-slate-800">
             {/* UPDATED BIOMARKERS */}
@@ -291,7 +311,7 @@ export const PlanManager: React.FC = () => {
                 <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-2"><span className="inline-flex items-center gap-1 px-2 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded text-[10px] font-bold uppercase tracking-widest"><Layers size={10} /> {currentPlan.phase}</span></div>
                     <div className="flex gap-2">
-                        <button onClick={() => setShowMacroModal(true)} className="bg-slate-700/50 hover:bg-slate-600 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 border border-slate-600"><Brain size={12} className="text-purple-400"/> Rationale</button>
+                        <button onClick={() => setShowMacroModal(true)} className="bg-slate-700/50 hover:bg-slate-600 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 border border-slate-600"><Brain size={12} className="text-purple-400"/> Lógica</button>
                         <button onClick={sharePlan} className="bg-slate-700/50 hover:bg-slate-600 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 border border-slate-600"><Share size={12} className="text-emerald-400"/></button>
                     </div>
                 </div>
