@@ -2,8 +2,8 @@ import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
-import { Loader2, Zap, Dumbbell, Play, Activity, AlertTriangle, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, Clock, Stethoscope, HeartPulse, Info, Download, Users } from 'lucide-react';
-import { TrainingSession, UserProfile, Injury, Coach } from '../types';
+import { Loader2, Zap, Dumbbell, Play, Activity, AlertTriangle, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, Clock, Stethoscope, HeartPulse, Info, Download } from 'lucide-react';
+import { TrainingSession, UserProfile, Injury } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { getPlanHistory } from '../services/firebase';
 
@@ -13,11 +13,14 @@ export const PlanManager: React.FC = () => {
   const [showProfileConfig, setShowProfileConfig] = useState(!userProfile.name || userProfile.name === 'Atleta');
   const [showMacroModal, setShowMacroModal] = useState(false);
   const [focusEvent, setFocusEvent] = useState(userProfile.events?.[0] || '100m'); 
+  
+  // BIOMARKERS RESTORED
   const [fatigue, setFatigue] = useState(5);
   const [sleep, setSleep] = useState(7);
   const [soreness, setSoreness] = useState(3);
   const [stress, setStress] = useState(4); 
   const [hydration, setHydration] = useState(7); 
+  
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const [tempProfile, setTempProfile] = useState<UserProfile>(userProfile);
   const [planHistoryState, setPlanHistoryState] = useState<any[]>([]);
@@ -43,27 +46,13 @@ export const PlanManager: React.FC = () => {
   const sharePlan = async () => { if(!currentPlan) return; const text = `PLAN ELITE - ${currentPlan.phase}\n${currentPlan.weeklyGoal}`; navigator.clipboard.writeText(text); alert("Copiado"); };
   const toggleEventSelection = (e: string) => { const current = tempProfile.events || []; if (current.includes(e)) setTempProfile({ ...tempProfile, events: current.filter(ev => ev !== e) }); else setTempProfile({ ...tempProfile, events: [...current, e] }); };
   const toggleTrainingDay = (day: string) => { const current = tempProfile.trainingDays || []; if (current.includes(day)) setTempProfile({ ...tempProfile, trainingDays: current.filter(d => d !== day) }); else setTempProfile({ ...tempProfile, trainingDays: [...current, day] }); };
-  
-  // Injury Management
   const addInjury = () => { setTempProfile({ ...tempProfile, injuries: [...(tempProfile.injuries || []), { type: 'Muscular', location: 'Isquios', severity: 'Leve', status: 'Activa' }] }); };
   const updateInjury = (index: number, field: keyof Injury, value: string) => { const updated = [...(tempProfile.injuries || [])]; updated[index] = { ...updated[index], [field]: value }; setTempProfile({ ...tempProfile, injuries: updated }); };
   const removeInjury = (index: number) => { setTempProfile({ ...tempProfile, injuries: tempProfile.injuries?.filter((_, i) => i !== index) }); };
   
-  // NEW: Coach Management
-  const addCoach = () => { 
-      const newCoach: Coach = { id: Date.now().toString(), name: '', role: 'Head Coach', email: '' };
-      setTempProfile({ ...tempProfile, coaches: [...(tempProfile.coaches || []), newCoach] }); 
-  };
-  const updateCoach = (index: number, field: keyof Coach, value: string) => {
-      const updated = [...(tempProfile.coaches || [])];
-      updated[index] = { ...updated[index], [field]: value };
-      setTempProfile({ ...tempProfile, coaches: updated });
-  };
-  const removeCoach = (index: number) => {
-      setTempProfile({ ...tempProfile, coaches: tempProfile.coaches?.filter((_, i) => i !== index) });
-  };
-
-  const InfoButton = ({ title, text }: { title: string, text: string }) => ( <button onClick={(e) => { e.stopPropagation(); setActiveTooltip({ title, text }); }} className="text-slate-500 hover:text-cyan-400 ml-1 inline-flex"><Info size={12} /></button> );
+  const InfoButton = ({ title, text }: { title: string, text: string }) => ( 
+    <button onClick={(e) => { e.stopPropagation(); setActiveTooltip({ title, text }); }} className="text-slate-500 hover:text-cyan-400 ml-1 inline-flex"><Info size={12} /></button> 
+  );
 
   const handleExportHistory = () => {
       if(planHistoryState.length === 0) return;
@@ -72,6 +61,7 @@ export const PlanManager: React.FC = () => {
   };
 
   const SessionCard: React.FC<{ session: TrainingSession }> = ({ session }) => {
+    // ... (Keep existing SessionCard logic same as before) ...
     const isExpanded = expandedDay === session.day;
     const isDone = session.feedback?.completed;
     const intensityColor = session.intensity === 'Max' ? 'text-red-400 border-red-900/50 bg-red-900/20' : session.intensity === 'High' ? 'text-orange-400 border-orange-900/50 bg-orange-900/20' : session.intensity === 'Medium' ? 'text-yellow-400 border-yellow-900/50 bg-yellow-900/20' : 'text-emerald-400 border-emerald-900/50 bg-emerald-900/20';
@@ -111,7 +101,6 @@ export const PlanManager: React.FC = () => {
       <div className="space-y-6 animate-in fade-in duration-500 pb-10">
         <h2 className="text-2xl font-bold mb-4">Perfil Holístico</h2>
         <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 space-y-6">
-          {/* Datos Básicos */}
           <section className="space-y-4">
              <h3 className="text-sm font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-2"><UserCog size={14}/> Identidad Atlética</h3>
              <div><label className="text-xs text-slate-400 block mb-1">Nombre</label><input type="text" value={tempProfile.name} onChange={e => setTempProfile({...tempProfile, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" /></div>
@@ -124,7 +113,6 @@ export const PlanManager: React.FC = () => {
              <div><label className="text-xs text-slate-400 block mb-1">Nivel</label><select value={tempProfile.experienceLevel} onChange={e => setTempProfile({...tempProfile, experienceLevel: e.target.value as any})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white"><option value="Beginner">Principiante</option><option value="Intermediate">Intermedio</option><option value="Advanced">Avanzado</option><option value="Elite">Élite</option></select></div>
           </section>
 
-          {/* Biometría Cardíaca */}
           <section className="space-y-4 pt-4 border-t border-slate-800">
              <h3 className="text-sm font-bold text-pink-400 uppercase tracking-wider flex items-center gap-2"><HeartPulse size={14}/> Biometría</h3>
              <div className="grid grid-cols-2 gap-3">
@@ -138,29 +126,6 @@ export const PlanManager: React.FC = () => {
                  </div>
              </div>
              <div><label className="text-xs text-slate-400 block mb-1">Condiciones Médicas</label><textarea placeholder="Asma, Diabetes, etc..." value={tempProfile.medicalConditions || ''} onChange={e => setTempProfile({...tempProfile, medicalConditions: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white h-20" /></div>
-          </section>
-
-          {/* NEW: EQUIPO TÉCNICO (COACHES) */}
-          <section className="space-y-4 pt-4 border-t border-slate-800">
-              <h3 className="text-sm font-bold text-blue-400 uppercase tracking-wider flex items-center gap-2"><Users size={14}/> Equipo Técnico (Staff)</h3>
-              {tempProfile.coaches?.map((coach, i) => (
-                  <div key={i} className="bg-slate-950 p-3 rounded-lg border border-slate-700 space-y-2">
-                      <div className="flex justify-between"><span className="text-xs font-bold text-blue-300">Entrenador {i+1}</span><button onClick={() => removeCoach(i)} className="text-xs text-slate-500"><X size={12}/></button></div>
-                      <div className="grid grid-cols-2 gap-2">
-                          <input type="text" placeholder="Nombre" value={coach.name} onChange={e => updateCoach(i, 'name', e.target.value)} className="bg-slate-900 border border-slate-800 text-xs text-white p-2 rounded"/>
-                          <select value={coach.role} onChange={e => updateCoach(i, 'role', e.target.value)} className="bg-slate-900 border border-slate-800 text-xs text-white p-2 rounded">
-                              <option value="Head Coach">Head Coach</option>
-                              <option value="Assistant">Asistente</option>
-                              <option value="Physio">Fisioterapeuta</option>
-                              <option value="Biomechanist">Biomecánico</option>
-                              <option value="Strength Coach">Prep. Físico</option>
-                              <option value="Nutritionist">Nutricionista</option>
-                          </select>
-                      </div>
-                      <input type="email" placeholder="Email / Contacto" value={coach.email} onChange={e => updateCoach(i, 'email', e.target.value)} className="w-full bg-slate-900 border border-slate-800 text-xs text-white p-2 rounded"/>
-                  </div>
-              ))}
-              <button onClick={addCoach} className="text-xs text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1">+ Agregar Miembro del Staff</button>
           </section>
 
           {/* Pruebas */}
@@ -207,7 +172,7 @@ export const PlanManager: React.FC = () => {
 
         {/* Floating Tooltip Modal */}
         {activeTooltip && (
-            <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6 backdrop-blur-sm" onClick={() => setActiveTooltip(null)}>
+            <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-6 backdrop-blur-sm" onClick={() => setActiveTooltip(null)}>
                 <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
                     <h4 className="font-bold text-white mb-2">{activeTooltip.title}</h4>
                     <p className="text-sm text-slate-300 leading-relaxed">{activeTooltip.text}</p>
@@ -219,7 +184,7 @@ export const PlanManager: React.FC = () => {
     );
   }
 
-  // ... (Rest of component remains same) ...
+  // ... (Main Render) ...
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-16">
       <div className="flex justify-between items-end border-b border-slate-800/50 pb-4">
@@ -233,8 +198,12 @@ export const PlanManager: React.FC = () => {
           {acwr && ( <div className="space-y-2"> <div className="flex justify-between text-xs text-slate-400 uppercase font-bold tracking-wider items-center"> <span>ACWR <InfoButton title="ACWR" text="Acute:Chronic Workload Ratio." /></span> <span>{acwr.ratio}</span> </div> <div className="h-4 bg-slate-800 rounded-full overflow-hidden relative"> <div className={`h-full transition-all duration-500 ${acwr.status === 'High Risk' ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(acwr.ratio * 50, 100)}%` }} /> </div> </div> )}
           
           <div className="space-y-4 max-w-sm mx-auto pt-4 border-t border-slate-800">
+            {/* RESTORED BIOMARKERS */}
             <div className="space-y-2"><div className="flex justify-between text-xs font-medium text-slate-300"><span className="flex items-center">Fatiga</span><span className="text-cyan-400">{fatigue}/10</span></div><input type="range" min="1" max="10" value={fatigue} onChange={(e) => setFatigue(parseInt(e.target.value))} className="w-full accent-cyan-500 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer" /></div>
-            {/* ... other sliders ... */}
+            <div className="space-y-2"><div className="flex justify-between text-xs font-medium text-slate-300"><span className="flex items-center">Sueño</span><span className="text-indigo-400">{sleep}/10</span></div><input type="range" min="1" max="10" value={sleep} onChange={(e) => setSleep(parseInt(e.target.value))} className="w-full accent-indigo-500 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer" /></div>
+            <div className="space-y-2"><div className="flex justify-between text-xs font-medium text-slate-300"><span className="flex items-center">Dolor</span><span className="text-red-400">{soreness}/10</span></div><input type="range" min="1" max="10" value={soreness} onChange={(e) => setSoreness(parseInt(e.target.value))} className="w-full accent-red-500 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer" /></div>
+            <div className="space-y-2"><div className="flex justify-between text-xs font-medium text-slate-300"><span className="flex items-center">Estrés</span><span className="text-yellow-400">{stress}/10</span></div><input type="range" min="1" max="10" value={stress} onChange={(e) => setStress(parseInt(e.target.value))} className="w-full accent-yellow-500 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer" /></div>
+            <div className="space-y-2"><div className="flex justify-between text-xs font-medium text-slate-300"><span className="flex items-center">Hidratación</span><span className="text-blue-400">{hydration}/10</span></div><input type="range" min="1" max="10" value={hydration} onChange={(e) => setHydration(parseInt(e.target.value))} className="w-full accent-blue-500 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer" /></div>
           </div>
 
           <button onClick={handleGenerate} disabled={loading} className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 text-white font-bold py-4 px-6 rounded-xl flex items-center justify-center gap-3 shadow-lg shadow-cyan-900/20 active:scale-95"> {loading ? <Loader2 className="animate-spin" /> : <Zap fill="currentColor" />} {loading ? 'Consultando Expertos...' : 'Generar Plan Elite'} </button>
@@ -253,7 +222,6 @@ export const PlanManager: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-6">
-           {/* Plan View */}
            <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-6 rounded-2xl border border-slate-700 relative overflow-hidden shadow-2xl">
              <div className="relative z-10">
                 <div className="flex justify-between items-start mb-4">
@@ -274,7 +242,7 @@ export const PlanManager: React.FC = () => {
       
       {showMacroModal && currentPlan?.rationale && ( <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowMacroModal(false)}> <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm"> <h3 className="text-xl font-bold text-white mb-4">Estrategia Técnica</h3> <p className="text-slate-300 text-sm leading-relaxed">{currentPlan.rationale}</p> </div> </div> )}
       {sessionFeedbackModal && <FeedbackModal />}
-      {activeTooltip && ( <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6 backdrop-blur-sm" onClick={() => setActiveTooltip(null)}> <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}> <h4 className="font-bold text-white mb-2">{activeTooltip.title}</h4> <p className="text-sm text-slate-300 leading-relaxed">{activeTooltip.text}</p> <button onClick={() => setActiveTooltip(null)} className="mt-4 w-full bg-slate-800 text-slate-300 py-2 rounded-lg text-sm font-bold">Entendido</button> </div> </div> )}
+      {activeTooltip && ( <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-6 backdrop-blur-sm" onClick={() => setActiveTooltip(null)}> <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}> <h4 className="font-bold text-white mb-2">{activeTooltip.title}</h4> <p className="text-sm text-slate-300 leading-relaxed">{activeTooltip.text}</p> <button onClick={() => setActiveTooltip(null)} className="mt-4 w-full bg-slate-800 text-slate-300 py-2 rounded-lg text-sm font-bold">Entendido</button> </div> </div> )}
     </div>
   );
 };

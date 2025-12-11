@@ -7,10 +7,10 @@ import { PlanManager } from './components/PlanManager';
 import VideoAnalyzer from './components/VideoAnalyzer';
 import { LiveCoach } from './components/LiveCoach';
 import PerformanceTracker from './components/PerformanceTracker';
+import { StaffHub } from './components/StaffHub'; // NEW
 import { AuthScreen } from './components/AuthScreen';
 import { Loader2 } from 'lucide-react';
 
-// Main App Controller
 const AppContent: React.FC = () => {
   const { user, loadingAuth } = useApp();
 
@@ -34,6 +34,7 @@ const AppContent: React.FC = () => {
           <Route path="/plan" element={<PlanManager />} />
           <Route path="/video" element={<VideoAnalyzer />} />
           <Route path="/tracker" element={<PerformanceTracker />} />
+          <Route path="/staff" element={<StaffHub />} /> {/* NEW */}
           <Route path="/chat" element={<LiveCoach />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
