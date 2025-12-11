@@ -4,18 +4,16 @@ import { useApp } from '../contexts/AppContext';
 import { Zap, TrendingUp, CalendarCheck, Trophy, Flag, Plus, Trash2, X, CheckSquare, Dumbbell, Play, ArrowRight, Clock, MapPin, Activity, Info, BatteryCharging } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
-import { calculateRecovery } from '../utils/recoveryEngine'; // IMPORT CRÍTICO
+import { calculateRecovery } from '../utils/recoveryEngine';
 
 export const HomeDashboard: React.FC = () => {
   const { userProfile, updateCompetitions, currentPlan, logs, updateSession } = useApp();
   const navigate = useNavigate();
-  // ... existing state ...
+  
   const [showCompModal, setShowCompModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState<any>(null);
   const [showSundayPrompt, setShowSundayPrompt] = useState(false);
   const [activeTooltip, setActiveTooltip] = useState<{title: string, text: string} | null>(null);
-  
-  // NEW: Recovery Modal State
   const [recoveryPlan, setRecoveryPlan] = useState<any>(null);
 
   useEffect(() => {
@@ -23,7 +21,7 @@ export const HomeDashboard: React.FC = () => {
     if (today.getDay() === 0) setShowSundayPrompt(true);
   }, []);
 
-  // FIX: ROBUST DAY MATCHING LOGIC
+  // FIX: ROBUST DAY MATCHING LOGIC (INSENSITIVE TO CASE/ACCENTS)
   const getTodaySession = () => {
       if (!currentPlan) return null;
       const days = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
@@ -59,12 +57,11 @@ export const HomeDashboard: React.FC = () => {
   const submitFeedback = () => {
     if(!showFeedbackModal) return;
     
-    // 1. Save Session
     updateSession(showFeedbackModal.day, {
         feedback: { completed: true, rpe, painLevel, duration, surface: surface as any, notes: fbNotes, timestamp: new Date().toISOString() }
     });
 
-    // 2. Generate Recovery Plan
+    // Generate Recovery Plan
     const rec = calculateRecovery(showFeedbackModal.intensity, duration, userProfile.weight || 70, rpe);
     setRecoveryPlan(rec);
 
@@ -79,7 +76,6 @@ export const HomeDashboard: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       
-      {/* ... Sunday Prompt & Header ... */}
       {showSundayPrompt && (
           <div className="bg-gradient-to-r from-cyan-900 to-blue-900 p-4 rounded-xl border border-cyan-500/30 flex items-center justify-between shadow-lg">
               <div><h3 className="text-white font-bold text-sm">¡Es Domingo!</h3><p className="text-cyan-200 text-xs">Hora de planificar la semana.</p></div>
@@ -127,7 +123,10 @@ export const HomeDashboard: React.FC = () => {
               <div><span className="text-slate-400 text-xs uppercase tracking-wider block mb-2 flex items-center gap-2"><Zap size={12} /> Rutina de Pista</span><ul className="space-y-2">{todaysSession.trackRoutine.map((drill, idx) => (<li key={idx} className="flex items-start gap-2 text-sm text-slate-300"><span className="w-1.5 h-1.5 mt-1.5 rounded-full bg-cyan-500 shrink-0"></span>{drill}</li>))}</ul></div>
               <div className="pt-2 border-t border-slate-800 mt-2">
                  {todaysSession.feedback?.completed ? (
-                     <div className="flex items-center gap-2 text-emerald-400 text-sm font-bold bg-emerald-900/20 p-2 rounded-lg justify-center"><CheckSquare size={16} /> Sesión Completada ({todaysSession.feedback.rpe}/10)</div>
+                     <div className="space-y-2">
+                         <div className="flex items-center gap-2 text-emerald-400 text-sm font-bold bg-emerald-900/20 p-2 rounded-lg justify-center"><CheckSquare size={16} /> Sesión Completada ({todaysSession.feedback.rpe}/10)</div>
+                         <button onClick={() => setRecoveryPlan(calculateRecovery(todaysSession.intensity, todaysSession.feedback!.duration, userProfile.weight || 70, todaysSession.feedback!.rpe))} className="w-full bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors"><BatteryCharging size={14}/> Ver Plan de Recuperación</button>
+                     </div>
                  ) : (
                      <button onClick={() => setShowFeedbackModal(todaysSession)} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"><CheckSquare size={16} /> Marcar Completada</button>
                  )}
@@ -166,7 +165,7 @@ export const HomeDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* NEW: RECOVERY HUB MODAL */}
+      {/* RECOVERY HUB MODAL */}
       {recoveryPlan && (
           <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 backdrop-blur-md animate-in zoom-in-95 duration-300">
               <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-6 w-full max-w-sm shadow-2xl relative overflow-hidden">
@@ -201,7 +200,6 @@ export const HomeDashboard: React.FC = () => {
           </div>
       )}
 
-      {/* Tooltip Modal */}
       {activeTooltip && (
             <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6 backdrop-blur-sm" onClick={() => setActiveTooltip(null)}>
                 <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
