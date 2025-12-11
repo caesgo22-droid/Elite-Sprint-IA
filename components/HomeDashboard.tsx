@@ -90,6 +90,18 @@ export const HomeDashboard: React.FC = () => {
     setFbNotes(""); setRpe(5); setPainLevel(0); setDuration(60);
   };
 
+  const handleShowRecovery = () => {
+      if (!todaysSession || !todaysSession.feedback) return;
+      
+      const rec = calculateRecovery(
+          todaysSession.intensity, 
+          todaysSession.feedback.duration || 60, 
+          userProfile.weight || 70, 
+          todaysSession.feedback.rpe || 5
+      );
+      setRecoveryPlan(rec);
+  };
+
   const InfoButton = ({ title, text }: { title: string, text: string }) => (
       <button 
         type="button"
@@ -189,7 +201,7 @@ export const HomeDashboard: React.FC = () => {
                  {todaysSession.feedback?.completed ? (
                      <div className="space-y-2">
                          <div className="flex items-center gap-2 text-emerald-400 text-sm font-bold bg-emerald-900/20 p-2 rounded-lg justify-center"><CheckSquare size={16} /> Sesión Completada ({todaysSession.feedback.rpe}/10)</div>
-                         <button onClick={() => setRecoveryPlan(calculateRecovery(todaysSession.intensity, todaysSession.feedback!.duration, userProfile.weight || 70, todaysSession.feedback!.rpe))} className="w-full bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors"><BatteryCharging size={14}/> Ver Plan de Recuperación</button>
+                         <button onClick={handleShowRecovery} className="w-full bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors"><BatteryCharging size={14}/> Ver Plan de Recuperación</button>
                      </div>
                  ) : (
                      <button onClick={() => setShowFeedbackModal(todaysSession)} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"><CheckSquare size={16} /> Marcar Completada</button>

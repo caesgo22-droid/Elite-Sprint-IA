@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
-import { Loader2, Zap, Dumbbell, Play, Activity, AlertTriangle, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, Clock, Stethoscope, HeartPulse, Info, Download, Users, Wrench, ExternalLink } from 'lucide-react';
+import { Loader2, Zap, Dumbbell, Play, Activity, AlertTriangle, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, Clock, Stethoscope, HeartPulse, Info, Download, Users, Wrench, ExternalLink, Calendar, MapPin, Plus } from 'lucide-react';
 import { TrainingSession, UserProfile, Injury, Coach } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { getPlanHistory } from '../services/firebase';
@@ -134,8 +134,6 @@ export const PlanManager: React.FC = () => {
     const save = () => { 
         updateSession(sessionFeedbackModal.day, { feedback: { completed: true, rpe, painLevel: pain, duration: dur, surface: srf as any, notes: nts, timestamp: new Date().toISOString() } }); 
         setSessionFeedbackModal(null); 
-        // Trigger recovery modal logic via AppContext updates or specific event if needed, but in this architecture, 
-        // HomeDashboard listens to 'completed' status to show recovery button.
         alert("Sesión guardada. Ve a Inicio para ver tu protocolo de recuperación.");
     };
     return ( 
@@ -226,7 +224,31 @@ export const PlanManager: React.FC = () => {
              <div><label className="text-xs text-slate-400 block mb-1">Nivel</label><select value={tempProfile.experienceLevel} onChange={e => setTempProfile({...tempProfile, experienceLevel: e.target.value as any})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white"><option value="Beginner">Principiante</option><option value="Intermediate">Intermedio</option><option value="Advanced">Avanzado</option><option value="Elite">Élite</option></select></div>
           </section>
 
-          {/* Biometría Cardíaca */}
+          {/* CLÍNICA DE LESIONES (RESTORED) */}
+          <section className="space-y-4 pt-4 border-t border-slate-800">
+             <div className="flex justify-between items-center">
+                 <h3 className="text-sm font-bold text-red-400 uppercase tracking-wider flex items-center gap-2"><Stethoscope size={14}/> Clínica de Lesiones</h3>
+                 <button onClick={addInjury} className="text-xs bg-slate-800 hover:bg-slate-700 text-white px-2 py-1 rounded flex items-center gap-1 transition-colors"><PlusIcon size={12}/> Agregar</button>
+             </div>
+             {(!tempProfile.injuries || tempProfile.injuries.length === 0) && <p className="text-xs text-slate-500 italic">Sin lesiones activas reportadas.</p>}
+             <div className="space-y-3">
+                 {tempProfile.injuries?.map((inj, idx) => (
+                     <div key={idx} className="bg-slate-950 p-3 rounded-lg border border-slate-700 relative">
+                         <button onClick={() => removeInjury(idx)} className="absolute top-2 right-2 text-slate-600 hover:text-red-400"><X size={14}/></button>
+                         <div className="grid grid-cols-2 gap-2 mb-2">
+                             <div><label className="text-[10px] text-slate-500 block">Ubicación</label><input type="text" value={inj.location} onChange={e => updateInjury(idx, 'location', e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"/></div>
+                             <div><label className="text-[10px] text-slate-500 block">Tipo</label><input type="text" value={inj.type} onChange={e => updateInjury(idx, 'type', e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"/></div>
+                         </div>
+                         <div className="grid grid-cols-2 gap-2">
+                             <div><label className="text-[10px] text-slate-500 block">Severidad</label><select value={inj.severity} onChange={e => updateInjury(idx, 'severity', e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"><option value="Leve">Leve</option><option value="Moderada">Moderada</option><option value="Grave">Grave</option></select></div>
+                             <div><label className="text-[10px] text-slate-500 block">Estado</label><select value={inj.status} onChange={e => updateInjury(idx, 'status', e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"><option value="Activa">Activa</option><option value="Recuperación">Recuperación</option><option value="Resuelta">Resuelta</option></select></div>
+                         </div>
+                     </div>
+                 ))}
+             </div>
+          </section>
+
+          {/* BIOMETRÍA */}
           <section className="space-y-4 pt-4 border-t border-slate-800">
              <h3 className="text-sm font-bold text-pink-400 uppercase tracking-wider flex items-center gap-2"><HeartPulse size={14}/> Biometría</h3>
              <div className="grid grid-cols-2 gap-3">
@@ -240,6 +262,39 @@ export const PlanManager: React.FC = () => {
                  </div>
              </div>
              <div><label className="text-xs text-slate-400 block mb-1">Condiciones Médicas</label><textarea placeholder="Asma, Diabetes, etc..." value={tempProfile.medicalConditions || ''} onChange={e => setTempProfile({...tempProfile, medicalConditions: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white h-20" /></div>
+          </section>
+
+          {/* DISPONIBILIDAD (RESTORED) */}
+          <section className="space-y-4 pt-4 border-t border-slate-800">
+              <h3 className="text-sm font-bold text-blue-400 uppercase tracking-wider flex items-center gap-2"><Calendar size={14}/> Disponibilidad</h3>
+              <div>
+                  <label className="text-xs text-slate-500 block mb-2">Días de Entrenamiento</label>
+                  <div className="flex flex-wrap gap-2">
+                      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+                          <button 
+                            key={day} 
+                            onClick={() => toggleTrainingDay(day)}
+                            className={`w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center transition-colors ${tempProfile.trainingDays.includes(day) ? 'bg-blue-600 text-white' : 'bg-slate-950 text-slate-600 border border-slate-800'}`}
+                          >
+                              {day.charAt(0)}
+                          </button>
+                      ))}
+                  </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                  <div>
+                      <label className="text-xs text-slate-500 block mb-1">Horas/Día</label>
+                      <input type="number" value={tempProfile.hoursPerDay} onChange={e => setTempProfile({...tempProfile, hoursPerDay: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-white"/>
+                  </div>
+                  <div>
+                      <label className="text-xs text-slate-500 block mb-1">Horario Pref.</label>
+                      <select value={tempProfile.preferredTime} onChange={e => setTempProfile({...tempProfile, preferredTime: e.target.value as any})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-white">
+                          <option value="Morning">Mañana</option>
+                          <option value="Afternoon">Tarde</option>
+                          <option value="Evening">Noche</option>
+                      </select>
+                  </div>
+              </div>
           </section>
 
           {/* Pruebas */}
@@ -338,3 +393,4 @@ export const PlanManager: React.FC = () => {
     </div>
   );
 };
+const PlusIcon = ({size}: {size:number}) => <Plus size={size} />;
