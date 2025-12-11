@@ -4,7 +4,7 @@ import { useApp } from '../contexts/AppContext';
 import { Zap, TrendingUp, CalendarCheck, Trophy, Flag, Plus, Trash2, X, CheckSquare, Dumbbell, Play, ArrowRight, Clock, MapPin, Activity, Info, BatteryCharging } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
-import { calculateRecovery } from '../utils/recoveryEngine';
+import { calculateRecovery } from '../utils/recoveryEngine'; // IMPORT CRÍTICO
 
 export const HomeDashboard: React.FC = () => {
   const { userProfile, updateCompetitions, currentPlan, logs, updateSession } = useApp();
@@ -14,6 +14,8 @@ export const HomeDashboard: React.FC = () => {
   const [showFeedbackModal, setShowFeedbackModal] = useState<any>(null);
   const [showSundayPrompt, setShowSundayPrompt] = useState(false);
   const [activeTooltip, setActiveTooltip] = useState<{title: string, text: string} | null>(null);
+  
+  // NEW: Recovery Modal State
   const [recoveryPlan, setRecoveryPlan] = useState<any>(null);
 
   useEffect(() => {
@@ -21,6 +23,7 @@ export const HomeDashboard: React.FC = () => {
     if (today.getDay() === 0) setShowSundayPrompt(true);
   }, []);
 
+  // FIX: ROBUST DAY MATCHING LOGIC
   const getTodaySession = () => {
       if (!currentPlan) return null;
       const days = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
@@ -46,6 +49,7 @@ export const HomeDashboard: React.FC = () => {
       t400: l.event === '400m' ? l.time : null,
   }));
 
+  // Feedback State
   const [rpe, setRpe] = useState(5);
   const [painLevel, setPainLevel] = useState(0); 
   const [duration, setDuration] = useState(60); 
@@ -55,11 +59,12 @@ export const HomeDashboard: React.FC = () => {
   const submitFeedback = () => {
     if(!showFeedbackModal) return;
     
+    // 1. Save Session
     updateSession(showFeedbackModal.day, {
         feedback: { completed: true, rpe, painLevel, duration, surface: surface as any, notes: fbNotes, timestamp: new Date().toISOString() }
     });
 
-    // Generate Recovery Plan
+    // 2. Generate Recovery Plan
     const rec = calculateRecovery(showFeedbackModal.intensity, duration, userProfile.weight || 70, rpe);
     setRecoveryPlan(rec);
 
@@ -82,7 +87,7 @@ export const HomeDashboard: React.FC = () => {
       
       {showSundayPrompt && (
           <div className="bg-gradient-to-r from-cyan-900 to-blue-900 p-4 rounded-xl border border-cyan-500/30 flex items-center justify-between shadow-lg">
-              <div><h3 className="text-white font-bold text-sm">¡Es Domingo!</h3><p className="text-cyan-200 text-xs">Hora de planificar.</p></div>
+              <div><h3 className="text-white font-bold text-sm">¡Es Domingo!</h3><p className="text-cyan-200 text-xs">Hora de planificar la semana.</p></div>
               <button onClick={() => navigate('/plan')} className="bg-white text-cyan-900 text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1">Planificar <ArrowRight size={12}/></button>
           </div>
       )}
@@ -114,6 +119,7 @@ export const HomeDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Plan Card (Today) */}
       <div className="bg-slate-900/50 rounded-2xl border border-slate-800 overflow-hidden flex flex-col max-h-[500px]">
         <div className="bg-slate-800/50 p-4 flex items-center justify-between border-b border-slate-800 shrink-0 sticky top-0 z-10">
           <div className="flex items-center gap-2"><CalendarCheck size={18} className="text-cyan-400" /><h3 className="font-semibold text-lg">Hoy ({dayNameES})</h3></div>
