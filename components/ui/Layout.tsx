@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { Home, Calendar, Activity, MessageSquare, Video, Users } from 'lucide-react';
 
 interface LayoutProps {
@@ -7,13 +7,12 @@ interface LayoutProps {
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const location = useLocation();
   const navItems = [
     { to: '/', icon: Home, label: 'Inicio' },
     { to: '/plan', icon: Calendar, label: 'Plan' },
     { to: '/video', icon: Video, label: 'Análisis' },
     { to: '/tracker', icon: Activity, label: 'Stats' },
-    { to: '/staff', icon: Users, label: 'Staff' }, // NEW
+    { to: '/staff', icon: Users, label: 'Staff' },
     { to: '/chat', icon: MessageSquare, label: 'Coach' },
   ];
 
@@ -39,7 +38,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 ${isActive ? 'text-cyan-400 scale-110' : 'text-slate-500 hover:text-slate-300'}
               `}
             >
-              <item.icon size={18} strokeWidth={isActive ? 2.5 : 2} />
+              {/* Aquí estaba el error. Usamos un render prop simple para pasar el estado active al icono si fuera necesario, 
+                  pero para evitar complejidad y errores, simplificamos el children */}
+              <item.icon size={18} />
               <span className="text-[9px] mt-1 font-medium">{item.label}</span>
             </NavLink>
           ))}
