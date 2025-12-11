@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { UserProfile, TrainingPlan, PerformanceLog, ChatMessage, BiomechanicalAnalysis } from '../types';
+
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
+import { UserProfile, TrainingPlan, PerformanceLog, ChatMessage, BiomechanicalAnalysis, NexusInsight } from '../types';
 import { auth, saveUserProfile, saveTrainingPlan, addPerformanceLog, updatePerformanceLog, deletePerformanceLog, fetchUserData, saveAnalysisToHistory, getAnalysisHistory, isInitialized, archivePlan, getPlanHistory } from '../services/firebase';
 import * as firebaseAuth from 'firebase/auth';
 import { calculateACWR, LoadStats } from '../utils/loadCalculator';
@@ -28,6 +29,8 @@ interface AppContextType {
   saveAnalysis: (analysis: BiomechanicalAnalysis) => void;
   acwrStats: LoadStats | null;
   planHistory: TrainingPlan[];
+  nexusInsight: NexusInsight | null;
+  setNexusInsight: (insight: NexusInsight | null) => void;
 }
 
 const defaultProfile: UserProfile = {
@@ -44,7 +47,6 @@ const defaultProfile: UserProfile = {
   experienceLevel: 'Intermediate',
   yearsExperience: 2,
   injuries: [],
-  // NEW: Default coaches
   coaches: [],
   trainingDays: ['Mon', 'Tue', 'Thu', 'Fri'],
   hoursPerDay: 2,
@@ -67,6 +69,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [lastAnalysis, setLastAnalysis] = useState<BiomechanicalAnalysis | null>(null);
   const [analysisHistory, setAnalysisHistory] = useState<BiomechanicalAnalysis[]>([]);
   const [acwrStats, setAcwrStats] = useState<LoadStats | null>(null);
+  const [nexusInsight, setNexusInsight] = useState<NexusInsight | null>(null);
 
   // Auth Listener & Data Fetching
   useEffect(() => {
@@ -85,7 +88,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
              const loadedProfile = data.profile as any;
              // Migration helpers
              if (loadedProfile.event && !loadedProfile.events) loadedProfile.events = [loadedProfile.event];
-             if (!loadedProfile.coaches) loadedProfile.coaches = []; // Ensure coaches exist
+             if (!loadedProfile.coaches) loadedProfile.coaches = [];
              
              setUserProfile({ ...defaultProfile, ...loadedProfile });
           }
@@ -180,10 +183,46 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (user && isInitialized) saveAnalysisToHistory(user.uid, analysis);
   };
 
+  // Optimization: Memoize the context value
+  const contextValue = useMemo(() => ({
+    user,
+    loadingAuth,
+    userProfile,
+    updateProfile,
+    updateCompetitions,
+    currentPlan,
+    setPlan,
+    updateSession,
+    logs,
+    addLog,
+    editLog,
+    deleteLog,
+    chatHistory,
+    addChatMessage,
+    lastAnalysis,
+    setLastAnalysis,
+    analysisHistory,
+    saveAnalysis,
+    acwrStats,
+    planHistory,
+    nexusInsight,
+    setNexusInsight
+  }), [
+    user,
+    loadingAuth,
+    userProfile,
+    currentPlan,
+    logs,
+    chatHistory,
+    lastAnalysis,
+    analysisHistory,
+    acwrStats,
+    planHistory,
+    nexusInsight
+  ]);
+
   return (
-    <AppContext.Provider value={{
-      user, loadingAuth, userProfile, updateProfile, updateCompetitions, currentPlan, setPlan, updateSession, logs, addLog, editLog, deleteLog, chatHistory, addChatMessage, lastAnalysis, setLastAnalysis, analysisHistory, saveAnalysis, acwrStats, planHistory
-    }}>
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );

@@ -1,25 +1,49 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { Zap, TrendingUp, CalendarCheck, Trophy, Flag, Plus, Trash2, X, CheckSquare, Dumbbell, Play, ArrowRight, Clock, MapPin, Activity, Info, BatteryCharging } from 'lucide-react';
+import { Zap, TrendingUp, CalendarCheck, CheckSquare, X, BatteryCharging, ArrowRight, Activity, MapPin, Clock, Info, BrainCircuit, AlertOctagon, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { calculateRecovery } from '../utils/recoveryEngine';
+import { generateNexusInsight } from '../services/geminiService';
+import { NexusInsight } from '../types';
 
 export const HomeDashboard: React.FC = () => {
-  const { userProfile, updateCompetitions, currentPlan, logs, updateSession } = useApp();
+  const { userProfile, currentPlan, logs, updateSession, lastAnalysis, acwrStats, nexusInsight, setNexusInsight } = useApp();
   const navigate = useNavigate();
   
-  const [showCompModal, setShowCompModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState<any>(null);
   const [showSundayPrompt, setShowSundayPrompt] = useState(false);
   const [activeTooltip, setActiveTooltip] = useState<{title: string, text: string} | null>(null);
   const [recoveryPlan, setRecoveryPlan] = useState<any>(null);
+  
+  // Nexus Local Loading State (data is in context)
+  const [loadingNexus, setLoadingNexus] = useState(false);
+
+  // Biomarkers State (Local for now, could be in context)
+  const [readiness, setReadiness] = useState({ fatigue: 5, sleep: 7, soreness: 3, stress: 4 });
 
   useEffect(() => {
     const today = new Date();
     if (today.getDay() === 0) setShowSundayPrompt(true);
   }, []);
+
+  // Generate Nexus Insight only if not exists or stale
+  useEffect(() => {
+      const fetchNexus = async () => {
+          // If we already have a fresh insight (e.g. less than 1 hour old), don't refetch
+          // Simple check: if exists, skip for now to save API calls in this demo
+          if (nexusInsight) return;
+
+          if (logs.length > 0 || lastAnalysis || acwrStats) {
+              setLoadingNexus(true);
+              const insight = await generateNexusInsight(logs, readiness, lastAnalysis, acwrStats);
+              if (insight) setNexusInsight(insight);
+              setLoadingNexus(false);
+          }
+      };
+      fetchNexus();
+  }, [logs.length, lastAnalysis, acwrStats?.ratio, nexusInsight]);
 
   const getTodaySession = () => {
       if (!currentPlan) return null;
@@ -79,18 +103,56 @@ export const HomeDashboard: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       
+      {/* HEADER: ELITE NEXUS */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 relative overflow-hidden shadow-2xl">
+          <div className="flex justify-between items-start mb-3 relative z-10">
+              <div>
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                      <BrainCircuit className="text-purple-400" /> Nexus Elite
+                  </h2>
+                  <p className="text-xs text-slate-400">Inteligencia de Alto Rendimiento</p>
+              </div>
+              {nexusInsight && (
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                      nexusInsight.status === 'Peak' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' :
+                      nexusInsight.status === 'Warning' ? 'bg-red-500/20 text-red-400 border border-red-500/50' :
+                      nexusInsight.status === 'Recovery' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' :
+                      'bg-slate-700 text-slate-300'
+                  }`}>
+                      {nexusInsight.status}
+                  </span>
+              )}
+          </div>
+          
+          {loadingNexus ? (
+              <div className="h-20 flex items-center justify-center text-slate-500 text-xs animate-pulse">
+                  Correlacionando Biomecánica, Fisiología y Tiempos...
+              </div>
+          ) : nexusInsight ? (
+              <div className="relative z-10 space-y-2">
+                  <h3 className="text-lg font-bold text-slate-200 leading-tight">"{nexusInsight.headline}"</h3>
+                  <p className="text-sm text-slate-400 leading-relaxed border-l-2 border-purple-500 pl-3">{nexusInsight.analysis}</p>
+                  <div className="mt-3 bg-purple-900/20 p-3 rounded-lg border border-purple-900/50 flex gap-3 items-start">
+                      <Sparkles size={16} className="text-purple-400 shrink-0 mt-0.5"/>
+                      <p className="text-xs text-purple-200 font-medium">{nexusInsight.recommendation}</p>
+                  </div>
+              </div>
+          ) : (
+              <div className="text-xs text-slate-500 text-center py-4">
+                  Registra entrenamientos y videos para activar el Nexus.
+              </div>
+          )}
+          
+          {/* Background FX */}
+          <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-purple-600/10 rounded-full blur-3xl pointer-events-none"></div>
+      </div>
+
       {showSundayPrompt && (
           <div className="bg-gradient-to-r from-cyan-900 to-blue-900 p-4 rounded-xl border border-cyan-500/30 flex items-center justify-between shadow-lg">
               <div><h3 className="text-white font-bold text-sm">¡Es Domingo!</h3><p className="text-cyan-200 text-xs">Hora de planificar la semana.</p></div>
               <button onClick={() => navigate('/plan')} className="bg-white text-cyan-900 text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1">Planificar <ArrowRight size={12}/></button>
           </div>
       )}
-
-      <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
-        <h2 className="text-2xl font-bold mb-2">Hola, {userProfile.name}</h2>
-        <p className="text-slate-400 italic text-sm border-l-2 border-cyan-500 pl-3">"Entrena inteligente, corre rápido."</p>
-      </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div onClick={() => navigate('/tracker')} className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex flex-col justify-between relative overflow-hidden cursor-pointer hover:bg-slate-900/80 transition-colors">

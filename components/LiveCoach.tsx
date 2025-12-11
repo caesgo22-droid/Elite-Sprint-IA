@@ -6,7 +6,7 @@ import { Send, User, Bot, Loader2, Wrench, Users } from 'lucide-react';
 import { ChatMessage } from '../types';
 
 export const LiveCoach: React.FC = () => {
-  const { userProfile, currentPlan, logs, lastAnalysis, chatHistory, addChatMessage, updateSession, acwrStats } = useApp();
+  const { userProfile, currentPlan, logs, lastAnalysis, chatHistory, addChatMessage, updateSession, acwrStats, planHistory, analysisHistory } = useApp();
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -39,11 +39,14 @@ export const LiveCoach: React.FC = () => {
       parts: [{ text: m.text }]
     }));
 
+    // OMNI-CONTEXT: Preparing the full dossier
     const context = {
         profile: userProfile,
         plan: currentPlan,
-        logs: logs,
+        planHistory: planHistory, // Past cycles
+        logs: logs, // Race times history
         lastAnalysis: lastAnalysis,
+        analysisHistory: analysisHistory, // Technical evolution
         acwr: acwrStats
     };
 

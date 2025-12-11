@@ -1,3 +1,4 @@
+
 // types.ts
 
 export interface PersonalBest { time: string; date: string; }
@@ -65,11 +66,19 @@ export interface TrainingPlan {
   acwrStatus?: { ratio: number; status: 'Optimal' | 'High Risk' | 'Low Load'; };
 }
 
+export interface KineticMetrics {
+  verticalOscillation: string; // "4.2 cm"
+  forceApplicationIndex: number; // 0-100 scale of efficiency
+  comVelocity: string; // Center of Mass Velocity
+}
+
 export interface BiomechanicalAnalysis {
   id: string;
   type: 'Single' | 'Sequence';
+  category: 'Personal' | 'External'; 
   phaseDetected: string;
   jointAngles: { knee?: string; hip?: string; torso?: string; shin?: string; };
+  kinetics?: KineticMetrics; // NEW: Advanced Physics Data
   groundContactTimeEstimate: string;
   criticalErrors: string[];
   correctiveDrills: string[];
@@ -95,6 +104,14 @@ export interface ChatMessage {
   text: string;
   timestamp: number;
   isToolLog?: boolean;
+}
+
+export interface NexusInsight {
+  status: 'Peak' | 'Recovery' | 'Warning' | 'Neutral';
+  headline: string;
+  analysis: string;
+  recommendation: string;
+  timestamp?: number; // To check validity
 }
 
 export interface Drill { name: string; category: 'Accel' | 'MaxV' | 'Plyo' | 'Strength' | 'Recovery'; intensity: number; videoKeyword: string; }

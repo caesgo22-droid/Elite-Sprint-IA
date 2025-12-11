@@ -1,14 +1,40 @@
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
-import { Loader2, Zap, Dumbbell, Play, Activity, AlertTriangle, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, Clock, Stethoscope, HeartPulse, Info, Download, Users } from 'lucide-react';
+import { Loader2, Zap, Dumbbell, Play, Activity, AlertTriangle, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, Clock, Stethoscope, HeartPulse, Info, Download, Users, Wrench } from 'lucide-react';
 import { TrainingSession, UserProfile, Injury, Coach } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { getPlanHistory } from '../services/firebase';
 
+// EXTRACTED AND MEMOIZED COMPONENT
+const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessionFeedbackModal }: any) => {
+    const isExpanded = expandedDay === session.day;
+    const isDone = session.feedback?.completed;
+    const intensityColor = session.intensity === 'Max' ? 'text-red-400 border-red-900/50 bg-red-900/20' : session.intensity === 'High' ? 'text-orange-400 border-orange-900/50 bg-orange-900/20' : session.intensity === 'Medium' ? 'text-yellow-400 border-yellow-900/50 bg-yellow-900/20' : 'text-emerald-400 border-emerald-900/50 bg-emerald-900/20';
+    
+    return (
+      <div onClick={() => setExpandedDay(isExpanded ? null : session.day)} className={`bg-slate-900/40 border rounded-xl overflow-hidden transition-all duration-300 ${isDone ? 'border-emerald-900/40' : 'border-slate-800'} ${isExpanded ? 'ring-1 ring-cyan-500/50 bg-slate-800/60' : 'hover:bg-slate-800/40'}`}>
+        <div className="p-4 flex justify-between items-center cursor-pointer select-none">
+          <div className="flex items-center gap-4">
+             <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center font-bold text-sm bg-slate-800 border border-slate-700 ${isDone ? 'text-emerald-400 border-emerald-900/50' : 'text-slate-200'}`}> {isDone ? <CheckSquare size={18} /> : <span className="text-[10px] text-slate-400 uppercase leading-none">{session.day.substring(0, 3)}</span>} </div>
+             <div> <h4 className={`font-bold text-lg tracking-tight ${isDone ? 'text-slate-400 line-through' : 'text-slate-100'}`}>{session.focus}</h4> <div className="flex items-center gap-2 mt-1"><span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wide ${intensityColor}`}>{session.intensity}</span></div> </div>
+          </div>
+          <ChevronRight size={20} className={`transition-transform ${isExpanded ? 'rotate-90 text-cyan-400' : 'text-slate-500'}`} />
+        </div>
+        {isExpanded && (
+          <div className="px-5 pb-5 space-y-5 border-t border-slate-700/50 pt-4 animate-in slide-in-from-top-2">
+            <div><div className="flex items-center gap-2 mb-3 text-cyan-400 text-xs font-bold uppercase tracking-wider"><Zap size={14} /> Rutina de Pista</div><ul className="space-y-2">{session.trackRoutine.map((item: string, i: number) => (<li key={i} className="flex items-start gap-3 text-sm text-slate-300"><span className="flex-shrink-0 w-1.5 h-1.5 mt-2 rounded-full bg-cyan-500"></span>{item}</li>))}</ul></div>
+            {session.gymRoutine && session.gymRoutine.length > 0 && (<div><div className="flex items-center gap-2 mb-3 text-purple-400 text-xs font-bold uppercase tracking-wider"><Dumbbell size={14} /> Fuerza</div><ul className="space-y-2">{session.gymRoutine.map((item: string, i: number) => (<li key={i} className="flex items-start gap-3 text-sm text-slate-300"><span className="flex-shrink-0 w-1.5 h-1.5 mt-2 rounded-full bg-purple-500"></span>{item}</li>))}</ul></div>)}
+            <div className="pt-2 border-t border-slate-800"> <button onClick={(e) => { e.stopPropagation(); setSessionFeedbackModal(session); }} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"> <CheckSquare size={16}/> {isDone ? 'Ver/Editar Feedback' : 'Registrar Feedback'} </button> </div>
+          </div>
+        )}
+      </div>
+    );
+});
+
 export const PlanManager: React.FC = () => {
-  const { user, userProfile, updateProfile, currentPlan, setPlan, updateSession } = useApp();
+  const { user, userProfile, updateProfile, currentPlan, setPlan, updateSession, lastAnalysis } = useApp();
   const [loading, setLoading] = useState(false);
   const [showProfileConfig, setShowProfileConfig] = useState(!userProfile.name || userProfile.name === 'Atleta');
   const [showMacroModal, setShowMacroModal] = useState(false);
@@ -39,7 +65,7 @@ export const PlanManager: React.FC = () => {
   }, [user, currentPlan]);
 
   const handleSaveProfile = () => { updateProfile(tempProfile); setShowProfileConfig(false); if (!tempProfile.events.includes(focusEvent)) setFocusEvent(tempProfile.events[0]); };
-  const handleGenerate = async () => { setLoading(true); const plan = await generateTrainingPlan(userProfile, { fatigue, sleep, soreness, stress, hydration }, new Date().toLocaleDateString('es-ES'), focusEvent, acwr || undefined); if (plan) setPlan(plan); else alert("Error"); setLoading(false); };
+  const handleGenerate = async () => { setLoading(true); const plan = await generateTrainingPlan(userProfile, { fatigue, sleep, soreness, stress, hydration }, new Date().toLocaleDateString('es-ES'), focusEvent, acwr || undefined); if (plan) setPlan(plan); else alert("Error de generación. Intenta de nuevo."); setLoading(false); };
   const sharePlan = async () => { if(!currentPlan) return; const text = `PLAN ELITE - ${currentPlan.phase}\n${currentPlan.weeklyGoal}`; navigator.clipboard.writeText(text); alert("Copiado"); };
   const toggleEventSelection = (e: string) => { const current = tempProfile.events || []; if (current.includes(e)) setTempProfile({ ...tempProfile, events: current.filter(ev => ev !== e) }); else setTempProfile({ ...tempProfile, events: [...current, e] }); };
   const toggleTrainingDay = (day: string) => { const current = tempProfile.trainingDays || []; if (current.includes(day)) setTempProfile({ ...tempProfile, trainingDays: current.filter(d => d !== day) }); else setTempProfile({ ...tempProfile, trainingDays: [...current, day] }); };
@@ -60,30 +86,6 @@ export const PlanManager: React.FC = () => {
       const link = document.createElement("a"); link.href = "data:text/csv;charset=utf-8," + encodeURI(csv); link.download = "training_plans.csv"; link.click();
   };
 
-  const SessionCard: React.FC<{ session: TrainingSession }> = ({ session }) => {
-    const isExpanded = expandedDay === session.day;
-    const isDone = session.feedback?.completed;
-    const intensityColor = session.intensity === 'Max' ? 'text-red-400 border-red-900/50 bg-red-900/20' : session.intensity === 'High' ? 'text-orange-400 border-orange-900/50 bg-orange-900/20' : session.intensity === 'Medium' ? 'text-yellow-400 border-yellow-900/50 bg-yellow-900/20' : 'text-emerald-400 border-emerald-900/50 bg-emerald-900/20';
-    return (
-      <div onClick={() => setExpandedDay(isExpanded ? null : session.day)} className={`bg-slate-900/40 border rounded-xl overflow-hidden transition-all duration-300 ${isDone ? 'border-emerald-900/40' : 'border-slate-800'} ${isExpanded ? 'ring-1 ring-cyan-500/50 bg-slate-800/60' : 'hover:bg-slate-800/40'}`}>
-        <div className="p-4 flex justify-between items-center cursor-pointer select-none">
-          <div className="flex items-center gap-4">
-             <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center font-bold text-sm bg-slate-800 border border-slate-700 ${isDone ? 'text-emerald-400 border-emerald-900/50' : 'text-slate-200'}`}> {isDone ? <CheckSquare size={18} /> : <span className="text-[10px] text-slate-400 uppercase leading-none">{session.day.substring(0, 3)}</span>} </div>
-             <div> <h4 className={`font-bold text-lg tracking-tight ${isDone ? 'text-slate-400 line-through' : 'text-slate-100'}`}>{session.focus}</h4> <div className="flex items-center gap-2 mt-1"><span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wide ${intensityColor}`}>{session.intensity}</span></div> </div>
-          </div>
-          <ChevronRight size={20} className={`transition-transform ${isExpanded ? 'rotate-90 text-cyan-400' : 'text-slate-500'}`} />
-        </div>
-        {isExpanded && (
-          <div className="px-5 pb-5 space-y-5 border-t border-slate-700/50 pt-4 animate-in slide-in-from-top-2">
-            <div><div className="flex items-center gap-2 mb-3 text-cyan-400 text-xs font-bold uppercase tracking-wider"><Zap size={14} /> Rutina de Pista</div><ul className="space-y-2">{session.trackRoutine.map((item, i) => (<li key={i} className="flex items-start gap-3 text-sm text-slate-300"><span className="flex-shrink-0 w-1.5 h-1.5 mt-2 rounded-full bg-cyan-500"></span>{item}</li>))}</ul></div>
-            {session.gymRoutine && session.gymRoutine.length > 0 && (<div><div className="flex items-center gap-2 mb-3 text-purple-400 text-xs font-bold uppercase tracking-wider"><Dumbbell size={14} /> Fuerza</div><ul className="space-y-2">{session.gymRoutine.map((item, i) => (<li key={i} className="flex items-start gap-3 text-sm text-slate-300"><span className="flex-shrink-0 w-1.5 h-1.5 mt-2 rounded-full bg-purple-500"></span>{item}</li>))}</ul></div>)}
-            <div className="pt-2 border-t border-slate-800"> <button onClick={(e) => { e.stopPropagation(); setSessionFeedbackModal(session); }} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"> <CheckSquare size={16}/> {isDone ? 'Ver/Editar Feedback' : 'Registrar Feedback'} </button> </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const FeedbackModal = () => {
     if(!sessionFeedbackModal) return null;
     const [rpe, setRpe] = useState(sessionFeedbackModal.feedback?.rpe || 5);
@@ -93,6 +95,28 @@ export const PlanManager: React.FC = () => {
     const [nts, setNts] = useState(sessionFeedbackModal.feedback?.notes || '');
     const save = () => { updateSession(sessionFeedbackModal.day, { feedback: { completed: true, rpe, painLevel: pain, duration: dur, surface: srf as any, notes: nts, timestamp: new Date().toISOString() } }); setSessionFeedbackModal(null); };
     return ( <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSessionFeedbackModal(null)}> <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm space-y-4" onClick={e => e.stopPropagation()}> <div className="flex justify-between"><h3 className="font-bold text-white">Feedback</h3><button onClick={() => setSessionFeedbackModal(null)}><X/></button></div> <div><label className="text-xs font-bold text-slate-400">RPE (1-10)</label><input type="range" min="1" max="10" value={rpe} onChange={e => setRpe(parseInt(e.target.value))} className="w-full accent-cyan-500"/></div> <div><label className="text-xs font-bold text-slate-400">Dolor (0-10)</label><input type="range" min="0" max="10" value={pain} onChange={e => setPain(parseInt(e.target.value))} className="w-full accent-red-500"/></div> <div><label className="text-xs font-bold text-slate-400">Duración (min)</label><input type="number" value={dur} onChange={e => setDur(parseInt(e.target.value))} className="w-full bg-slate-950 p-2 rounded text-white"/></div> <div><label className="text-xs font-bold text-slate-400">Superficie</label><select value={srf} onChange={e => setSrf(e.target.value as any)} className="w-full bg-slate-950 p-2 rounded text-white"><option value="Track">Pista</option><option value="Gym">Gym</option></select></div> <div><label className="text-xs font-bold text-slate-400">Notas</label><textarea value={nts} onChange={e => setNts(e.target.value)} className="w-full bg-slate-950 p-2 rounded text-white h-20"/></div> <button onClick={save} className="w-full bg-emerald-600 py-3 rounded-lg text-white font-bold">Guardar</button> </div> </div> );
+  };
+
+  // --- NEW: INJECT DRILLS LOGIC ---
+  const handleInjectDrills = () => {
+    if (!lastAnalysis || !currentPlan) return;
+    const drills = lastAnalysis.correctiveDrills;
+    if (drills.length === 0) return;
+
+    if (window.confirm(`Se detectaron errores (${lastAnalysis.criticalErrors.join(', ')}). ¿Quieres actualizar las rutinas de pista con los drills correctivos recomendados?`)) {
+        // Find upcoming sessions (not completed)
+        const updatedSessions = currentPlan.sessions.map(s => {
+            if (!s.feedback?.completed) {
+                // Prepend corrective drills to track routine
+                const newRoutine = [...drills, ...s.trackRoutine.filter(d => !drills.includes(d))];
+                return { ...s, trackRoutine: newRoutine };
+            }
+            return s;
+        });
+        const newPlan = { ...currentPlan, sessions: updatedSessions };
+        setPlan(newPlan);
+        alert("Plan actualizado con éxito. Revisa tus próximas sesiones.");
+    }
   };
 
   const BiomarkerSlider = ({ label, value, setter, color, minLabel, maxLabel }: any) => (
@@ -273,10 +297,18 @@ export const PlanManager: React.FC = () => {
                 </div>
                <div className="flex items-center gap-2 mb-2"><Target size={18} className="text-emerald-400" /><h3 className="text-xl font-bold text-white">Objetivo Semanal</h3></div>
                <p className="text-sm text-slate-300 leading-relaxed max-w-lg mb-3 pl-7">{currentPlan.weeklyGoal}</p>
-               <button onClick={() => { if(window.confirm("¿Descartar?")) setPlan(null as any); }} className="mt-4 text-xs text-slate-500 underline decoration-slate-700 hover:text-red-400">Reiniciar Ciclo</button>
+               
+               {/* NEW: DRILL INJECTION BUTTON */}
+               {lastAnalysis && lastAnalysis.criticalErrors.length > 0 && (
+                   <button onClick={handleInjectDrills} className="mt-3 bg-red-900/30 border border-red-500/30 hover:bg-red-900/50 text-red-300 px-4 py-2 rounded-lg flex items-center gap-2 text-xs font-bold transition-all w-full justify-center">
+                       <Wrench size={14}/> Inyectar Drills Correctivos ({lastAnalysis.criticalErrors.length} errores)
+                   </button>
+               )}
+
+               <button onClick={() => { if(window.confirm("¿Descartar?")) setPlan(null as any); }} className="mt-4 text-xs text-slate-500 underline decoration-slate-700 hover:text-red-400 block mx-auto">Reiniciar Ciclo</button>
              </div>
            </div>
-           <div className="space-y-3 pb-8">{currentPlan.sessions.map((session, idx) => (<SessionCard key={idx} session={session} />))}</div>
+           <div className="space-y-3 pb-8">{currentPlan.sessions.map((session: TrainingSession, idx: number) => (<SessionCard key={idx} session={session} expandedDay={expandedDay} setExpandedDay={setExpandedDay} setSessionFeedbackModal={setSessionFeedbackModal} />))}</div>
         </div>
       )}
       
