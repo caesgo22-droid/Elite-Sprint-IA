@@ -148,7 +148,6 @@ export const generateTrainingPlan = async (
   }
 };
 
-// ... (Rest of functions analyzeTechnique, chatWithCoach remain unchanged) ...
 export const analyzeTechnique = async (images: string[], bioData: any = null, advancedMetrics: any = null): Promise<BiomechanicalAnalysis | null> => {
   if (!ai) return null;
   try {
@@ -180,8 +179,8 @@ export const chatWithCoach = async (history: any[], message: string, context: an
   if (!ai) return { text: "⚠️ API Key faltante.", functionCall: null };
   try {
     const prunedHistory = history.slice(-10);
-    const staffContext = context.profile.coaches?.length ? `STAFF: ${context.profile.coaches.map((c:any)=>`${c.name} (${c.role})`).join(', ')}` : "";
-    const systemPrompt = `IDENTIDAD: Entrenador Nivel 5. CONTEXTO: Atleta ${context.profile.name}, ACWR ${context.acwr?.ratio || 'N/A'}. ${staffContext}. DIRECTIVAS: Sé breve, técnico y socrático.`;
+    const staffContext = context.profile.coaches?.length ? `STAFF REGISTRADO: ${context.profile.coaches.map((c:any)=>`${c.name} (${c.role})`).join(', ')}` : "";
+    const systemPrompt = `IDENTIDAD: Entrenador Nivel 5. CONTEXTO: Atleta ${context.profile.name}, ACWR ${context.acwr?.ratio || 'N/A'}. ${staffContext}. Si el usuario pregunta por un miembro del staff, responde asumiendo ese rol. DIRECTIVAS: Sé breve, técnico y socrático.`;
 
     const chat = ai.chats.create({
       model: 'gemini-2.5-flash',

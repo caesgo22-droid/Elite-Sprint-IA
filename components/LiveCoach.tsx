@@ -50,7 +50,6 @@ export const LiveCoach: React.FC = () => {
     const response = await chatWithCoach(apiHistory, finalMessage, context);
 
     if (response.functionCall) {
-        // ... (Tool handling same as before) ...
         const fc = response.functionCall;
         if (fc.name === 'modifySession') {
              const args = fc.args as any;

@@ -4,7 +4,7 @@ import { useApp } from '../contexts/AppContext';
 import { Zap, TrendingUp, CalendarCheck, Trophy, Flag, Plus, Trash2, X, CheckSquare, Dumbbell, Play, ArrowRight, Clock, MapPin, Activity, Info, BatteryCharging } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
-import { calculateRecovery } from '../utils/recoveryEngine'; // IMPORT CRÍTICO
+import { calculateRecovery } from '../utils/recoveryEngine';
 
 export const HomeDashboard: React.FC = () => {
   const { userProfile, updateCompetitions, currentPlan, logs, updateSession } = useApp();
@@ -14,8 +14,6 @@ export const HomeDashboard: React.FC = () => {
   const [showFeedbackModal, setShowFeedbackModal] = useState<any>(null);
   const [showSundayPrompt, setShowSundayPrompt] = useState(false);
   const [activeTooltip, setActiveTooltip] = useState<{title: string, text: string} | null>(null);
-  
-  // NEW: Recovery Modal State
   const [recoveryPlan, setRecoveryPlan] = useState<any>(null);
 
   useEffect(() => {
@@ -23,7 +21,6 @@ export const HomeDashboard: React.FC = () => {
     if (today.getDay() === 0) setShowSundayPrompt(true);
   }, []);
 
-  // FIX: ROBUST DAY MATCHING LOGIC
   const getTodaySession = () => {
       if (!currentPlan) return null;
       const days = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
@@ -49,7 +46,6 @@ export const HomeDashboard: React.FC = () => {
       t400: l.event === '400m' ? l.time : null,
   }));
 
-  // Feedback State
   const [rpe, setRpe] = useState(5);
   const [painLevel, setPainLevel] = useState(0); 
   const [duration, setDuration] = useState(60); 
@@ -59,12 +55,10 @@ export const HomeDashboard: React.FC = () => {
   const submitFeedback = () => {
     if(!showFeedbackModal) return;
     
-    // 1. Save Session
     updateSession(showFeedbackModal.day, {
         feedback: { completed: true, rpe, painLevel, duration, surface: surface as any, notes: fbNotes, timestamp: new Date().toISOString() }
     });
 
-    // 2. Generate Recovery Plan
     const rec = calculateRecovery(showFeedbackModal.intensity, duration, userProfile.weight || 70, rpe);
     setRecoveryPlan(rec);
 
@@ -119,7 +113,6 @@ export const HomeDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Plan Card (Today) */}
       <div className="bg-slate-900/50 rounded-2xl border border-slate-800 overflow-hidden flex flex-col max-h-[500px]">
         <div className="bg-slate-800/50 p-4 flex items-center justify-between border-b border-slate-800 shrink-0 sticky top-0 z-10">
           <div className="flex items-center gap-2"><CalendarCheck size={18} className="text-cyan-400" /><h3 className="font-semibold text-lg">Hoy ({dayNameES})</h3></div>
@@ -176,7 +169,6 @@ export const HomeDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* RECOVERY HUB MODAL (Z-INDEX 60) */}
       {recoveryPlan && (
           <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md animate-in zoom-in-95 duration-300">
               <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-6 w-full max-w-sm shadow-2xl relative overflow-hidden">
@@ -211,7 +203,6 @@ export const HomeDashboard: React.FC = () => {
           </div>
       )}
 
-      {/* Tooltip Modal (Z-INDEX 70 - TOP) */}
       {activeTooltip && (
             <div className="fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-6 backdrop-blur-sm" onClick={() => setActiveTooltip(null)}>
                 <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
