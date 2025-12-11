@@ -1,9 +1,8 @@
-
 import * as React from 'react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
-import { Loader2, Zap, Dumbbell, Play, Activity, AlertTriangle, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, Clock, Stethoscope, HeartPulse, Info, Download, Users, Wrench, ExternalLink, Calendar, MapPin, Plus } from 'lucide-react';
+import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench } from 'lucide-react';
 import { TrainingSession, UserProfile, Injury, Coach } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { getPlanHistory } from '../services/firebase';
@@ -33,6 +32,9 @@ const InfoButton = ({ title, text, onClick }: { title: string, text: string, onC
         <Info size={12} />
     </button> 
 );
+
+// Helper Icon
+const PlusIcon = ({size}: {size:number}) => <Plus size={size} />;
 
 const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessionFeedbackModal }: any) => {
     const isExpanded = expandedDay === session.day;
@@ -111,10 +113,6 @@ export const PlanManager: React.FC = () => {
   const addInjury = () => { setTempProfile({ ...tempProfile, injuries: [...(tempProfile.injuries || []), { type: 'Muscular', location: 'Isquios', severity: 'Leve', status: 'Activa' }] }); };
   const updateInjury = (index: number, field: keyof Injury, value: string) => { const updated = [...(tempProfile.injuries || [])]; updated[index] = { ...updated[index], [field]: value }; setTempProfile({ ...tempProfile, injuries: updated }); };
   const removeInjury = (index: number) => { setTempProfile({ ...tempProfile, injuries: tempProfile.injuries?.filter((_, i) => i !== index) }); };
-  
-  const addCoach = () => { const newCoach: Coach = { id: Date.now().toString(), name: '', role: 'Head Coach', email: '', phone: '', notes: '' }; setTempProfile({ ...tempProfile, coaches: [...(tempProfile.coaches || []), newCoach] }); };
-  const updateCoach = (index: number, field: keyof Coach, value: string) => { const updated = [...(tempProfile.coaches || [])]; updated[index] = { ...updated[index], [field]: value }; setTempProfile({ ...tempProfile, coaches: updated }); };
-  const removeCoach = (index: number) => { setTempProfile({ ...tempProfile, coaches: tempProfile.coaches?.filter((_, i) => i !== index) }); };
 
   const showTooltip = (title: string, text: string) => { setActiveTooltip({title, text}); };
 
@@ -393,4 +391,3 @@ export const PlanManager: React.FC = () => {
     </div>
   );
 };
-const PlusIcon = ({size}: {size:number}) => <Plus size={size} />;

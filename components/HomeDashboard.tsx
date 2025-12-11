@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { Zap, TrendingUp, CalendarCheck, CheckSquare, X, BatteryCharging, ArrowRight, Activity, MapPin, Clock, Info, BrainCircuit, AlertOctagon, Sparkles } from 'lucide-react';
+import { Zap, TrendingUp, CalendarCheck, CheckSquare, X, BatteryCharging, ArrowRight, Activity, MapPin, Clock, Info, BrainCircuit, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { calculateRecovery } from '../utils/recoveryEngine';
