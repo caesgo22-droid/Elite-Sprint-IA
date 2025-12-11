@@ -1,4 +1,3 @@
-
 import * as firebaseApp from "firebase/app";
 import * as firebaseAuth from "firebase/auth";
 import { getFirestore, doc, setDoc, getDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc, Firestore } from "firebase/firestore";
@@ -38,20 +37,21 @@ let isInitialized = false;
 
 try {
   // Check if config is valid to prevent crash
-  if (!firebaseConfig.apiKey) {
-    throw new Error("Firebase API Key is missing. Check .env or Vercel Environment Variables.");
-  }
+  // IF keys are missing, we don't throw, we just log and stay uninitialized.
+  if (firebaseConfig.apiKey) {
+      if (!getApps().length) {
+        app = initializeApp(firebaseConfig);
+      } else {
+        app = getApp();
+      }
 
-  if (!getApps().length) {
-    app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      db = getFirestore(app);
+      googleProvider = new GoogleAuthProvider();
+      isInitialized = true;
   } else {
-    app = getApp();
+      console.warn("🔥 Firebase config missing. App will run in offline mode (UI Only).");
   }
-
-  auth = getAuth(app);
-  db = getFirestore(app);
-  googleProvider = new GoogleAuthProvider();
-  isInitialized = true;
 
 } catch (error) {
   console.error("🔥 FIREBASE INITIALIZATION ERROR:", error);
@@ -60,6 +60,7 @@ try {
 export { auth, db, googleProvider, isInitialized };
 
 // --- Firestore Helpers (Safe Wrappers) ---
+// These functions check isInitialized before running to prevent crashes.
 
 export const saveUserProfile = async (uid: string, profile: any) => {
   if (!db || !isInitialized) return;
@@ -71,7 +72,6 @@ export const saveTrainingPlan = async (uid: string, plan: any) => {
   try { await setDoc(doc(db, "users", uid), { currentPlan: plan }, { merge: true }); } catch(e) { console.error(e); }
 };
 
-// New: Archive Plan
 export const archivePlan = async (uid: string, plan: any) => {
   if (!db || !isInitialized) return;
   try { 
@@ -80,7 +80,6 @@ export const archivePlan = async (uid: string, plan: any) => {
   } catch(e) { console.error(e); }
 };
 
-// New: Get Plan History
 export const getPlanHistory = async (uid: string) => {
   if (!db || !isInitialized) return [];
   try {
@@ -139,4 +138,3 @@ export const fetchUserData = async (uid: string) => {
     };
   } catch(e) { console.error(e); return { profile: null, currentPlan: null, logs: [] }; }
 };
-    
