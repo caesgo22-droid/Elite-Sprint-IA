@@ -21,7 +21,6 @@ export const HomeDashboard: React.FC = () => {
     if (today.getDay() === 0) setShowSundayPrompt(true);
   }, []);
 
-  // FIX: ROBUST DAY MATCHING LOGIC (INSENSITIVE TO CASE/ACCENTS)
   const getTodaySession = () => {
       if (!currentPlan) return null;
       const days = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
@@ -47,7 +46,6 @@ export const HomeDashboard: React.FC = () => {
       t400: l.event === '400m' ? l.time : null,
   }));
 
-  // Feedback State
   const [rpe, setRpe] = useState(5);
   const [painLevel, setPainLevel] = useState(0); 
   const [duration, setDuration] = useState(60); 
@@ -70,7 +68,13 @@ export const HomeDashboard: React.FC = () => {
   };
 
   const InfoButton = ({ title, text }: { title: string, text: string }) => (
-      <button onClick={(e) => { e.stopPropagation(); setActiveTooltip({ title, text }); }} className="text-slate-500 hover:text-cyan-400 ml-1 inline-flex p-1"><Info size={14} /></button>
+      <button 
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveTooltip({ title, text }); }} 
+        className="text-cyan-400 hover:text-cyan-300 ml-2 inline-flex items-center justify-center bg-slate-800 rounded-full w-4 h-4"
+      >
+          <Info size={10} />
+      </button>
   );
 
   return (
@@ -78,7 +82,7 @@ export const HomeDashboard: React.FC = () => {
       
       {showSundayPrompt && (
           <div className="bg-gradient-to-r from-cyan-900 to-blue-900 p-4 rounded-xl border border-cyan-500/30 flex items-center justify-between shadow-lg">
-              <div><h3 className="text-white font-bold text-sm">¡Es Domingo!</h3><p className="text-cyan-200 text-xs">Hora de planificar la semana.</p></div>
+              <div><h3 className="text-white font-bold text-sm">¡Es Domingo!</h3><p className="text-cyan-200 text-xs">Hora de planificar.</p></div>
               <button onClick={() => navigate('/plan')} className="bg-white text-cyan-900 text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1">Planificar <ArrowRight size={12}/></button>
           </div>
       )}
@@ -110,7 +114,6 @@ export const HomeDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Plan Card (Today) */}
       <div className="bg-slate-900/50 rounded-2xl border border-slate-800 overflow-hidden flex flex-col max-h-[500px]">
         <div className="bg-slate-800/50 p-4 flex items-center justify-between border-b border-slate-800 shrink-0 sticky top-0 z-10">
           <div className="flex items-center gap-2"><CalendarCheck size={18} className="text-cyan-400" /><h3 className="font-semibold text-lg">Hoy ({dayNameES})</h3></div>
@@ -133,7 +136,7 @@ export const HomeDashboard: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="text-center py-8"><p className="text-slate-400 mb-4">No hay sesión asignada para hoy.</p><button onClick={() => navigate('/plan')} className="bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-2 rounded-full text-sm font-semibold">Generar Plan</button></div>
+            <div className="text-center py-8"><p className="text-slate-400 mb-4">No hay sesión asignada para hoy ({dayNameES}).</p><button onClick={() => navigate('/plan')} className="bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-2 rounded-full text-sm font-semibold">Generar Plan</button></div>
           )}
         </div>
       </div>
@@ -145,17 +148,19 @@ export const HomeDashboard: React.FC = () => {
                 <div className="space-y-4">
                     <div>
                         <div className="flex justify-between text-xs text-slate-400 font-bold mb-1">
-                            <span className="flex items-center">RPE <InfoButton title="RPE (Esfuerzo)" text="1=Muy suave (Caminar). 5=Moderado. 10=Esfuerzo Máximo/Fallo."/></span><span className="text-cyan-400">{rpe}/10</span>
+                            <span className="flex items-center">RPE <InfoButton title="RPE (Esfuerzo Percibido)" text="1 (Muy Suave): Caminar. 5 (Moderado): Puedes hablar. 8 (Duro): No puedes hablar. 10 (Máximo): Fallo muscular/cardiaco."/></span>
+                            <span className="text-cyan-400">{rpe}/10</span>
                         </div>
                         <input type="range" min="1" max="10" value={rpe} onChange={e => setRpe(parseInt(e.target.value))} className="w-full accent-cyan-500"/>
-                        <div className="flex justify-between text-[10px] text-slate-500"><span>1 (Suave)</span><span>10 (Máximo)</span></div>
+                        <div className="flex justify-between text-[10px] text-slate-500 font-bold uppercase"><span>Min (1)</span><span>Max (10)</span></div>
                     </div>
                     <div>
                         <div className="flex justify-between text-xs text-slate-400 font-bold mb-1">
-                            <span className="flex items-center gap-1"><Activity size={12}/> Dolor <InfoButton title="Nivel de Dolor" text="0=Sin dolor. 3=Molestia leve. 10=Incapacitante."/></span><span className="text-red-400">{painLevel}/10</span>
+                            <span className="flex items-center gap-1"><Activity size={12}/> Dolor <InfoButton title="Nivel de Dolor" text="0: Sin dolor. 3: Molestia (entrenar con cuidado). 5: Altera la técnica (PARAR). 10: Incapacitante."/></span>
+                            <span className="text-red-400">{painLevel}/10</span>
                         </div>
                         <input type="range" min="0" max="10" value={painLevel} onChange={e => setPainLevel(parseInt(e.target.value))} className="w-full accent-red-500"/>
-                        <div className="flex justify-between text-[10px] text-slate-500"><span>0 (Nada)</span><span>10 (Extremo)</span></div>
+                        <div className="flex justify-between text-[10px] text-slate-500 font-bold uppercase"><span>Nada (0)</span><span>Extremo (10)</span></div>
                     </div>
                     <div><label className="text-xs text-slate-400 font-bold mb-1 flex items-center gap-1"><Clock size={12}/> Duración (Minutos)</label><input type="number" value={duration} onChange={e => setDuration(parseInt(e.target.value))} className="w-full bg-slate-950 border border-slate-700 rounded p-3 text-sm text-white"/></div>
                     <div><label className="text-xs text-slate-400 font-bold mb-1 flex items-center gap-1"><MapPin size={12}/> Superficie</label><select value={surface} onChange={e => setSurface(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-3 text-sm text-white"><option value="Track">Pista</option><option value="Grass">Césped</option><option value="Road">Asfalto</option></select></div>
@@ -165,9 +170,9 @@ export const HomeDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* RECOVERY HUB MODAL */}
+      {/* RECOVERY HUB MODAL (Z-INDEX 60) */}
       {recoveryPlan && (
-          <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 backdrop-blur-md animate-in zoom-in-95 duration-300">
+          <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md animate-in zoom-in-95 duration-300">
               <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-6 w-full max-w-sm shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-cyan-500"></div>
                   <div className="flex justify-between items-start mb-4">
@@ -200,8 +205,9 @@ export const HomeDashboard: React.FC = () => {
           </div>
       )}
 
+      {/* Tooltip Modal (Z-INDEX 70 - TOP) */}
       {activeTooltip && (
-            <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6 backdrop-blur-sm" onClick={() => setActiveTooltip(null)}>
+            <div className="fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-6 backdrop-blur-sm" onClick={() => setActiveTooltip(null)}>
                 <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
                     <h4 className="font-bold text-white mb-2">{activeTooltip.title}</h4>
                     <p className="text-sm text-slate-300 leading-relaxed">{activeTooltip.text}</p>
