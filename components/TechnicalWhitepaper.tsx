@@ -2,7 +2,6 @@
 import * as React from 'react';
 import { ShieldCheck, X, Cpu, Scale, Eye, FileText, Database, GitBranch, Activity, Server } from 'lucide-react';
 import { DRILL_DATABASE, PHASE_TEMPLATES } from '../services/trainingDatabase';
-import metadata from '../metadata.json';
 
 // Dynamic System Metrics
 const SYSTEM_METRICS = {
@@ -27,7 +26,7 @@ export const TechnicalWhitepaper: React.FC<{ onClose: () => void }> = ({ onClose
                 <h2 className="text-xl font-bold text-white tracking-tight">System Architecture & Logic</h2>
             </div>
             <p className="text-xs text-slate-400 uppercase tracking-widest font-mono">
-                {metadata.name} | Version: {new Date().getFullYear()}.{new Date().getMonth() + 1}
+                Elite Sprint Coach AI | Version: {new Date().getFullYear()}.{new Date().getMonth() + 1}
             </p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full transition-colors"><X className="text-slate-400" /></button>

@@ -30,6 +30,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <h1 className="text-xl font-bold tracking-tighter bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">
             ELITE SPRINT AI
           </h1>
+          <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-mono">v2.0</span>
           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
         </div>
         

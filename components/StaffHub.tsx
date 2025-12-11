@@ -1,10 +1,10 @@
+
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { Users, Plus, Trash2, Mail, Phone, Edit2, Save } from 'lucide-react';
 import { Coach } from '../types';
 
-// EXPORTACIÓN CRÍTICA: Debe decir "export const StaffHub"
 export const StaffHub: React.FC = () => {
   const { userProfile, updateProfile } = useApp();
   const [isEditing, setIsEditing] = useState<string | null>(null);
