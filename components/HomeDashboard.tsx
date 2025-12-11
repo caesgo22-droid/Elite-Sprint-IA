@@ -1,27 +1,46 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { Zap, TrendingUp, CalendarCheck, Trophy, Flag, Plus, Trash2, X, CheckSquare, Dumbbell, Play, ArrowRight, Clock, MapPin, Activity, Info } from 'lucide-react';
+import { Zap, TrendingUp, CalendarCheck, Trophy, Flag, Plus, Trash2, X, CheckSquare, Dumbbell, Play, ArrowRight, Clock, MapPin, Activity, Info, BatteryCharging } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
+import { calculateRecovery } from '../utils/recoveryEngine'; // IMPORT CRÍTICO
 
 export const HomeDashboard: React.FC = () => {
   const { userProfile, updateCompetitions, currentPlan, logs, updateSession } = useApp();
   const navigate = useNavigate();
+  // ... existing state ...
   const [showCompModal, setShowCompModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState<any>(null);
   const [showSundayPrompt, setShowSundayPrompt] = useState(false);
   const [activeTooltip, setActiveTooltip] = useState<{title: string, text: string} | null>(null);
+  
+  // NEW: Recovery Modal State
+  const [recoveryPlan, setRecoveryPlan] = useState<any>(null);
 
   useEffect(() => {
     const today = new Date();
     if (today.getDay() === 0) setShowSundayPrompt(true);
   }, []);
 
-  const normalizeText = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const daysMap = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
-  const dayNameES = daysMap[new Date().getDay()];
-  const todaysSession = currentPlan?.sessions.find(s => normalizeText(s.day).includes(normalizeText(dayNameES)));
+  // FIX: ROBUST DAY MATCHING LOGIC
+  const getTodaySession = () => {
+      if (!currentPlan) return null;
+      const days = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
+      const englishDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const todayIndex = new Date().getDay();
+      
+      const targetSpanish = days[todayIndex].toLowerCase(); 
+      const targetEnglish = englishDays[todayIndex].toLowerCase(); 
+
+      return currentPlan.sessions.find(s => {
+          const sDay = s.day.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          return sDay.includes(targetSpanish) || sDay.includes(targetEnglish) || sDay.includes(targetSpanish.slice(0,3));
+      });
+  };
+
+  const todaysSession = getTodaySession();
+  const dayNameES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][new Date().getDay()];
 
   const chartData = logs.slice(-20).map(l => ({
       date: l.date.substring(5),
@@ -29,17 +48,6 @@ export const HomeDashboard: React.FC = () => {
       t200: l.event === '200m' ? l.time : null,
       t400: l.event === '400m' ? l.time : null,
   }));
-
-  const [newCompName, setNewCompName] = useState("");
-  const [newCompDate, setNewCompDate] = useState("");
-
-  const addComp = () => {
-    if(!newCompName || !newCompDate) return;
-    updateCompetitions([...userProfile.competitions, { id: Date.now().toString(), name: newCompName, date: newCompDate }]);
-    setNewCompName(""); setNewCompDate("");
-  };
-
-  const removeComp = (id: string) => updateCompetitions(userProfile.competitions.filter(c => c.id !== id));
 
   // Feedback State
   const [rpe, setRpe] = useState(5);
@@ -50,9 +58,16 @@ export const HomeDashboard: React.FC = () => {
 
   const submitFeedback = () => {
     if(!showFeedbackModal) return;
+    
+    // 1. Save Session
     updateSession(showFeedbackModal.day, {
         feedback: { completed: true, rpe, painLevel, duration, surface: surface as any, notes: fbNotes, timestamp: new Date().toISOString() }
     });
+
+    // 2. Generate Recovery Plan
+    const rec = calculateRecovery(showFeedbackModal.intensity, duration, userProfile.weight || 70, rpe);
+    setRecoveryPlan(rec);
+
     setShowFeedbackModal(null);
     setFbNotes(""); setRpe(5); setPainLevel(0); setDuration(60);
   };
@@ -64,6 +79,7 @@ export const HomeDashboard: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       
+      {/* ... Sunday Prompt & Header ... */}
       {showSundayPrompt && (
           <div className="bg-gradient-to-r from-cyan-900 to-blue-900 p-4 rounded-xl border border-cyan-500/30 flex items-center justify-between shadow-lg">
               <div><h3 className="text-white font-bold text-sm">¡Es Domingo!</h3><p className="text-cyan-200 text-xs">Hora de planificar la semana.</p></div>
@@ -118,7 +134,7 @@ export const HomeDashboard: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="text-center py-8"><p className="text-slate-400 mb-4">No hay sesión asignada.</p><button onClick={() => navigate('/plan')} className="bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-2 rounded-full text-sm font-semibold">Generar Plan</button></div>
+            <div className="text-center py-8"><p className="text-slate-400 mb-4">No hay sesión asignada para hoy.</p><button onClick={() => navigate('/plan')} className="bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-2 rounded-full text-sm font-semibold">Generar Plan</button></div>
           )}
         </div>
       </div>
@@ -133,12 +149,14 @@ export const HomeDashboard: React.FC = () => {
                             <span className="flex items-center">RPE <InfoButton title="RPE (Esfuerzo)" text="1=Muy suave (Caminar). 5=Moderado. 10=Esfuerzo Máximo/Fallo."/></span><span className="text-cyan-400">{rpe}/10</span>
                         </div>
                         <input type="range" min="1" max="10" value={rpe} onChange={e => setRpe(parseInt(e.target.value))} className="w-full accent-cyan-500"/>
+                        <div className="flex justify-between text-[10px] text-slate-500"><span>1 (Suave)</span><span>10 (Máximo)</span></div>
                     </div>
                     <div>
                         <div className="flex justify-between text-xs text-slate-400 font-bold mb-1">
-                            <span className="flex items-center gap-1"><Activity size={12}/> Dolor <InfoButton title="Nivel de Dolor" text="0=Sin dolor. 3=Molestia leve (entrenar con precaución). 10=Dolor insoportable."/></span><span className="text-red-400">{painLevel}/10</span>
+                            <span className="flex items-center gap-1"><Activity size={12}/> Dolor <InfoButton title="Nivel de Dolor" text="0=Sin dolor. 3=Molestia leve. 10=Incapacitante."/></span><span className="text-red-400">{painLevel}/10</span>
                         </div>
                         <input type="range" min="0" max="10" value={painLevel} onChange={e => setPainLevel(parseInt(e.target.value))} className="w-full accent-red-500"/>
+                        <div className="flex justify-between text-[10px] text-slate-500"><span>0 (Nada)</span><span>10 (Extremo)</span></div>
                     </div>
                     <div><label className="text-xs text-slate-400 font-bold mb-1 flex items-center gap-1"><Clock size={12}/> Duración (Minutos)</label><input type="number" value={duration} onChange={e => setDuration(parseInt(e.target.value))} className="w-full bg-slate-950 border border-slate-700 rounded p-3 text-sm text-white"/></div>
                     <div><label className="text-xs text-slate-400 font-bold mb-1 flex items-center gap-1"><MapPin size={12}/> Superficie</label><select value={surface} onChange={e => setSurface(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-3 text-sm text-white"><option value="Track">Pista</option><option value="Grass">Césped</option><option value="Road">Asfalto</option></select></div>
@@ -148,6 +166,42 @@ export const HomeDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* NEW: RECOVERY HUB MODAL */}
+      {recoveryPlan && (
+          <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 backdrop-blur-md animate-in zoom-in-95 duration-300">
+              <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-6 w-full max-w-sm shadow-2xl relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-cyan-500"></div>
+                  <div className="flex justify-between items-start mb-4">
+                      <div><h3 className="font-bold text-xl text-white flex items-center gap-2"><BatteryCharging className="text-emerald-400"/> Fuel & Recovery</h3><p className="text-xs text-slate-400 uppercase tracking-widest mt-1">Protocolo Post-Entreno</p></div>
+                      <button onClick={() => setRecoveryPlan(null)}><X className="text-slate-400 hover:text-white"/></button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                      <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800">
+                          <div className="text-xs text-slate-500 font-bold uppercase mb-2">Nutrición Inmediata</div>
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                              <div className="bg-slate-900 p-2 rounded-lg border border-slate-800"><div className="text-lg font-bold text-white">{recoveryPlan.nutrition.carbs}</div><div className="text-[10px] text-slate-400">Carbs</div></div>
+                              <div className="bg-slate-900 p-2 rounded-lg border border-slate-800"><div className="text-lg font-bold text-white">{recoveryPlan.nutrition.protein}</div><div className="text-[10px] text-slate-400">Proteína</div></div>
+                              <div className="bg-slate-900 p-2 rounded-lg border border-slate-800"><div className="text-lg font-bold text-white">{recoveryPlan.nutrition.hydration}</div><div className="text-[10px] text-slate-400">Agua</div></div>
+                          </div>
+                          <p className="text-[10px] text-emerald-400 mt-2 italic">"{recoveryPlan.nutrition.notes}"</p>
+                      </div>
+
+                      <div>
+                          <div className="text-xs text-slate-500 font-bold uppercase mb-2">Acciones de Recuperación</div>
+                          <ul className="space-y-2">
+                              {recoveryPlan.protocols.map((p: string, i: number) => (
+                                  <li key={i} className="flex items-center gap-2 text-sm text-slate-300 bg-slate-800/50 p-2 rounded-lg"><CheckSquare size={14} className="text-cyan-500"/> {p}</li>
+                              ))}
+                          </ul>
+                      </div>
+                  </div>
+                  <button onClick={() => setRecoveryPlan(null)} className="w-full mt-6 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors">Entendido</button>
+              </div>
+          </div>
+      )}
+
+      {/* Tooltip Modal */}
       {activeTooltip && (
             <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6 backdrop-blur-sm" onClick={() => setActiveTooltip(null)}>
                 <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
