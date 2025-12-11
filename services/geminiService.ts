@@ -53,7 +53,7 @@ const PLAN_SCHEMA: Schema = {
       items: {
         type: Type.OBJECT,
         properties: {
-          day: { type: Type.STRING, description: "Día de la semana (ej: Lunes)" },
+          day: { type: Type.STRING, description: "Día exacto (ej: Lunes)" },
           focus: { type: Type.STRING, enum: ['Acceleration', 'Max Velocity', 'Speed Endurance', 'Tempo', 'Recovery', 'Strength', 'Plyometrics', 'Technical', 'Lactic Tolerance'] },
           trackRoutine: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista de ejercicios con pausas." },
           gymRoutine: { type: Type.ARRAY, items: { type: Type.STRING } },
@@ -141,8 +141,13 @@ export const generateTrainingPlan = async (
     else if (currentMonth >= 9) phaseName = "General Prep";
 
     const structure = getStructureForPhase(phaseName);
+    
+    // STRICT DAY MAPPING LOGIC
     const dayMap: {[key:string]: string} = { 'Mon': 'Lunes', 'Tue': 'Martes', 'Wed': 'Miércoles', 'Thu': 'Jueves', 'Fri': 'Viernes', 'Sat': 'Sábado', 'Sun': 'Domingo' };
-    const userDays = profile.trainingDays.map(d => dayMap[d] || d).join(", ");
+    const userDaysES = profile.trainingDays.map(d => dayMap[d] || d);
+    
+    // Convert template object to array of priorities to map sequentially to user days
+    const templatePriorities = Object.values(structure.weeklyStructure);
 
     const prompt = `
       ROL: DIRECTOR DE RENDIMIENTO (WORLD ATHLETICS LEVEL 5).
@@ -156,8 +161,14 @@ export const generateTrainingPlan = async (
       - Si estamos en Fase Competición: Elimina volumen basura. Todo debe ser al 95%+ o al 0% (Recuperación).
       - Selecciona Drills específicos que corrijan la técnica, no solo ejercicios aleatorios.
 
-      DÍAS DISPONIBLES: [ ${userDays} ]
-      ESTRUCTURA BASE: ${JSON.stringify(structure.weeklyStructure)}
+      *** REGLA CRÍTICA DE CALENDARIO ***
+      El atleta SOLO entrena estos días exactos: [ ${userDaysES.join(", ")} ].
+      NO generes sesiones para otros días. Si el template tiene 5 sesiones pero el usuario entrena 3 días, prioriza las sesiones de Calidad (Speed/Power) y elimina las de relleno (Tempo/General).
+      
+      ESTRUCTURA DE FASE SUGERIDA (Prioridades): 
+      ${JSON.stringify(templatePriorities)}
+      
+      Instrucción: Mapea las prioridades de la fase secuencialmente a los días disponibles del usuario ([${userDaysES.join(", ")}]).
     `;
 
     const response = await ai.models.generateContent({

@@ -1,7 +1,8 @@
+
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { Zap, TrendingUp, CalendarCheck, CheckSquare, X, BatteryCharging, ArrowRight, Activity, MapPin, Clock, Info, BrainCircuit, Sparkles } from 'lucide-react';
+import { Zap, TrendingUp, CalendarCheck, CheckSquare, X, BatteryCharging, ArrowRight, BrainCircuit, Sparkles, Activity, Clock, MapPin, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { calculateRecovery } from '../utils/recoveryEngine';
@@ -79,11 +80,14 @@ export const HomeDashboard: React.FC = () => {
   const submitFeedback = () => {
     if(!showFeedbackModal) return;
     
+    // Update Context
     updateSession(showFeedbackModal.day, {
         feedback: { completed: true, rpe, painLevel, duration, surface: surface as any, notes: fbNotes, timestamp: new Date().toISOString() }
     });
 
-    const rec = calculateRecovery(showFeedbackModal.intensity, duration, userProfile.weight || 70, rpe);
+    // Calculate Recovery Immediately based on submitted values (not waiting for context update)
+    const weight = (userProfile.weight && userProfile.weight > 0) ? userProfile.weight : 70; // Fallback weight
+    const rec = calculateRecovery(showFeedbackModal.intensity, duration, weight, rpe);
     setRecoveryPlan(rec);
 
     setShowFeedbackModal(null);
@@ -93,10 +97,11 @@ export const HomeDashboard: React.FC = () => {
   const handleShowRecovery = () => {
       if (!todaysSession || !todaysSession.feedback) return;
       
+      const weight = (userProfile.weight && userProfile.weight > 0) ? userProfile.weight : 70;
       const rec = calculateRecovery(
           todaysSession.intensity, 
           todaysSession.feedback.duration || 60, 
-          userProfile.weight || 70, 
+          weight,
           todaysSession.feedback.rpe || 5
       );
       setRecoveryPlan(rec);
@@ -237,7 +242,7 @@ export const HomeDashboard: React.FC = () => {
                     </div>
                     <div><label className="text-xs text-slate-400 font-bold mb-1 flex items-center gap-1"><Clock size={12}/> Duración (Minutos)</label><input type="number" value={duration} onChange={e => setDuration(parseInt(e.target.value))} className="w-full bg-slate-950 border border-slate-700 rounded p-3 text-sm text-white"/></div>
                     <div><label className="text-xs text-slate-400 font-bold mb-1 flex items-center gap-1"><MapPin size={12}/> Superficie</label><select value={surface} onChange={e => setSurface(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-3 text-sm text-white"><option value="Track">Pista</option><option value="Grass">Césped</option><option value="Road">Asfalto</option></select></div>
-                    <button onClick={submitFeedback} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl shadow-lg">Guardar Sesión</button>
+                    <button onClick={submitFeedback} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl shadow-lg">Guardar y Calcular Recuperación</button>
                 </div>
             </div>
         </div>
