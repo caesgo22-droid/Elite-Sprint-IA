@@ -1,11 +1,13 @@
+
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
-import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench } from 'lucide-react';
+import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging } from 'lucide-react';
 import { TrainingSession, UserProfile, Injury, Coach } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { getPlanHistory } from '../services/firebase';
+import { calculateRecovery } from '../utils/recoveryEngine';
 
 // Helper for Video Links
 const DrillItem = ({ name, colorClass }: { name: string, colorClass: string }) => (
@@ -36,7 +38,7 @@ const InfoButton = ({ title, text, onClick }: { title: string, text: string, onC
 // Helper Icon
 const PlusIcon = ({size}: {size:number}) => <Plus size={size} />;
 
-const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessionFeedbackModal }: any) => {
+const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessionFeedbackModal, onShowRecovery }: any) => {
     const isExpanded = expandedDay === session.day;
     const isDone = session.feedback?.completed;
     const intensityColor = session.intensity === 'Max' ? 'text-red-400 border-red-900/50 bg-red-900/20' : session.intensity === 'High' ? 'text-orange-400 border-orange-900/50 bg-orange-900/20' : session.intensity === 'Medium' ? 'text-yellow-400 border-yellow-900/50 bg-yellow-900/20' : 'text-emerald-400 border-emerald-900/50 bg-emerald-900/20';
@@ -66,7 +68,18 @@ const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessi
                     </ul>
                 </div>
             )}
-            <div className="pt-2 border-t border-slate-800"> <button onClick={(e) => { e.stopPropagation(); setSessionFeedbackModal(session); }} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"> <CheckSquare size={16}/> {isDone ? 'Ver/Editar Feedback' : 'Registrar Feedback'} </button> </div>
+            
+            <div className="pt-2 border-t border-slate-800 grid grid-cols-1 gap-2 sm:grid-cols-2"> 
+                <button onClick={(e) => { e.stopPropagation(); setSessionFeedbackModal(session); }} className={`w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors ${isDone ? 'bg-slate-800 text-slate-300 hover:text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-200 col-span-2'}`}> 
+                    <CheckSquare size={16}/> {isDone ? 'Editar Feedback' : 'Registrar Sesión'} 
+                </button> 
+                
+                {isDone && (
+                    <button onClick={(e) => { e.stopPropagation(); onShowRecovery(session); }} className="w-full bg-emerald-900/20 border border-emerald-500/30 hover:bg-emerald-900/40 text-emerald-400 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors"> 
+                        <BatteryCharging size={16}/> Fuel & Recovery
+                    </button>
+                )}
+            </div>
           </div>
         )}
       </div>
@@ -90,6 +103,9 @@ export const PlanManager: React.FC = () => {
   const [acwr, setAcwr] = useState<{ratio: number, status: string} | null>(null);
   const [sessionFeedbackModal, setSessionFeedbackModal] = useState<TrainingSession | null>(null);
   const [activeTooltip, setActiveTooltip] = useState<{title: string, text: string} | null>(null);
+  
+  // New: Local Recovery Modal State
+  const [viewingRecovery, setViewingRecovery] = useState<any>(null);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -122,6 +138,18 @@ export const PlanManager: React.FC = () => {
       const link = document.createElement("a"); link.href = "data:text/csv;charset=utf-8," + encodeURI(csv); link.download = "training_plans.csv"; link.click();
   };
 
+  const handleCalculateRecovery = (session: TrainingSession) => {
+      if(!session.feedback) return;
+      const weight = (userProfile.weight && userProfile.weight > 0) ? userProfile.weight : 70;
+      const rec = calculateRecovery(
+          session.intensity,
+          session.feedback.duration || 60,
+          weight,
+          session.feedback.rpe || 5
+      );
+      setViewingRecovery(rec);
+  };
+
   const FeedbackModal = () => {
     if(!sessionFeedbackModal) return null;
     const [rpe, setRpe] = useState(sessionFeedbackModal.feedback?.rpe || 5);
@@ -131,8 +159,13 @@ export const PlanManager: React.FC = () => {
     const [nts, setNts] = useState(sessionFeedbackModal.feedback?.notes || '');
     const save = () => { 
         updateSession(sessionFeedbackModal.day, { feedback: { completed: true, rpe, painLevel: pain, duration: dur, surface: srf as any, notes: nts, timestamp: new Date().toISOString() } }); 
+        
+        // Auto-show recovery after saving
+        const weight = (userProfile.weight && userProfile.weight > 0) ? userProfile.weight : 70;
+        const rec = calculateRecovery(sessionFeedbackModal.intensity, dur, weight, rpe);
+        setViewingRecovery(rec);
+        
         setSessionFeedbackModal(null); 
-        alert("Sesión guardada. Ve a Inicio para ver tu protocolo de recuperación.");
     };
     return ( 
         <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSessionFeedbackModal(null)}> 
@@ -381,12 +414,61 @@ export const PlanManager: React.FC = () => {
                <button onClick={() => { if(window.confirm("¿Descartar?")) setPlan(null as any); }} className="mt-4 text-xs text-slate-500 underline decoration-slate-700 hover:text-red-400 block mx-auto">Reiniciar Ciclo</button>
              </div>
            </div>
-           <div className="space-y-3 pb-8">{currentPlan.sessions.map((session: TrainingSession, idx: number) => (<SessionCard key={idx} session={session} expandedDay={expandedDay} setExpandedDay={setExpandedDay} setSessionFeedbackModal={setSessionFeedbackModal} />))}</div>
+           
+           {/* Session List */}
+           <div className="space-y-3 pb-8">
+               {currentPlan.sessions.map((session: TrainingSession, idx: number) => (
+                   <SessionCard 
+                       key={idx} 
+                       session={session} 
+                       expandedDay={expandedDay} 
+                       setExpandedDay={setExpandedDay} 
+                       setSessionFeedbackModal={setSessionFeedbackModal} 
+                       onShowRecovery={handleCalculateRecovery}
+                    />
+               ))}
+           </div>
         </div>
       )}
       
       {showMacroModal && currentPlan?.rationale && ( <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowMacroModal(false)}> <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm"> <h3 className="text-xl font-bold text-white mb-4">Estrategia Técnica</h3> <p className="text-slate-300 text-sm leading-relaxed">{currentPlan.rationale}</p> </div> </div> )}
       {sessionFeedbackModal && <FeedbackModal />}
+      
+      {/* RECOVERY MODAL (DUPLICATED FOR PLAN MANAGER ACCESS) */}
+      {viewingRecovery && (
+          <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md animate-in zoom-in-95 duration-300">
+              <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-6 w-full max-w-sm shadow-2xl relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-cyan-500"></div>
+                  <div className="flex justify-between items-start mb-4">
+                      <div><h3 className="font-bold text-xl text-white flex items-center gap-2"><BatteryCharging className="text-emerald-400"/> Fuel & Recovery</h3><p className="text-xs text-slate-400 uppercase tracking-widest mt-1">Protocolo Post-Entreno</p></div>
+                      <button onClick={() => setViewingRecovery(null)}><X className="text-slate-400 hover:text-white"/></button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                      <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800">
+                          <div className="text-xs text-slate-500 font-bold uppercase mb-2">Nutrición Inmediata</div>
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                              <div className="bg-slate-900 p-2 rounded-lg border border-slate-800"><div className="text-lg font-bold text-white">{viewingRecovery.nutrition.carbs}</div><div className="text-[10px] text-slate-400">Carbs</div></div>
+                              <div className="bg-slate-900 p-2 rounded-lg border border-slate-800"><div className="text-lg font-bold text-white">{viewingRecovery.nutrition.protein}</div><div className="text-[10px] text-slate-400">Proteína</div></div>
+                              <div className="bg-slate-900 p-2 rounded-lg border border-slate-800"><div className="text-lg font-bold text-white">{viewingRecovery.nutrition.hydration}</div><div className="text-[10px] text-slate-400">Agua</div></div>
+                          </div>
+                          <p className="text-[10px] text-emerald-400 mt-2 italic">"{viewingRecovery.nutrition.notes}"</p>
+                      </div>
+
+                      <div>
+                          <div className="text-xs text-slate-500 font-bold uppercase mb-2">Acciones de Recuperación</div>
+                          <ul className="space-y-2">
+                              {viewingRecovery.protocols.map((p: string, i: number) => (
+                                  <li key={i} className="flex items-center gap-2 text-sm text-slate-300 bg-slate-800/50 p-2 rounded-lg"><CheckSquare size={14} className="text-cyan-500"/> {p}</li>
+                              ))}
+                          </ul>
+                      </div>
+                  </div>
+                  <button onClick={() => setViewingRecovery(null)} className="w-full mt-6 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors">Entendido</button>
+              </div>
+          </div>
+      )}
+
       {activeTooltip && ( <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-6 backdrop-blur-sm" onClick={() => setActiveTooltip(null)}> <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}> <h4 className="font-bold text-white mb-2">{activeTooltip.title}</h4> <p className="text-sm text-slate-300 leading-relaxed">{activeTooltip.text}</p> <button onClick={() => setActiveTooltip(null)} className="mt-4 w-full bg-slate-800 text-slate-300 py-2 rounded-lg text-sm font-bold">Entendido</button> </div> </div> )}
     </div>
   );
