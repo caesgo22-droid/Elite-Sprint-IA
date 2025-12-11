@@ -3,15 +3,15 @@ import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
-import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging } from 'lucide-react';
+import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle } from 'lucide-react';
 import { TrainingSession, UserProfile, Injury, Coach } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { getPlanHistory } from '../services/firebase';
 import { calculateRecovery } from '../utils/recoveryEngine';
 
-// Helper for Video Links
+// Helper for Video Links - MODIFIED: Always visible, no hover required
 const DrillItem = ({ name, colorClass }: { name: string, colorClass: string }) => (
-    <li className="flex items-center justify-between group text-sm text-slate-300">
+    <li className="flex items-center justify-between group text-sm text-slate-300 py-1">
         <div className="flex items-start gap-3">
             <span className={`flex-shrink-0 w-1.5 h-1.5 mt-2 rounded-full ${colorClass}`}></span>
             <span>{name}</span>
@@ -20,10 +20,10 @@ const DrillItem = ({ name, colorClass }: { name: string, colorClass: string }) =
             href={`https://www.youtube.com/results?search_query=track+and+field+drill+${name.replace(/\s/g, '+')}`} 
             target="_blank" 
             rel="noopener noreferrer"
-            className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+            className="text-slate-500 hover:text-red-500 transition-colors p-2 bg-slate-800/50 rounded-full hover:bg-slate-800"
             title="Ver video de referencia"
         >
-            <Play size={12} fill="currentColor" />
+            <Play size={14} fill="currentColor" />
         </a>
     </li>
 );
@@ -122,7 +122,23 @@ export const PlanManager: React.FC = () => {
 
   const handleSaveProfile = () => { updateProfile(tempProfile); setShowProfileConfig(false); if (!tempProfile.events.includes(focusEvent)) setFocusEvent(tempProfile.events[0]); };
   const handleGenerate = async () => { setLoading(true); const plan = await generateTrainingPlan(userProfile, { fatigue, sleep, soreness, stress, hydration }, new Date().toLocaleDateString('es-ES'), focusEvent, acwr || undefined); if (plan) setPlan(plan); else alert("Error de generación. Intenta de nuevo."); setLoading(false); };
-  const sharePlan = async () => { if(!currentPlan) return; const text = `PLAN ELITE - ${currentPlan.phase}\n${currentPlan.weeklyGoal}`; navigator.clipboard.writeText(text); alert("Copiado"); };
+  
+  // SHARED: Copy to Clipboard
+  const sharePlan = async () => { 
+      if(!currentPlan) return; 
+      const text = `PLAN ELITE - ${currentPlan.phase}\n${currentPlan.weeklyGoal}`; 
+      navigator.clipboard.writeText(text); 
+      alert("Copiado al portapapeles"); 
+  };
+
+  // NEW: Share via WhatsApp
+  const shareToWhatsapp = () => {
+      if(!currentPlan) return;
+      const text = `*ELITE SPRINT AI - MICRO-CICLO*\n\n*Fase:* ${currentPlan.phase}\n*Objetivo:* ${currentPlan.weeklyGoal}\n\nGenerado por Elite Sprint Coach AI.`;
+      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(url, '_blank');
+  };
+
   const toggleEventSelection = (e: string) => { const current = tempProfile.events || []; if (current.includes(e)) setTempProfile({ ...tempProfile, events: current.filter(ev => ev !== e) }); else setTempProfile({ ...tempProfile, events: [...current, e] }); };
   const toggleTrainingDay = (day: string) => { const current = tempProfile.trainingDays || []; if (current.includes(day)) setTempProfile({ ...tempProfile, trainingDays: current.filter(d => d !== day) }); else setTempProfile({ ...tempProfile, trainingDays: [...current, day] }); };
   
@@ -190,8 +206,16 @@ export const PlanManager: React.FC = () => {
                     <input type="range" min="0" max="10" value={pain} onChange={e => setPain(parseInt(e.target.value))} className="w-full accent-red-500"/>
                 </div> 
 
-                <div><label className="text-xs font-bold text-slate-400 block mb-1">Duración (min)</label><input type="number" value={dur} onChange={e => setDur(parseInt(e.target.value))} className="w-full bg-slate-950 p-3 rounded-lg border border-slate-800 text-white text-sm"/></div> 
-                <div><label className="text-xs font-bold text-slate-400 block mb-1">Superficie</label><select value={srf} onChange={e => setSrf(e.target.value as any)} className="w-full bg-slate-950 p-3 rounded-lg border border-slate-800 text-white text-sm"><option value="Track">Pista</option><option value="Grass">Césped</option><option value="Gym">Gimnasio</option><option value="Road">Asfalto</option></select></div> 
+                <div>
+                    <label className="text-xs font-bold text-slate-400 mb-1 flex items-center gap-1">Duración (min) <InfoButton title="Duración" text="Tiempo total de trabajo efectivo (sin contar calentamiento ni descansos largos). Usado para calcular carga metabólica." onClick={showTooltip}/></label>
+                    <input type="number" value={dur} onChange={e => setDur(parseInt(e.target.value))} className="w-full bg-slate-950 p-3 rounded-lg border border-slate-800 text-white text-sm"/>
+                </div> 
+                
+                <div>
+                    <label className="text-xs font-bold text-slate-400 mb-1 flex items-center gap-1">Superficie <InfoButton title="Superficie" text="Afecta el impacto articular. Pista (Alto Impacto/Retorno). Césped (Bajo Impacto/Recuperación)." onClick={showTooltip}/></label>
+                    <select value={srf} onChange={e => setSrf(e.target.value as any)} className="w-full bg-slate-950 p-3 rounded-lg border border-slate-800 text-white text-sm"><option value="Track">Pista</option><option value="Grass">Césped</option><option value="Gym">Gimnasio</option><option value="Road">Asfalto</option></select>
+                </div> 
+                
                 <div><label className="text-xs font-bold text-slate-400 block mb-1">Notas</label><textarea value={nts} onChange={e => setNts(e.target.value)} className="w-full bg-slate-950 p-3 rounded-lg border border-slate-800 text-white text-sm h-20"/></div> 
                 
                 <button onClick={save} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-colors">Guardar Sesión</button> 
@@ -200,7 +224,7 @@ export const PlanManager: React.FC = () => {
     );
   };
 
-  // --- NEW: INJECT DRILLS LOGIC ---
+  // ... rest of the component ...
   const handleInjectDrills = () => {
     if (!lastAnalysis || !currentPlan) return;
     const drills = lastAnalysis.correctiveDrills;
@@ -398,7 +422,8 @@ export const PlanManager: React.FC = () => {
                     <div className="flex items-center gap-2"><span className="inline-flex items-center gap-1 px-2 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded text-[10px] font-bold uppercase tracking-widest"><Layers size={10} /> {currentPlan.phase}</span></div>
                     <div className="flex gap-2">
                         <button onClick={() => setShowMacroModal(true)} className="bg-slate-700/50 hover:bg-slate-600 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 border border-slate-600"><Brain size={12} className="text-purple-400"/> Lógica</button>
-                        <button onClick={sharePlan} className="bg-slate-700/50 hover:bg-slate-600 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 border border-slate-600"><Share size={12} className="text-emerald-400"/></button>
+                        <button onClick={sharePlan} className="bg-slate-700/50 hover:bg-slate-600 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 border border-slate-600" title="Copiar"><Share size={12} className="text-emerald-400"/></button>
+                        <button onClick={shareToWhatsapp} className="bg-emerald-900/50 hover:bg-emerald-800 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 border border-emerald-700 text-emerald-400" title="Enviar por WhatsApp"><MessageCircle size={12}/></button>
                     </div>
                 </div>
                <div className="flex items-center gap-2 mb-2"><Target size={18} className="text-emerald-400" /><h3 className="text-xl font-bold text-white">Objetivo Semanal</h3></div>
