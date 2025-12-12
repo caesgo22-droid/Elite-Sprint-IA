@@ -141,6 +141,46 @@ const modifySessionTool: FunctionDeclaration = {
   }
 };
 
+// --- FALLBACK PLAN GENERATOR (Emergency Protocol) ---
+const generateFallbackPlan = (profile: UserProfile, phaseName: string): TrainingPlan => {
+    return {
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString(),
+        weeklyGoal: "Recuperación Estructural y Mecánica (Modo Fallback)",
+        phase: "General Prep",
+        rationale: "Se ha generado un plan base de mantenimiento debido a un error de conexión con el motor de IA. Este plan asegura que puedas entrenar hoy de forma segura.",
+        sessions: [
+            {
+                day: "Lunes",
+                focus: "Acceleration",
+                trackRoutine: ["Wall Drills 3x30s", "A-Skip 3x20m", "Sled Push 4x20m", "Falling Starts 6x20m"],
+                gymRoutine: ["Squats 3x5", "RDL 3x8"],
+                biomechanicsKpi: "Empuje horizontal completo",
+                videoKeywords: ["accel"],
+                intensity: "High"
+            },
+            {
+                day: "Miércoles",
+                focus: "Max Velocity",
+                trackRoutine: ["Wicket Runs 6x", "Fly 10m (30m buildup) x 4"],
+                gymRoutine: ["Nordic Curl 3x5", "Core"],
+                biomechanicsKpi: "Contacto debajo de cadera",
+                videoKeywords: ["maxv"],
+                intensity: "Max"
+            },
+            {
+                day: "Viernes",
+                focus: "Tempo",
+                trackRoutine: ["100m @ 70% x 10 (Walk back recovery)", "Mobility Routine"],
+                gymRoutine: [],
+                biomechanicsKpi: "Relajación de hombros",
+                videoKeywords: ["tempo"],
+                intensity: "Low"
+            }
+        ]
+    } as any; // Cast to bypass strict checks if needed
+};
+
 export const generateTrainingPlan = async (
   profile: UserProfile, 
   readiness: { fatigue: number; sleep: number; soreness: number; stress: number; hydration: number }, 
@@ -148,44 +188,39 @@ export const generateTrainingPlan = async (
   focusEvent?: string,
   acwr?: { ratio: number; status: string }
 ): Promise<TrainingPlan | null> => {
-  if (!ai) return null;
+  // Always define phase name first to use in fallback if needed
+  const currentMonth = new Date().getMonth(); 
+  let phaseName = "General Prep";
+  if (currentMonth >= 2 && currentMonth <= 4) phaseName = "Specific Prep"; 
+  else if (currentMonth >= 5 && currentMonth <= 8) phaseName = "Competition"; 
+  else if (currentMonth >= 9) phaseName = "General Prep";
+
+  if (!ai) {
+      console.warn("AI not initialized, returning fallback plan");
+      return generateFallbackPlan(profile, phaseName);
+  }
+
   try {
     const cnsScore = ((readiness.sleep) + (10 - readiness.fatigue) + (10 - readiness.soreness) + (10 - readiness.stress) + (readiness.hydration)) / 5; 
     
-    // Auto-Phase Detection
-    const currentMonth = new Date().getMonth(); 
-    let phaseName = "General Prep";
-    if (currentMonth >= 2 && currentMonth <= 4) phaseName = "Specific Prep"; 
-    else if (currentMonth >= 5 && currentMonth <= 8) phaseName = "Competition"; 
-    else if (currentMonth >= 9) phaseName = "General Prep";
-
-    const structure = getStructureForPhase(phaseName);
-    const dayMap: {[key:string]: string} = { 'Mon': 'Lunes', 'Tue': 'Martes', 'Wed': 'Miércoles', 'Thu': 'Jueves', 'Fri': 'Viernes', 'Sat': 'Sábado', 'Sun': 'Domingo' };
-    
-    // SAFETY FIX: Ensure trainingDays exists, default to M/W/F if empty
-    const trainingDays = (profile.trainingDays && profile.trainingDays.length > 0) 
+    // SAFETY FIX: Ensure trainingDays exists, default to M/W/F if empty or invalid
+    const trainingDays = (profile.trainingDays && Array.isArray(profile.trainingDays) && profile.trainingDays.length > 0) 
         ? profile.trainingDays 
         : ['Mon', 'Wed', 'Fri'];
         
+    const dayMap: {[key:string]: string} = { 'Mon': 'Lunes', 'Tue': 'Martes', 'Wed': 'Miércoles', 'Thu': 'Jueves', 'Fri': 'Viernes', 'Sat': 'Sábado', 'Sun': 'Domingo' };
     const userDaysES = trainingDays.map(d => dayMap[d] || d);
     
     const prompt = `
       ACTÚA COMO: DIRECTOR DE ALTO RENDIMIENTO (WORLD ATHLETICS LEVEL V).
       
-      ${ELITE_PLANNING_FRAMEWORK}
-      
       PACIENTE (ATLETA):
-      - Nombre: ${profile.name}
-      - Nivel: ${profile.experienceLevel}
+      - Nombre: ${profile.name || 'Atleta'}
+      - Nivel: ${profile.experienceLevel || 'Intermedio'}
       - Evento: ${focusEvent || "100m"}
       - Contexto: Fase ${phaseName}.
       - Estado SNC (Readiness): ${cnsScore.toFixed(1)}/10.
       - Carga (ACWR): ${acwr ? acwr.ratio : "N/A"}.
-      
-      PROTOCOLOS DE SEGURIDAD OBLIGATORIOS:
-      1. Si ACWR > 1.3 o Readiness < 5: Implementar "Unloading Week" (Reducir volumen 40%, mantener intensidad).
-      2. Si hay dolor muscular reportado > 3/10: Eliminar pliometría y MaxV. Sustituir por Tempo en Piscina o Bicicleta.
-      3. Fase Competición: Volumen mínimo efectivo. Enfoque Neural.
       
       TAREA:
       Diseñar el microciclo SOLAMENTE para los días: [ ${userDaysES.join(", ")} ].
@@ -208,8 +243,15 @@ export const generateTrainingPlan = async (
       // Add IDs to sessions if missing, or handle in frontend
       return { id: Date.now().toString(), createdAt: new Date().toISOString(), focusEvent: focusEvent || profile.events[0], acwrStatus: acwr, ...data } as TrainingPlan;
     }
-    return null;
-  } catch (error) { console.error("Plan Gen Error:", error); return null; }
+    
+    // If no text response but no error thrown
+    return generateFallbackPlan(profile, phaseName);
+
+  } catch (error) { 
+      console.error("Plan Gen Error (Using Fallback):", error); 
+      // CRITICAL: Return fallback instead of null to prevent UI freeze
+      return generateFallbackPlan(profile, phaseName);
+  }
 };
 
 export const analyzeTechnique = async (images: string[], bioData: any = null, advancedMetrics: any = null, analysisMode: 'Personal' | 'External' = 'Personal'): Promise<BiomechanicalAnalysis | null> => {

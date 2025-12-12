@@ -79,31 +79,20 @@ export const HomeDashboard: React.FC = () => {
 
   const submitFeedback = () => {
     if(!showFeedbackModal) return;
-    
-    // Update Context
     updateSession(showFeedbackModal.day, {
         feedback: { completed: true, rpe, painLevel, duration, surface: surface as any, notes: fbNotes, timestamp: new Date().toISOString() }
     });
-
-    // Calculate Recovery Immediately based on submitted values (not waiting for context update)
     const weight = (userProfile.weight && userProfile.weight > 0) ? userProfile.weight : 70; // Fallback weight
     const rec = calculateRecovery(showFeedbackModal.intensity, duration, weight, rpe);
     setRecoveryPlan(rec);
-
     setShowFeedbackModal(null);
     setFbNotes(""); setRpe(5); setPainLevel(0); setDuration(60);
   };
 
   const handleShowRecovery = () => {
       if (!todaysSession || !todaysSession.feedback) return;
-      
       const weight = (userProfile.weight && userProfile.weight > 0) ? userProfile.weight : 70;
-      const rec = calculateRecovery(
-          todaysSession.intensity, 
-          todaysSession.feedback.duration || 60, 
-          weight,
-          todaysSession.feedback.rpe || 5
-      );
+      const rec = calculateRecovery(todaysSession.intensity, todaysSession.feedback.duration || 60, weight, todaysSession.feedback.rpe || 5);
       setRecoveryPlan(rec);
   };
 
@@ -167,7 +156,6 @@ export const HomeDashboard: React.FC = () => {
               </div>
           )}
           
-          {/* Background FX */}
           <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-purple-600/10 rounded-full blur-3xl pointer-events-none"></div>
       </div>
 
@@ -207,8 +195,8 @@ export const HomeDashboard: React.FC = () => {
           </div>
           <div className="flex gap-2">
              {todaysSession && (
-                 <button onClick={shareDailySession} className="p-1.5 bg-emerald-900/30 text-emerald-400 rounded-lg border border-emerald-500/30 hover:bg-emerald-900/50 transition-colors" title="Compartir Sesión">
-                    <MessageCircle size={16}/>
+                 <button onClick={shareDailySession} className="bg-emerald-600 text-white px-3 py-1.5 rounded-full flex items-center gap-1 shadow-lg shadow-emerald-900/20 hover:bg-emerald-500 transition-colors" title="Compartir Sesión">
+                    <MessageCircle size={14}/> 
                  </button>
              )}
              {todaysSession && <span className={`px-2 py-1 rounded text-xs font-bold uppercase flex items-center ${todaysSession.intensity === 'Max' ? 'bg-red-500/20 text-red-400' : todaysSession.intensity === 'High' ? 'bg-orange-500/20 text-orange-400' : 'bg-green-500/20 text-green-400'}`}>{todaysSession.intensity}</span>}
@@ -243,7 +231,7 @@ export const HomeDashboard: React.FC = () => {
                 <div className="space-y-4">
                     <div>
                         <div className="flex justify-between text-xs text-slate-400 font-bold mb-1">
-                            <span className="flex items-center">RPE <InfoButton title="RPE (Esfuerzo Percibido)" text="1 (Muy Suave): Caminar. 5 (Moderado): Puedes hablar. 8 (Duro): No puedes hablar. 10 (Máximo): Fallo muscular/cardiaco."/></span>
+                            <span className="flex items-center">RPE <InfoButton title="RPE" text="1 (Muy Suave) - 10 (Fallo)."/></span>
                             <span className="text-cyan-400">{rpe}/10</span>
                         </div>
                         <input type="range" min="1" max="10" value={rpe} onChange={e => setRpe(parseInt(e.target.value))} className="w-full accent-cyan-500"/>
@@ -251,7 +239,7 @@ export const HomeDashboard: React.FC = () => {
                     </div>
                     <div>
                         <div className="flex justify-between text-xs text-slate-400 font-bold mb-1">
-                            <span className="flex items-center gap-1"><Activity size={12}/> Dolor <InfoButton title="Nivel de Dolor" text="0: Sin dolor. 3: Molestia (entrenar con cuidado). 5: Altera la técnica (PARAR). 10: Incapacitante."/></span>
+                            <span className="flex items-center gap-1"><Activity size={12}/> Dolor</span>
                             <span className="text-red-400">{painLevel}/10</span>
                         </div>
                         <input type="range" min="0" max="10" value={painLevel} onChange={e => setPainLevel(parseInt(e.target.value))} className="w-full accent-red-500"/>
@@ -282,16 +270,10 @@ export const HomeDashboard: React.FC = () => {
                               <div className="bg-slate-900 p-2 rounded-lg border border-slate-800"><div className="text-lg font-bold text-white">{recoveryPlan.nutrition.protein}</div><div className="text-[10px] text-slate-400">Proteína</div></div>
                               <div className="bg-slate-900 p-2 rounded-lg border border-slate-800"><div className="text-lg font-bold text-white">{recoveryPlan.nutrition.hydration}</div><div className="text-[10px] text-slate-400">Agua</div></div>
                           </div>
-                          <p className="text-[10px] text-emerald-400 mt-2 italic">"{recoveryPlan.nutrition.notes}"</p>
                       </div>
-
                       <div>
                           <div className="text-xs text-slate-500 font-bold uppercase mb-2">Acciones de Recuperación</div>
-                          <ul className="space-y-2">
-                              {recoveryPlan.protocols.map((p: string, i: number) => (
-                                  <li key={i} className="flex items-center gap-2 text-sm text-slate-300 bg-slate-800/50 p-2 rounded-lg"><CheckSquare size={14} className="text-cyan-500"/> {p}</li>
-                              ))}
-                          </ul>
+                          <ul className="space-y-2">{recoveryPlan.protocols.map((p: string, i: number) => (<li key={i} className="flex items-center gap-2 text-sm text-slate-300 bg-slate-800/50 p-2 rounded-lg"><CheckSquare size={14} className="text-cyan-500"/> {p}</li>))}</ul>
                       </div>
                   </div>
                   <button onClick={() => setRecoveryPlan(null)} className="w-full mt-6 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors">Entendido</button>
@@ -299,15 +281,7 @@ export const HomeDashboard: React.FC = () => {
           </div>
       )}
 
-      {activeTooltip && (
-            <div className="fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-6 backdrop-blur-sm" onClick={() => setActiveTooltip(null)}>
-                <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
-                    <h4 className="font-bold text-white mb-2">{activeTooltip.title}</h4>
-                    <p className="text-sm text-slate-300 leading-relaxed">{activeTooltip.text}</p>
-                    <button onClick={() => setActiveTooltip(null)} className="mt-4 w-full bg-slate-800 text-slate-300 py-2 rounded-lg text-sm font-bold">Entendido</button>
-                </div>
-            </div>
-      )}
+      {activeTooltip && ( <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-6 backdrop-blur-sm" onClick={() => setActiveTooltip(null)}> <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}> <h4 className="font-bold text-white mb-2">{activeTooltip.title}</h4> <p className="text-sm text-slate-300 leading-relaxed">{activeTooltip.text}</p> <button onClick={() => setActiveTooltip(null)} className="mt-4 w-full bg-slate-800 text-slate-300 py-2 rounded-lg text-sm font-bold">Entendido</button> </div> </div> )}
     </div>
   );
 };
