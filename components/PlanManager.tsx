@@ -3,7 +3,9 @@ import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
-import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle } from 'lucide-react';
+import { auth } from '../services/firebase';
+import { signOut } from 'firebase/auth';
+import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle, LogOut } from 'lucide-react';
 import { TrainingSession, UserProfile, Injury, Coach } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { getPlanHistory } from '../services/firebase';
@@ -43,6 +45,13 @@ const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessi
     const isDone = session.feedback?.completed;
     const intensityColor = session.intensity === 'Max' ? 'text-red-400 border-red-900/50 bg-red-900/20' : session.intensity === 'High' ? 'text-orange-400 border-orange-900/50 bg-orange-900/20' : session.intensity === 'Medium' ? 'text-yellow-400 border-yellow-900/50 bg-yellow-900/20' : 'text-emerald-400 border-emerald-900/50 bg-emerald-900/20';
     
+    const shareSession = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const text = `*ELITE SPRINT AI - Sesión (${session.day})*\n\n*Enfoque:* ${session.focus}\n*Rutina:* ${session.trackRoutine.join(', ')}\n*Intensidad:* ${session.intensity}`;
+        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+        window.open(url, '_blank');
+    };
+
     return (
       <div onClick={() => setExpandedDay(isExpanded ? null : session.day)} className={`bg-slate-900/40 border rounded-xl overflow-hidden transition-all duration-300 ${isDone ? 'border-emerald-900/40' : 'border-slate-800'} ${isExpanded ? 'ring-1 ring-cyan-500/50 bg-slate-800/60' : 'hover:bg-slate-800/40'}`}>
         <div className="p-4 flex justify-between items-center cursor-pointer select-none">
@@ -50,7 +59,10 @@ const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessi
              <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center font-bold text-sm bg-slate-800 border border-slate-700 ${isDone ? 'text-emerald-400 border-emerald-900/50' : 'text-slate-200'}`}> {isDone ? <CheckSquare size={18} /> : <span className="text-[10px] text-slate-400 uppercase leading-none">{session.day.substring(0, 3)}</span>} </div>
              <div> <h4 className={`font-bold text-lg tracking-tight ${isDone ? 'text-slate-400 line-through' : 'text-slate-100'}`}>{session.focus}</h4> <div className="flex items-center gap-2 mt-1"><span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wide ${intensityColor}`}>{session.intensity}</span></div> </div>
           </div>
-          <ChevronRight size={20} className={`transition-transform ${isExpanded ? 'rotate-90 text-cyan-400' : 'text-slate-500'}`} />
+          <div className="flex items-center gap-2">
+            {isExpanded && <button onClick={shareSession} className="text-emerald-500 p-2 hover:bg-emerald-900/20 rounded-full mr-2"><MessageCircle size={18}/></button>}
+            <ChevronRight size={20} className={`transition-transform ${isExpanded ? 'rotate-90 text-cyan-400' : 'text-slate-500'}`} />
+          </div>
         </div>
         {isExpanded && (
           <div className="px-5 pb-5 space-y-5 border-t border-slate-700/50 pt-4 animate-in slide-in-from-top-2">
@@ -137,6 +149,11 @@ export const PlanManager: React.FC = () => {
       const text = `*ELITE SPRINT AI - MICRO-CICLO*\n\n*Fase:* ${currentPlan.phase}\n*Objetivo:* ${currentPlan.weeklyGoal}\n\nGenerado por Elite Sprint Coach AI.`;
       const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
       window.open(url, '_blank');
+  };
+
+  const handleLogout = async () => {
+      await signOut(auth);
+      window.location.reload();
   };
 
   const toggleEventSelection = (e: string) => { const current = tempProfile.events || []; if (current.includes(e)) setTempProfile({ ...tempProfile, events: current.filter(ev => ev !== e) }); else setTempProfile({ ...tempProfile, events: [...current, e] }); };
@@ -264,12 +281,27 @@ export const PlanManager: React.FC = () => {
   if (showProfileConfig) {
     return (
       <div className="space-y-6 animate-in fade-in duration-500 pb-10">
-        <h2 className="text-2xl font-bold mb-4">Perfil Holístico</h2>
+        <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold">Perfil Holístico</h2>
+            <button onClick={() => setShowProfileConfig(false)} className="p-2 bg-slate-800 rounded-full"><X/></button>
+        </div>
+        
         <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 space-y-6">
           {/* IDENTIDAD */}
           <section className="space-y-4">
              <h3 className="text-sm font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-2"><UserCog size={14}/> Identidad Atlética</h3>
              <div><label className="text-xs text-slate-400 block mb-1">Nombre</label><input type="text" value={tempProfile.name} onChange={e => setTempProfile({...tempProfile, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" /></div>
+             
+             {/* ROLE SWITCHER FOR TESTING */}
+             <div>
+                <label className="text-xs text-slate-400 block mb-1">Rol del Sistema</label>
+                <select value={tempProfile.role} onChange={e => setTempProfile({...tempProfile, role: e.target.value as any})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white">
+                    <option value="athlete">Atleta</option>
+                    <option value="staff">Entrenador / Staff</option>
+                </select>
+                <p className="text-[10px] text-slate-500 mt-1">Cambia a "Staff" para ver el panel de entrenadores.</p>
+             </div>
+
              <div className="grid grid-cols-2 gap-3">
                  <div><label className="text-xs text-slate-400 block mb-1">Edad</label><input type="number" value={tempProfile.age} onChange={e => setTempProfile({...tempProfile, age: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" /></div>
                  <div><label className="text-xs text-slate-400 block mb-1">Años Exp.</label><input type="number" value={tempProfile.yearsExperience} onChange={e => setTempProfile({...tempProfile, yearsExperience: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" /></div>
@@ -363,6 +395,10 @@ export const PlanManager: React.FC = () => {
           </section>
 
           <button onClick={handleSaveProfile} className="w-full bg-cyan-600 text-white font-bold py-4 rounded-xl mt-4 shadow-lg shadow-cyan-900/20">Guardar Perfil Completo</button>
+          
+          <button onClick={handleLogout} className="w-full bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900/50 font-bold py-3 rounded-xl mt-2 flex items-center justify-center gap-2 transition-colors">
+              <LogOut size={16}/> Cerrar Sesión
+          </button>
         </div>
 
         {activeTooltip && (
@@ -422,7 +458,7 @@ export const PlanManager: React.FC = () => {
                     <div className="flex items-center gap-2"><span className="inline-flex items-center gap-1 px-2 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded text-[10px] font-bold uppercase tracking-widest"><Layers size={10} /> {currentPlan.phase}</span></div>
                     <div className="flex gap-2">
                         <button onClick={() => setShowMacroModal(true)} className="bg-slate-700/50 hover:bg-slate-600 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 border border-slate-600"><Brain size={12} className="text-purple-400"/> Lógica</button>
-                        <button onClick={sharePlan} className="bg-slate-700/50 hover:bg-slate-600 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 border border-slate-600" title="Copiar"><Share size={12} className="text-emerald-400"/></button>
+                        <button onClick={sharePlan} className="bg-slate-700/50 hover:bg-slate-600 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 border border-slate-600" title="Copiar"><Share size={12} className="text-slate-300"/></button>
                         <button onClick={shareToWhatsapp} className="bg-emerald-900/50 hover:bg-emerald-800 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 border border-emerald-700 text-emerald-400" title="Enviar por WhatsApp"><MessageCircle size={12}/></button>
                     </div>
                 </div>

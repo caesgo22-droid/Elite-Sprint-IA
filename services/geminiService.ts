@@ -161,10 +161,14 @@ export const generateTrainingPlan = async (
 
     const structure = getStructureForPhase(phaseName);
     const dayMap: {[key:string]: string} = { 'Mon': 'Lunes', 'Tue': 'Martes', 'Wed': 'Miércoles', 'Thu': 'Jueves', 'Fri': 'Viernes', 'Sat': 'Sábado', 'Sun': 'Domingo' };
-    const userDaysES = profile.trainingDays.map(d => dayMap[d] || d);
     
-    const templatePriorities = Object.values(structure.weeklyStructure);
-
+    // SAFETY FIX: Ensure trainingDays exists, default to M/W/F if empty
+    const trainingDays = (profile.trainingDays && profile.trainingDays.length > 0) 
+        ? profile.trainingDays 
+        : ['Mon', 'Wed', 'Fri'];
+        
+    const userDaysES = trainingDays.map(d => dayMap[d] || d);
+    
     const prompt = `
       ACTÚA COMO: DIRECTOR DE ALTO RENDIMIENTO (WORLD ATHLETICS LEVEL V).
       
@@ -175,7 +179,7 @@ export const generateTrainingPlan = async (
       - Nivel: ${profile.experienceLevel}
       - Evento: ${focusEvent || "100m"}
       - Contexto: Fase ${phaseName}.
-      - Estado CNS (Readiness): ${cnsScore.toFixed(1)}/10.
+      - Estado SNC (Readiness): ${cnsScore.toFixed(1)}/10.
       - Carga (ACWR): ${acwr ? acwr.ratio : "N/A"}.
       
       PROTOCOLOS DE SEGURIDAD OBLIGATORIOS:
@@ -184,10 +188,12 @@ export const generateTrainingPlan = async (
       3. Fase Competición: Volumen mínimo efectivo. Enfoque Neural.
       
       TAREA:
-      Diseñar el microciclo para los días: [ ${userDaysES.join(", ")} ].
+      Diseñar el microciclo SOLAMENTE para los días: [ ${userDaysES.join(", ")} ].
       Usa la base de datos de Drills para seleccionar ejercicios específicos (CE, SDE, SPE).
       
-      SALIDA JSON REQUERIDA (Esquema definido).
+      IMPORTANTE:
+      - Devuelve un objeto JSON válido que cumpla estrictamente con el esquema.
+      - Asegúrate de incluir todos los campos requeridos (weeklyGoal, rationale, sessions).
     `;
 
     const response = await ai.models.generateContent({
@@ -199,6 +205,7 @@ export const generateTrainingPlan = async (
     if (response.text) {
       const data = cleanAndParseJSON(response.text);
       if (!data) throw new Error("Failed to parse JSON response");
+      // Add IDs to sessions if missing, or handle in frontend
       return { id: Date.now().toString(), createdAt: new Date().toISOString(), focusEvent: focusEvent || profile.events[0], acwrStatus: acwr, ...data } as TrainingPlan;
     }
     return null;
@@ -245,10 +252,7 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
       2. ¿Hay "Colapso" en la rodilla de apoyo durante la amortiguación? (Falta de Stiffness).
       3. ¿La pierna libre hace un recorrido circular (Backside) o lineal (Pistón)?
       
-      SALIDA:
-      - Identifica 2 Errores Críticos que impacten la velocidad o riesgo de lesión.
-      - Asigna Drills Correctivos específicos (ej: "Wickets" para Overstriding, "Sleds" para aceleración).
-      - Genera "Coach Shouts" cortos y directos para usar en pista.
+      SALIDA JSON REQUERIDA.
     `;
 
     const parts: any[] = [];

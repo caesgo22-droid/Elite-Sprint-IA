@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { Zap, TrendingUp, CalendarCheck, CheckSquare, X, BatteryCharging, ArrowRight, BrainCircuit, Sparkles, Activity, Clock, MapPin, Info } from 'lucide-react';
+import { Zap, TrendingUp, CalendarCheck, CheckSquare, X, BatteryCharging, ArrowRight, BrainCircuit, Sparkles, Activity, Clock, MapPin, Info, MessageCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { calculateRecovery } from '../utils/recoveryEngine';
@@ -107,6 +107,13 @@ export const HomeDashboard: React.FC = () => {
       setRecoveryPlan(rec);
   };
 
+  const shareDailySession = () => {
+      if(!todaysSession) return;
+      const text = `*ELITE SPRINT AI - Sesión de Hoy (${dayNameES})*\n\n*Enfoque:* ${todaysSession.focus}\n*Rutina:* ${todaysSession.trackRoutine.join(', ')}\n*Intensidad:* ${todaysSession.intensity}`;
+      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(url, '_blank');
+  };
+
   const InfoButton = ({ title, text }: { title: string, text: string }) => (
       <button 
         type="button"
@@ -194,8 +201,18 @@ export const HomeDashboard: React.FC = () => {
 
       <div className="bg-slate-900/50 rounded-2xl border border-slate-800 overflow-hidden flex flex-col max-h-[500px]">
         <div className="bg-slate-800/50 p-4 flex items-center justify-between border-b border-slate-800 shrink-0 sticky top-0 z-10">
-          <div className="flex items-center gap-2"><CalendarCheck size={18} className="text-cyan-400" /><h3 className="font-semibold text-lg">Hoy ({dayNameES})</h3></div>
-          {todaysSession && <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${todaysSession.intensity === 'Max' ? 'bg-red-500/20 text-red-400' : todaysSession.intensity === 'High' ? 'bg-orange-500/20 text-orange-400' : 'bg-green-500/20 text-green-400'}`}>{todaysSession.intensity}</span>}
+          <div className="flex items-center gap-2">
+            <CalendarCheck size={18} className="text-cyan-400" />
+            <h3 className="font-semibold text-lg">Hoy ({dayNameES})</h3>
+          </div>
+          <div className="flex gap-2">
+             {todaysSession && (
+                 <button onClick={shareDailySession} className="p-1.5 bg-emerald-900/30 text-emerald-400 rounded-lg border border-emerald-500/30 hover:bg-emerald-900/50 transition-colors" title="Compartir Sesión">
+                    <MessageCircle size={16}/>
+                 </button>
+             )}
+             {todaysSession && <span className={`px-2 py-1 rounded text-xs font-bold uppercase flex items-center ${todaysSession.intensity === 'Max' ? 'bg-red-500/20 text-red-400' : todaysSession.intensity === 'High' ? 'bg-orange-500/20 text-orange-400' : 'bg-green-500/20 text-green-400'}`}>{todaysSession.intensity}</span>}
+          </div>
         </div>
         <div className="p-5 overflow-y-auto">
           {todaysSession ? (
