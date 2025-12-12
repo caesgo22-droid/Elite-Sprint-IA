@@ -1,7 +1,8 @@
+
 import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { analyzeTechnique } from '../services/geminiService';
+import { analyzeTechnique, hasApiKey } from '../services/geminiService';
 import { ElitePhysicsEngine, AdvancedMetrics, calculateAngle } from '../utils/biomechanicsUtils';
 import { BiomechanicalAnalysis, KineticMetrics } from '../types';
 import { Loader2, AlertTriangle, CheckCircle, History, ScanLine, UploadCloud, Play, Video, Share, Info, UserCircle2, GraduationCap, FileText, MessageCircle, Activity, LocateFixed, Eye, X, Table2, MousePointerClick, Maximize2 } from 'lucide-react';
@@ -91,11 +92,10 @@ const VideoAnalyzer: React.FC = () => {
       if (!poseLandmarker) return null;
       
       try {
-          // CRITICAL FIX: If timestamp goes backwards (loop or scrub), reset MediaPipe graph
-          if (timestamp < lastVideoTimestamp.current) {
-             // PoseLandmarker in tasks-vision does not have reset(). 
-             // We rely on catch block if it throws or robust handling.
-             // poseLandmarker.reset(); 
+          // STRICT SAFETY CHECK: If timestamp goes backwards, ABORT immediately.
+          // This prevents "Packet timestamp mismatch" crash in MediaPipe.
+          if (timestamp <= lastVideoTimestamp.current) {
+             return null; 
           }
           lastVideoTimestamp.current = timestamp;
 
@@ -121,7 +121,7 @@ const VideoAnalyzer: React.FC = () => {
           }
       } catch (e) {
           console.warn("MediaPipe Detection Glitch (Ignored):", e);
-          // Attempt recovery
+          // Force reset tracking on error to be safe
           try { lastVideoTimestamp.current = -1; } catch(err) {}
       }
       return null;
@@ -237,7 +237,8 @@ const VideoAnalyzer: React.FC = () => {
           videoRef.current.pause();
           videoRef.current.currentTime = time;
           setCurrentTime(time);
-          // Allow manual scrub to force process, but reset if jump is large backwards handled in performDetection
+          // Reset safe timestamp for manual jumps
+          lastVideoTimestamp.current = -1; 
           setTimeout(() => processFrame(time), 50); 
       }
   };
@@ -254,6 +255,7 @@ const VideoAnalyzer: React.FC = () => {
       if (videoRef.current && analysis.timestamp) {
           videoRef.current.currentTime = analysis.timestamp;
           videoRef.current.pause();
+          lastVideoTimestamp.current = -1; // Reset for jump
           setTimeout(() => processFrame(analysis.timestamp!), 200);
       } else {
           alert("Este análisis antiguo no tiene marca de tiempo guardada.");
@@ -267,16 +269,15 @@ const VideoAnalyzer: React.FC = () => {
     setStatusMessage("Detección de Contacto (GCT)...");
     
     // Reset tracker for scan
-    if (poseLandmarker) {
-        // try { poseLandmarker.reset(); } catch(e) {}
-    }
     lastVideoTimestamp.current = -1;
 
     try {
         const video = videoRef.current;
         video.pause();
         const duration = video.duration;
-        const scanSteps = 15;
+        
+        // INCREASED PRECISION: 25 steps for better detection
+        const scanSteps = 25; 
         const tempHistory: any[] = [];
 
         // 1. SCAN PHASE
@@ -284,7 +285,7 @@ const VideoAnalyzer: React.FC = () => {
             const time = (duration / scanSteps) * i;
             video.currentTime = time;
             // Wait for seek to complete (basic buffer)
-            await new Promise(r => setTimeout(r, 200)); 
+            await new Promise(r => setTimeout(r, 150)); 
             const data = performDetection(video, time * 1000);
             if(data) tempHistory.push(data);
         }
@@ -292,10 +293,11 @@ const VideoAnalyzer: React.FC = () => {
         // 2. LOGIC PHASE
         setStatusMessage("Analizando Puntos Críticos...");
         const { maxFlexionFrame, maxExtensionFrame } = physicsEngine.current.detectSprintPhases(tempHistory);
-        const bestFrame = maxExtensionFrame || maxFlexionFrame || tempHistory[Math.floor(tempHistory.length/2)];
+        // Robust Fallback: If no perfect phase found, use the frame with highest velocity or just middle frame
+        const bestFrame = maxExtensionFrame || maxFlexionFrame || tempHistory.sort((a,b) => (b.advanced?.velocity || 0) - (a.advanced?.velocity || 0))[0] || tempHistory[Math.floor(tempHistory.length/2)];
         
         if (!bestFrame) {
-            alert("No se detectó un cuerpo claro en el video.");
+            alert("No se detectó un cuerpo claro en el video. Intenta con un video con mejor iluminación o ángulo.");
             setLoading(false);
             isScanning.current = false;
             return;
@@ -375,8 +377,18 @@ const VideoAnalyzer: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-16">
        <div className="flex justify-between items-end border-b border-slate-800 pb-4">
-          <div><h2 className="text-2xl font-bold">Bio-Mecánica</h2><p className="text-slate-400 text-sm">Laboratorio de Precisión</p></div>
-          <button onClick={() => setViewHistory(!viewHistory)} className="text-xs bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700 hover:text-cyan-400"><History size={12} className="inline mr-1"/> Historial</button>
+          <div>
+            <h2 className="text-2xl font-bold">Bio-Mecánica</h2>
+            <p className="text-slate-400 text-sm">Laboratorio de Precisión</p>
+          </div>
+          <div className="flex gap-2">
+            {!hasApiKey && (
+                <div className="bg-red-900/20 border border-red-500/50 text-red-400 px-3 py-1.5 rounded-full text-xs font-bold animate-pulse flex items-center gap-1">
+                    <AlertTriangle size={12}/> API Key Missing
+                </div>
+            )}
+            <button onClick={() => setViewHistory(!viewHistory)} className="text-xs bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700 hover:text-cyan-400"><History size={12} className="inline mr-1"/> Historial</button>
+          </div>
        </div>
 
        {viewHistory ? (

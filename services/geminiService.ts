@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Schema, FunctionDeclaration, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { TrainingPlan, BiomechanicalAnalysis, UserProfile, NexusInsight } from "../types";
 import { getStructureForPhase, DRILL_DATABASE } from "./trainingDatabase";
@@ -13,6 +14,8 @@ const getApiKey = () => {
 }
 
 const apiKey = getApiKey();
+export const hasApiKey = !!apiKey; // EXPORTED FOR UI
+
 let ai: GoogleGenAI | null = null;
 
 if (apiKey) {
@@ -451,3 +454,4 @@ export const generateNexusInsight = async (logs: any[], readiness: any, lastAnal
 
     } catch (error) { console.error("Nexus Error", error); return null; }
 }
+    
