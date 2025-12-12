@@ -56,7 +56,6 @@ const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessi
              <div> <h4 className={`font-bold text-lg tracking-tight ${isDone ? 'text-slate-400 line-through' : 'text-slate-100'}`}>{session.focus}</h4> <div className="flex items-center gap-2 mt-1"><span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wide ${intensityColor}`}>{session.intensity}</span></div> </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* FORCE VISIBILITY OF WHATSAPP BUTTON */}
             <button onClick={shareSession} className="text-emerald-500 bg-emerald-900/20 p-2 rounded-full mr-1 hover:bg-emerald-900/40 z-10 relative">
                 <MessageCircle size={18}/>
             </button>
@@ -255,11 +254,35 @@ export const PlanManager: React.FC = () => {
              <h3 className="text-sm font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-2"><UserCog size={14}/> Identidad Atlética</h3>
              <div><label className="text-xs text-slate-400 block mb-1">Nombre</label><input type="text" value={tempProfile.name} onChange={e => setTempProfile({...tempProfile, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" /></div>
              
+             {/* RESTORED: Age, Height, Weight, Experience */}
              <div className="grid grid-cols-2 gap-3">
-                 <div><label className="text-xs text-slate-400 block mb-1">Edad</label><input type="number" value={tempProfile.age} onChange={e => setTempProfile({...tempProfile, age: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" /></div>
-                 <div><label className="text-xs text-slate-400 block mb-1">Peso (kg)</label><input type="number" value={tempProfile.weight || ''} onChange={e => setTempProfile({...tempProfile, weight: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" /></div>
+                 <div>
+                     <label className="text-xs text-slate-400 block mb-1">Edad</label>
+                     <input type="number" value={tempProfile.age} onChange={e => setTempProfile({...tempProfile, age: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" />
+                 </div>
+                 <div>
+                     <label className="text-xs text-slate-400 block mb-1">Altura (cm)</label>
+                     <input type="number" value={tempProfile.height || ''} onChange={e => setTempProfile({...tempProfile, height: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" />
+                 </div>
+                 <div>
+                     <label className="text-xs text-slate-400 block mb-1">Peso (kg)</label>
+                     <input type="number" value={tempProfile.weight || ''} onChange={e => setTempProfile({...tempProfile, weight: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" />
+                 </div>
+                 <div>
+                     <label className="text-xs text-slate-400 block mb-1">Años Exp.</label>
+                     <input type="number" value={tempProfile.yearsExperience || ''} onChange={e => setTempProfile({...tempProfile, yearsExperience: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" />
+                 </div>
              </div>
-             <div><label className="text-xs text-slate-400 block mb-1">Nivel</label><select value={tempProfile.experienceLevel} onChange={e => setTempProfile({...tempProfile, experienceLevel: e.target.value as any})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white"><option value="Beginner">Principiante</option><option value="Intermediate">Intermedio</option><option value="Advanced">Avanzado</option><option value="Elite">Élite</option></select></div>
+             
+             <div>
+                 <label className="text-xs text-slate-400 block mb-1">Nivel de Experiencia</label>
+                 <select value={tempProfile.experienceLevel} onChange={e => setTempProfile({...tempProfile, experienceLevel: e.target.value as any})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white">
+                     <option value="Beginner">Principiante (Inicio)</option>
+                     <option value="Intermediate">Intermedio (Regional)</option>
+                     <option value="Advanced">Avanzado (Nacional)</option>
+                     <option value="Elite">Élite (Internacional)</option>
+                 </select>
+             </div>
           </section>
 
           {/* RESTORED: Clinical Injuries */}
@@ -348,7 +371,7 @@ export const PlanManager: React.FC = () => {
                           </div>
                           <div>
                               <label className="text-[10px] text-slate-500 block uppercase">Fecha</label>
-                              <input type="date" value={tempProfile.pbs[ev]?.date || ''} onChange={e => updatePB(ev, 'date', e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"/>
+                              <input type="date" value={tempProfile.pbs[ev]?.date || ''} onChange={e => updatePB(ev, 'date', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white"/>
                           </div>
                       </div>
                   ))}

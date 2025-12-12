@@ -141,44 +141,44 @@ const modifySessionTool: FunctionDeclaration = {
   }
 };
 
-// --- FALLBACK PLAN GENERATOR (Emergency Protocol) ---
-const generateFallbackPlan = (profile: UserProfile, phaseName: string): TrainingPlan => {
+// --- DYNAMIC FALLBACK PLAN GENERATOR ---
+const generateFallbackPlan = (profile: UserProfile, phaseName: string, daysES: string[]): TrainingPlan => {
+    // Dynamic fallback that generates a session for EACH requested day
+    const sessions = daysES.map((day, index) => {
+        // Simple rotation logic for fallback: Accel -> Tempo -> MaxV -> Recovery
+        let focus = "Acceleration";
+        let intensity = "High";
+        let routine = ["Wall Drills 3x30s", "A-Skip 3x20m", "Sled Push 4x20m"];
+        
+        if (index % 3 === 1) {
+            focus = "Tempo";
+            intensity = "Low";
+            routine = ["100m @ 70% x 10", "Core Circuit"];
+        } else if (index % 3 === 2) {
+            focus = "Max Velocity";
+            intensity = "Max";
+            routine = ["Wicket Runs 6x", "Fly 10m x 4"];
+        }
+
+        return {
+            day: day,
+            focus: focus,
+            trackRoutine: routine,
+            gymRoutine: index === 0 ? ["Squats 3x5"] : [],
+            biomechanicsKpi: "Postura Neutra",
+            videoKeywords: [focus.toLowerCase()],
+            intensity: intensity
+        };
+    });
+
     return {
         id: Date.now().toString(),
         createdAt: new Date().toISOString(),
-        weeklyGoal: "Recuperación Estructural y Mecánica (Modo Fallback)",
-        phase: "General Prep",
-        rationale: "Se ha generado un plan base de mantenimiento debido a un error de conexión con el motor de IA. Este plan asegura que puedas entrenar hoy de forma segura.",
-        sessions: [
-            {
-                day: "Lunes",
-                focus: "Acceleration",
-                trackRoutine: ["Wall Drills 3x30s", "A-Skip 3x20m", "Sled Push 4x20m", "Falling Starts 6x20m"],
-                gymRoutine: ["Squats 3x5", "RDL 3x8"],
-                biomechanicsKpi: "Empuje horizontal completo",
-                videoKeywords: ["accel"],
-                intensity: "High"
-            },
-            {
-                day: "Miércoles",
-                focus: "Max Velocity",
-                trackRoutine: ["Wicket Runs 6x", "Fly 10m (30m buildup) x 4"],
-                gymRoutine: ["Nordic Curl 3x5", "Core"],
-                biomechanicsKpi: "Contacto debajo de cadera",
-                videoKeywords: ["maxv"],
-                intensity: "Max"
-            },
-            {
-                day: "Viernes",
-                focus: "Tempo",
-                trackRoutine: ["100m @ 70% x 10 (Walk back recovery)", "Mobility Routine"],
-                gymRoutine: [],
-                biomechanicsKpi: "Relajación de hombros",
-                videoKeywords: ["tempo"],
-                intensity: "Low"
-            }
-        ]
-    } as any; 
+        weeklyGoal: "Recuperación Estructural y Mecánica (Modo Offline)",
+        phase: phaseName as any,
+        rationale: "Plan generado automáticamente por el sistema de seguridad debido a interrupción en la conexión IA.",
+        sessions: sessions as any
+    } as TrainingPlan; 
 };
 
 export const generateTrainingPlan = async (
@@ -194,21 +194,20 @@ export const generateTrainingPlan = async (
   else if (currentMonth >= 5 && currentMonth <= 8) phaseName = "Competition"; 
   else if (currentMonth >= 9) phaseName = "General Prep";
 
+  // Prepare Days List
+  const trainingDays = (profile.trainingDays && Array.isArray(profile.trainingDays) && profile.trainingDays.length > 0) 
+        ? profile.trainingDays 
+        : ['Mon', 'Wed', 'Fri'];
+  const dayMap: {[key:string]: string} = { 'Mon': 'Lunes', 'Tue': 'Martes', 'Wed': 'Miércoles', 'Thu': 'Jueves', 'Fri': 'Viernes', 'Sat': 'Sábado', 'Sun': 'Domingo' };
+  const userDaysES = trainingDays.map(d => dayMap[d] || d);
+
   if (!ai) {
-      console.warn("AI not initialized, returning fallback plan");
-      return generateFallbackPlan(profile, phaseName);
+      console.warn("AI not initialized, returning dynamic fallback plan");
+      return generateFallbackPlan(profile, phaseName, userDaysES);
   }
 
   try {
     const cnsScore = ((readiness.sleep) + (10 - readiness.fatigue) + (10 - readiness.soreness) + (10 - readiness.stress) + (readiness.hydration)) / 5; 
-    
-    // SAFETY FIX: Ensure trainingDays exists, default to M/W/F if empty or invalid
-    const trainingDays = (profile.trainingDays && Array.isArray(profile.trainingDays) && profile.trainingDays.length > 0) 
-        ? profile.trainingDays 
-        : ['Mon', 'Wed', 'Fri'];
-        
-    const dayMap: {[key:string]: string} = { 'Mon': 'Lunes', 'Tue': 'Martes', 'Wed': 'Miércoles', 'Thu': 'Jueves', 'Fri': 'Viernes', 'Sat': 'Sábado', 'Sun': 'Domingo' };
-    const userDaysES = trainingDays.map(d => dayMap[d] || d);
     
     const prompt = `
       ACTÚA COMO: DIRECTOR DE ALTO RENDIMIENTO (WORLD ATHLETICS LEVEL V).
@@ -222,14 +221,16 @@ export const generateTrainingPlan = async (
       - Carga (ACWR): ${acwr ? acwr.ratio : "N/A"}.
       
       TAREA CRÍTICA:
-      Generar un microciclo de entrenamiento para EXACTAMENTE estos días: ${userDaysES.join(", ")}.
+      Generar un microciclo de entrenamiento EXACTAMENTE para los siguientes días: ${userDaysES.join(", ")}.
       
-      **DEBES GENERAR UN OBJETO "SESSION" PARA CADA UNO DE LOS DÍAS LISTADOS ARRIBA. NO OMITAS NINGÚN DÍA.**
+      **REGLAS ESTRICTAS DE SALIDA:**
+      1. El array "sessions" debe tener una longitud exacta de ${userDaysES.length}.
+      2. CADA uno de los días listados (${userDaysES.join(", ")}) debe tener su propio objeto de sesión.
+      3. NO omitas ningún día. Si es día de descanso activo, marca el focus como "Recovery".
       
-      INSTRUCCIONES:
+      INSTRUCCIONES DE ENTRENAMIENTO:
       1. Usa la base de datos de Drills para seleccionar ejercicios específicos (CE, SDE, SPE).
-      2. Si el día es de recuperación, asigna "Tempo" o "Recovery".
-      3. Devuelve un objeto JSON válido que cumpla estrictamente con el esquema.
+      2. Devuelve un objeto JSON válido que cumpla estrictamente con el esquema.
     `;
 
     const response = await ai.models.generateContent({
@@ -244,11 +245,11 @@ export const generateTrainingPlan = async (
       return { id: Date.now().toString(), createdAt: new Date().toISOString(), focusEvent: focusEvent || profile.events[0], acwrStatus: acwr, ...data } as TrainingPlan;
     }
     
-    return generateFallbackPlan(profile, phaseName);
+    return generateFallbackPlan(profile, phaseName, userDaysES);
 
   } catch (error) { 
-      console.error("Plan Gen Error (Using Fallback):", error); 
-      return generateFallbackPlan(profile, phaseName);
+      console.error("Plan Gen Error (Using Dynamic Fallback):", error); 
+      return generateFallbackPlan(profile, phaseName, userDaysES);
   }
 };
 
@@ -296,7 +297,7 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
     `;
 
     const parts: any[] = [];
-    images.forEach(img => parts.push({ inlineData: { mimeType: 'image/webp', data: img } }));
+    images.forEach(img => parts.push({ inlineData: { mimeType: 'image/jpeg', data: img } }));
     parts.push({ text: promptText });
 
     const response = await ai.models.generateContent({

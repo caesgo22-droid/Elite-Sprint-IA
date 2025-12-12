@@ -1,11 +1,10 @@
-
 import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { analyzeTechnique } from '../services/geminiService';
 import { ElitePhysicsEngine, AdvancedMetrics } from '../utils/biomechanicsUtils';
 import { BiomechanicalAnalysis, KineticMetrics } from '../types';
-import { Loader2, AlertTriangle, CheckCircle, History, ScanLine, UploadCloud, Play, Download, Share, Zap, Info, ToggleLeft, ToggleRight, Ruler, FileText, Video, GraduationCap, UserCircle2, LocateFixed, Activity, MessageCircle } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle, History, ScanLine, UploadCloud, Play, Video, Share, Info, UserCircle2, GraduationCap, FileText, MessageCircle, Activity, LocateFixed } from 'lucide-react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 
 const VideoAnalyzer: React.FC = () => {
@@ -21,17 +20,10 @@ const VideoAnalyzer: React.FC = () => {
   const [measuredData, setMeasuredData] = useState<any>(null);
   const [advancedMetrics, setAdvancedMetrics] = useState<AdvancedMetrics>({ strideLength: '-', velocity: '-' });
   const [comLocation, setComLocation] = useState<{x:number, y:number} | null>(null);
-  
-  // NEW: Analysis Mode (Personal vs External/Educational)
   const [analysisMode, setAnalysisMode] = useState<'Personal' | 'External'>('Personal');
-  
-  // Tooltip State
   const [activeTooltip, setActiveTooltip] = useState<{title: string, text: string} | null>(null);
 
-  // Physics Engine Instance
   const physicsEngine = useRef<ElitePhysicsEngine>(new ElitePhysicsEngine());
-  
-  // Mount tracking
   const isMounted = useRef(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -71,10 +63,7 @@ const VideoAnalyzer: React.FC = () => {
         setMeasuredData(null);
         setAdvancedMetrics({ strideLength: '-', velocity: '-' });
         setComLocation(null);
-        
-        // RESET PHYSICS ENGINE STATE
         physicsEngine.current.reset();
-        
         setTimeout(() => { if(videoRef.current) { videoRef.current.load(); videoRef.current.currentTime = 0.1; } }, 500);
     }
   };
@@ -97,99 +86,116 @@ const VideoAnalyzer: React.FC = () => {
 
       if (result.landmarks && result.landmarks.length > 0) {
           const landmarks = result.landmarks[0];
-          
-          // Use Physics Engine Class
           const com = physicsEngine.current.calculateCenterOfMass(landmarks);
           setComLocation(com);
           
           if(ctx) {
               ctx.clearRect(0, 0, canvas.width, canvas.height);
-              ctx.lineWidth = 4;
               
-              // Draw Skeleton
-              const connections = [[11,13],[13,15], [12,14],[14,16], [11,12], [23,24], [23,25],[25,27], [24,26],[26,28], [11,23], [12,24]];
-              connections.forEach(([i, j]) => {
+              // --- PROFESSIONAL SKELETON RENDER ---
+              const drawLine = (i: number, j: number, color: string, width: number) => {
                   if(landmarks[i] && landmarks[j]) {
                       ctx.beginPath();
                       ctx.moveTo(landmarks[i].x * canvas.width, landmarks[i].y * canvas.height);
                       ctx.lineTo(landmarks[j].x * canvas.width, landmarks[j].y * canvas.height);
-                      ctx.strokeStyle = "#00ff00aa"; 
+                      ctx.strokeStyle = color;
+                      ctx.lineWidth = width;
                       ctx.stroke();
                   }
-              });
+              }
+              
+              const R_COLOR = "#00ffff"; 
+              const L_COLOR = "#ff00ff";
+              const TRUNK_COLOR = "#ffffff";
 
-              // Draw CoM & Force Vector
+              drawLine(12, 14, R_COLOR, 3); // Shoulder-Elbow
+              drawLine(14, 16, R_COLOR, 3); // Elbow-Wrist
+              drawLine(24, 26, R_COLOR, 3); // Hip-Knee
+              drawLine(26, 28, R_COLOR, 3); // Knee-Ankle
+              
+              drawLine(11, 13, L_COLOR, 3);
+              drawLine(13, 15, L_COLOR, 3);
+              drawLine(23, 25, L_COLOR, 3);
+              drawLine(25, 27, L_COLOR, 3);
+
+              drawLine(11, 12, TRUNK_COLOR, 2); // Shoulders
+              drawLine(23, 24, TRUNK_COLOR, 2); // Hips
+              drawLine(11, 23, TRUNK_COLOR, 2); // L-Side
+              drawLine(12, 24, TRUNK_COLOR, 2); // R-Side
+
               if (com) {
                   const cx = com.x * canvas.width;
                   const cy = com.y * canvas.height;
                   
-                  // CoM Dot
                   ctx.beginPath();
                   ctx.fillStyle = "#ffff00"; // Yellow
-                  ctx.shadowColor = "#000";
-                  ctx.shadowBlur = 10;
-                  ctx.arc(cx, cy, 8, 0, 2*Math.PI);
+                  ctx.arc(cx, cy, 6, 0, 2*Math.PI);
                   ctx.fill();
-                  ctx.shadowBlur = 0;
-
-                  // Force Vector (Approximation based on Shin/Trunk)
-                  const ankle = landmarks[27]; // Left ankle for demo
-                  if (ankle) {
-                      const ax = ankle.x * canvas.width;
-                      const ay = ankle.y * canvas.height;
-                      // Draw line from ground to CoM (Resultant Force Line)
-                      ctx.beginPath();
-                      ctx.strokeStyle = "#ff00ff"; // Magenta
-                      ctx.lineWidth = 3;
-                      ctx.setLineDash([5, 5]);
-                      ctx.moveTo(ax, ay);
-                      ctx.lineTo(cx, cy);
-                      ctx.stroke();
-                      ctx.setLineDash([]);
-                  }
+                  
+                  ctx.beginPath();
+                  ctx.strokeStyle = "#ffff00";
+                  ctx.setLineDash([5, 5]);
+                  ctx.lineWidth = 1;
+                  ctx.moveTo(cx, cy);
+                  ctx.lineTo(cx, canvas.height); 
+                  ctx.stroke();
+                  ctx.setLineDash([]);
               }
           }
 
           const mechanics = physicsEngine.current.calculateSprintMechanics(landmarks);
           if(mechanics) setMeasuredData(mechanics);
 
-          // Get Advanced Metrics from Engine
-          const advanced = physicsEngine.current.estimateStrideParams(
-              landmarks, 
-              userProfile.height || 175, 
-              startTimeMs,
-              com
-          );
-          
+          const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, startTimeMs, com);
           setAdvancedMetrics(advanced);
       }
+  };
+
+  // Helper to ensure video is ready at a specific time
+  const seekTo = (video: HTMLVideoElement, time: number) => {
+      return new Promise((resolve) => {
+          const onSeeked = () => {
+              video.removeEventListener('seeked', onSeeked);
+              resolve(true);
+          };
+          video.addEventListener('seeked', onSeeked);
+          video.currentTime = time;
+      });
   };
 
   const handleAutoSequence = async () => {
     if(!previewUrl || !videoRef.current) return;
     setLoading(true);
-    setStatusMessage(analysisMode === 'Personal' ? "Calculando Física Corporal (CoM/Fuerza)..." : "Analizando Modelo Técnico...");
+    setStatusMessage("Escaneando Puntos Biomecánicos...");
     
     try {
         const duration = videoRef.current.duration;
+        // Grab frames at key phases (Accel, Trans, MaxV approx)
         const frames = [duration * 0.2, duration * 0.5, duration * 0.8]; 
         const capturedImages: string[] = [];
         
         for (const time of frames) {
-            videoRef.current.currentTime = time;
-            await new Promise(r => setTimeout(r, 500)); 
+            // WAIT for seek to complete before drawing
+            await seekTo(videoRef.current, time);
+            // Give it a tiny buffer for renderer
+            await new Promise(r => setTimeout(r, 100)); 
+            
             await detectPose(); 
             
             const canvas = document.createElement('canvas');
             canvas.width = videoRef.current.videoWidth;
             canvas.height = videoRef.current.videoHeight;
-            canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
-            capturedImages.push(canvas.toDataURL('image/webp', 0.8).split(',')[1]);
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.drawImage(videoRef.current, 0, 0);
+                // Reduce quality slightly to ensure payload isn't too big for Gemini
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                capturedImages.push(dataUrl.split(',')[1]);
+            }
         }
         
-        setStatusMessage("Generando Diagnóstico Cinético...");
+        setStatusMessage("Consultando Motor de Física...");
         
-        // Prepare Kinetic Data
         const bioData = measuredData;
         const kinetics: KineticMetrics = {
             verticalOscillation: advancedMetrics.verticalOscillation || "N/A",
@@ -204,17 +210,21 @@ const VideoAnalyzer: React.FC = () => {
                  ...result, 
                  id: Date.now().toString(), 
                  type: 'Sequence' as const, 
-                 thumbnail: `data:image/webp;base64,${capturedImages[1]}`,
+                 thumbnail: `data:image/jpeg;base64,${capturedImages[1]}`, // Use middle frame
                  kinetics: kinetics
              };
              setSessionAnalyses(prev => [analysis, ...prev]);
-             
-             if (analysisMode === 'Personal') {
-                 saveAnalysis(analysis);
-             }
+             if (analysisMode === 'Personal') saveAnalysis(analysis);
+        } else {
+            alert("No se pudo generar el análisis. Intenta con un video más claro o corto.");
         }
 
-    } catch(e) { console.error(e); } finally { setLoading(false); }
+    } catch(e) { 
+        console.error("Analysis sequence error:", e);
+        alert("Error técnico durante el análisis.");
+    } finally { 
+        setLoading(false); 
+    }
   };
 
   const copyAnalysis = async (analysis: BiomechanicalAnalysis) => {
@@ -274,9 +284,8 @@ Generated by Elite Sprint Coach AI
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-16">
-       {/* ... (Header) ... */}
        <div className="flex justify-between items-end border-b border-slate-800 pb-4">
-          <div><h2 className="text-2xl font-bold">Bio-Mecánica</h2><p className="text-slate-400 text-sm">MediaPipe + Physics Engine (CoM)</p></div>
+          <div><h2 className="text-2xl font-bold">Bio-Mecánica</h2><p className="text-slate-400 text-sm">Laboratorio de Análisis de Movimiento</p></div>
           <button onClick={() => setViewHistory(!viewHistory)} className="text-xs bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700 hover:text-cyan-400"><History size={12} className="inline mr-1"/> Historial</button>
        </div>
 
@@ -291,11 +300,10 @@ Generated by Elite Sprint Coach AI
                        </div>
                    </div>
                ))}
-               {analysisHistory.filter(h => h.category === 'Personal' || !h.category).length === 0 && <div className="text-center text-slate-500 text-sm py-4">No hay análisis personales guardados.</div>}
+               {analysisHistory.length === 0 && <div className="text-center text-slate-500 text-sm py-4">No hay análisis guardados.</div>}
            </div>
        ) : (
            <>
-            {/* ANALYSIS MODE SELECTOR */}
             {!previewUrl && (
                 <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 mb-4">
                     <button onClick={() => setAnalysisMode('Personal')} className={`flex-1 py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${analysisMode === 'Personal' ? 'bg-cyan-900/40 text-cyan-400 border border-cyan-500/50' : 'text-slate-500 hover:text-slate-300'}`}>
@@ -319,29 +327,22 @@ Generated by Elite Sprint Coach AI
                     <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4">
                         <UploadCloud size={32} className={`transition-colors ${isDragging ? 'text-cyan-400' : 'text-slate-400'}`} />
                     </div>
-                    <span className="font-bold text-slate-300 text-lg">Subir Video {analysisMode === 'External' ? 'de Referencia' : 'Personal'}</span>
-                    <p className="text-slate-500 text-xs mt-2">Soporta Slow-Mo 240fps</p>
+                    <span className="font-bold text-slate-300 text-lg">Subir Video</span>
+                    <p className="text-slate-500 text-xs mt-2">Soporta Slow-Mo 120/240fps</p>
                 </div>
             ) : (
                 <div className="space-y-6">
-                    {/* Mode Indicator Badge */}
-                    <div className="flex justify-center">
-                        <span className={`px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider border flex items-center gap-2 ${analysisMode === 'Personal' ? 'bg-cyan-900/30 border-cyan-500/50 text-cyan-400' : 'bg-purple-900/30 border-purple-500/50 text-purple-400'}`}>
-                            {analysisMode === 'Personal' ? <UserCircle2 size={12}/> : <GraduationCap size={12}/>}
-                            Modo: {analysisMode === 'Personal' ? 'Diagnóstico Personal' : 'Análisis Didáctico'}
-                        </span>
-                    </div>
-
                     <div className="relative rounded-2xl overflow-hidden bg-black max-h-[60vh] mx-auto shadow-2xl border border-slate-800 ring-1 ring-white/10 flex justify-center items-center bg-contain">
                         {isVideo ? (
                             <video ref={videoRef} src={previewUrl} className="w-full h-auto max-h-[60vh]" playsInline muted controls={false} onLoadedData={() => detectPose()} onSeeked={() => detectPose()} />
                         ) : <img src={previewUrl} className="w-full h-full object-contain" />}
                         <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-80" />
                         
-                        {/* Physics Overlay Legend */}
-                        <div className="absolute top-2 left-2 bg-black/50 p-1.5 rounded border border-white/20 pointer-events-none">
-                            <div className="flex items-center gap-2 mb-1"><span className="w-2 h-2 rounded-full bg-yellow-400 shadow-lg"></span> <span className="text-[9px] text-white">Centro de Masa (CoM)</span></div>
-                            <div className="flex items-center gap-2"><span className="w-4 h-0.5 bg-purple-500 rotate-45"></span> <span className="text-[9px] text-white">Vector Fuerza (Est.)</span></div>
+                        {/* Legend */}
+                        <div className="absolute top-2 left-2 bg-black/60 p-2 rounded border border-white/10 pointer-events-none backdrop-blur-md">
+                            <div className="flex items-center gap-2 mb-1"><span className="w-2 h-2 rounded-full bg-yellow-400 shadow-lg"></span> <span className="text-[10px] text-white font-mono">CoM (Centro de Masa)</span></div>
+                            <div className="flex items-center gap-2 mb-1"><span className="w-4 h-0.5 bg-green-500"></span> <span className="text-[10px] text-white font-mono">Vector Fuerza</span></div>
+                            <div className="flex items-center gap-2"><span className="w-0.5 h-3 bg-yellow-400 border-l border-dashed border-yellow-400"></span> <span className="text-[10px] text-white font-mono">Proyección Vertical</span></div>
                         </div>
 
                         {/* DESKTOP HUD */}
@@ -387,7 +388,6 @@ Generated by Elite Sprint Coach AI
                                 <div className="text-lg font-bold text-white font-mono">{advancedMetrics.velocity}</div>
                             </div>
                             
-                            {/* ADVANCED PHYSICS ROW */}
                             <div className="col-span-3 grid grid-cols-2 gap-2 mt-1">
                                 <div className="bg-purple-900/20 p-2 rounded-xl border border-purple-500/30 flex justify-between items-center px-3 relative pointer-events-auto">
                                     <div className="text-[9px] text-purple-300 font-bold uppercase flex items-center gap-1"><LocateFixed size={10}/> Bounce <InfoButton title="Bounce" text="Oscilación Vertical."/></div>
@@ -401,26 +401,21 @@ Generated by Elite Sprint Coach AI
                         </div>
                     )}
                     
-                    {/* Controls */}
                     <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 flex flex-col gap-3 backdrop-blur-sm sticky bottom-20 z-10 shadow-lg">
                         <div className="flex gap-2">
                             <button onClick={handleAutoSequence} disabled={loading || !poseLandmarker} className={`flex-1 bg-gradient-to-r ${analysisMode === 'Personal' ? 'from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500' : 'from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500'} text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 text-sm shadow-lg active:scale-95 transition-all`}>
-                                {loading ? <Loader2 className="animate-spin" /> : <ScanLine />} {loading ? statusMessage : '✨ Iniciar Auto-Análisis'}
+                                {loading ? <Loader2 className="animate-spin" /> : <ScanLine />} {loading ? statusMessage : '✨ Diagnóstico Nivel V'}
                             </button>
                             <a href={previewUrl} download="analysis.mp4" className="p-3 bg-slate-800 rounded-lg text-slate-300 hover:text-white border border-slate-700" title="Descargar Video"><Video size={20}/></a>
                         </div>
-                        {analysisMode === 'External' && (
-                            <p className="text-[10px] text-center text-slate-500">* Modo Didáctico: Este análisis NO se guardará en tu historial personal.</p>
-                        )}
                     </div>
                     
-                    {/* Results */}
                     {sessionAnalyses.map((analysis) => (
                         <div key={analysis.id} className={`bg-slate-900/90 border p-5 rounded-2xl space-y-4 animate-in slide-in-from-bottom-4 ${analysis.category === 'External' ? 'border-purple-500/30' : 'border-slate-700'}`}>
                             <div className="flex justify-between items-start border-b border-slate-800 pb-3">
                                 <div>
                                     <h3 className="font-bold text-xl text-white tracking-tight">{analysis.phaseDetected}</h3>
-                                    <span className="text-xs text-slate-500 uppercase tracking-widest">{analysis.type === 'Sequence' ? 'Análisis de Secuencia' : 'Frame Único'}</span>
+                                    <span className="text-xs text-slate-500 uppercase tracking-widest">{analysis.type === 'Sequence' ? 'Kinograma Completo' : 'Frame Único'}</span>
                                 </div>
                                 <div className="flex gap-2">
                                     <span className={`px-3 py-1 rounded-lg text-sm font-bold ${analysis.score > 80 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{analysis.score}</span>
@@ -430,7 +425,6 @@ Generated by Elite Sprint Coach AI
                                 </div>
                             </div>
                             
-                            {/* PHYSICS INSIGHT */}
                             {analysis.kinetics && (
                                 <div className="grid grid-cols-2 gap-2 bg-slate-950/50 p-2 rounded-lg border border-slate-800">
                                     <div className="text-center">
@@ -445,8 +439,13 @@ Generated by Elite Sprint Coach AI
                             )}
 
                             {analysis.criticalErrors.length > 0 && (<div className="bg-red-900/10 border-l-4 border-red-500 p-3 rounded-r-lg"><h4 className="text-xs font-bold text-red-400 uppercase mb-2 flex items-center gap-2"><AlertTriangle size={12}/> Errores Críticos</h4><ul className="space-y-1">{analysis.criticalErrors.map((err, i) => <li key={i} className="text-sm text-slate-300">• {err}</li>)}</ul></div>)}
-                            <div><h4 className="text-xs font-bold text-emerald-400 uppercase mb-2 flex items-center gap-2"><CheckCircle size={12}/> Correcciones</h4><div className="flex flex-wrap gap-2">{analysis.correctiveDrills.map((drill, i) => (<a key={i} href={`https://www.youtube.com/results?search_query=sprint+drill+${drill.replace(/\s/g, '+')}`} target="_blank" rel="noopener noreferrer" className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors"><Play size={10} fill="currentColor"/> {drill}</a>))}</div></div>
-                            {analysis.coachShouts.length > 0 && (<div className="pt-2"><div className="flex flex-wrap gap-3">{analysis.coachShouts.map((s, i) => (<div key={i} className="bg-white text-black font-extrabold text-xs px-4 py-2 rounded-xl rounded-bl-none shadow-lg transform -rotate-1 hover:rotate-0 transition-transform cursor-default border-2 border-slate-300">{s.toUpperCase()}!</div>))}</div></div>)}
+                            
+                            <div>
+                                <h4 className="text-xs font-bold text-emerald-400 uppercase mb-2 flex items-center gap-2"><CheckCircle size={12}/> Correcciones & Drills</h4>
+                                <div className="flex flex-wrap gap-2">{analysis.correctiveDrills.map((drill, i) => (<a key={i} href={`https://www.youtube.com/results?search_query=track+and+field+drill+${drill.replace(/\s/g, '+')}`} target="_blank" rel="noopener noreferrer" className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors"><Play size={10} fill="currentColor"/> {drill}</a>))}</div>
+                            </div>
+                            
+                            {analysis.coachShouts.length > 0 && (<div className="pt-2"><h4 className="text-[10px] text-slate-500 font-bold uppercase mb-1">Cues Verbales</h4><div className="flex flex-wrap gap-3">{analysis.coachShouts.map((s, i) => (<div key={i} className="bg-white text-black font-extrabold text-xs px-4 py-2 rounded-xl rounded-bl-none shadow-lg transform -rotate-1 hover:rotate-0 transition-transform cursor-default border-2 border-slate-300">{s.toUpperCase()}!</div>))}</div></div>)}
                         </div>
                     ))}
                     {sessionAnalyses.length > 0 && (<button onClick={() => {setSessionAnalyses([]); setPreviewUrl(null); setMeasuredData(null);}} className="w-full border border-dashed border-slate-700 text-slate-400 py-4 rounded-xl text-sm hover:bg-slate-900 hover:text-white transition-colors">Analizar Otro Video</button>)}
@@ -455,7 +454,6 @@ Generated by Elite Sprint Coach AI
            </>
        )}
 
-       {/* Floating Tooltip */}
        {activeTooltip && (
             <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-6 backdrop-blur-sm" onClick={() => setActiveTooltip(null)}>
                 <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
