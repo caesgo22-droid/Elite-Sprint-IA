@@ -312,7 +312,7 @@ export const generateTrainingPlan = async (
 export const analyzeTechnique = async (images: string[], bioData: any = null, advancedMetrics: any = null, analysisMode: 'Personal' | 'External' = 'Personal'): Promise<BiomechanicalAnalysis | null> => {
   if (!ai) {
     console.error("Gemini AI instance not initialized. Missing API Key.");
-    return null;
+    throw new Error("API_KEY_MISSING");
   }
   
   try {
@@ -383,9 +383,13 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
         }
     }
     return null;
-  } catch (error) { 
-      console.error("Analysis Error:", error); 
-      return null; 
+  } catch (error: any) { 
+      console.error("Analysis Error:", error);
+      // Propagate quota errors specifically
+      if (error.message?.includes("429") || error.status === 429) {
+          throw new Error("QUOTA_EXCEEDED");
+      }
+      throw error; 
   }
 };
 
@@ -454,4 +458,3 @@ export const generateNexusInsight = async (logs: any[], readiness: any, lastAnal
 
     } catch (error) { console.error("Nexus Error", error); return null; }
 }
-    

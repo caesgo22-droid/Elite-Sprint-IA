@@ -51,8 +51,9 @@ const VideoAnalyzer: React.FC = () => {
         const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/wasm");
         if (!isMounted.current) return;
         
+        // UPGRADE: Using FULL model instead of LITE for better detection at distance
         const landmarker = await PoseLandmarker.createFromOptions(vision, {
-          baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task`, delegate: "GPU" },
+          baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task`, delegate: "GPU" },
           runningMode: "VIDEO", numPoses: 1
         });
         
@@ -350,9 +351,15 @@ const VideoAnalyzer: React.FC = () => {
             alert("No se pudo obtener una respuesta de la IA. \n\nCausa probable: Falta la API Key de Gemini en el servidor (Vercel).");
         }
 
-    } catch(e) { 
+    } catch(e: any) { 
         console.error("Auto-Capture error:", e);
-        alert("Error técnico al procesar el video.");
+        if (e.message === "QUOTA_EXCEEDED" || e.message?.includes("429")) {
+            alert("⚠️ Límite de cuota de IA excedido (Error 429).\n\nHas alcanzado el límite gratuito de Gemini por minuto/día. Intenta de nuevo en unos momentos.");
+        } else if (e.message === "API_KEY_MISSING") {
+             alert("Error: Falta la API Key en el servidor.");
+        } else {
+             alert("Error técnico al procesar el video. Verifica tu conexión.");
+        }
     } finally { 
         setLoading(false); 
         isScanning.current = false; // Unblock
