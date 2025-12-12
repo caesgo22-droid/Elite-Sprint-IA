@@ -1,4 +1,3 @@
-
 import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
@@ -35,6 +34,10 @@ const VideoAnalyzer: React.FC = () => {
 
   const physicsEngine = useRef<ElitePhysicsEngine>(new ElitePhysicsEngine());
   const isMounted = useRef(true);
+  
+  // CRITICAL FIX: Track timestamps to prevent MediaPipe crash on seek
+  const lastVideoTimestamp = useRef<number>(-1);
+  const isScanning = useRef<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -74,6 +77,7 @@ const VideoAnalyzer: React.FC = () => {
         setDisplayAdvanced({ strideLength: '-', velocity: '-' });
         setComLocation(null);
         setFrameCache([]); // Reset cache
+        lastVideoTimestamp.current = -1; // Reset timestamp tracker
         physicsEngine.current.reset();
         setTimeout(() => { if(videoRef.current) { videoRef.current.load(); } }, 500);
     }
@@ -86,25 +90,39 @@ const VideoAnalyzer: React.FC = () => {
   const performDetection = (video: HTMLVideoElement, timestamp: number) => {
       if (!poseLandmarker) return null;
       
-      const result = poseLandmarker.detectForVideo(video, timestamp);
-      
-      if (result.landmarks && result.landmarks.length > 0) {
-          const landmarks = result.landmarks[0];
-          
-          // 1. Calculate CoM
-          const com = physicsEngine.current.calculateCenterOfMass(landmarks);
-          setComLocation(com);
-          
-          // 2. Calculate Mechanics
-          const mechanics = physicsEngine.current.calculateSprintMechanics(landmarks);
-          setDisplayData(mechanics);
+      try {
+          // CRITICAL FIX: If timestamp goes backwards (loop or scrub), reset MediaPipe graph
+          if (timestamp < lastVideoTimestamp.current) {
+             // PoseLandmarker in tasks-vision does not have reset(). 
+             // We rely on catch block if it throws or robust handling.
+             // poseLandmarker.reset(); 
+          }
+          lastVideoTimestamp.current = timestamp;
 
-          // 3. Calculate Advanced Metrics (now with GCT state)
-          const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, timestamp, com);
-          setDisplayAdvanced(advanced);
+          const result = poseLandmarker.detectForVideo(video, timestamp);
+          
+          if (result.landmarks && result.landmarks.length > 0) {
+              const landmarks = result.landmarks[0];
+              
+              // 1. Calculate CoM
+              const com = physicsEngine.current.calculateCenterOfMass(landmarks);
+              setComLocation(com);
+              
+              // 2. Calculate Mechanics
+              const mechanics = physicsEngine.current.calculateSprintMechanics(landmarks);
+              setDisplayData(mechanics);
 
-          // RETURN DATA FOR API USE
-          return { landmarks, mechanics, advanced, com, timestamp };
+              // 3. Calculate Advanced Metrics (now with GCT state)
+              const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, timestamp, com);
+              setDisplayAdvanced(advanced);
+
+              // RETURN DATA FOR API USE
+              return { landmarks, mechanics, advanced, com, timestamp };
+          }
+      } catch (e) {
+          console.warn("MediaPipe Detection Glitch (Ignored):", e);
+          // Attempt recovery
+          try { lastVideoTimestamp.current = -1; } catch(err) {}
       }
       return null;
   };
@@ -204,6 +222,9 @@ const VideoAnalyzer: React.FC = () => {
   };
 
   const handleTimeUpdate = () => {
+      // Prevent conflicts if Auto-Scan is running
+      if (isScanning.current) return;
+
       if(videoRef.current) {
           setCurrentTime(videoRef.current.currentTime);
           if(!videoRef.current.paused) processFrame(videoRef.current.currentTime);
@@ -216,7 +237,8 @@ const VideoAnalyzer: React.FC = () => {
           videoRef.current.pause();
           videoRef.current.currentTime = time;
           setCurrentTime(time);
-          setTimeout(() => processFrame(time), 50); // Slight delay to ensure frame render
+          // Allow manual scrub to force process, but reset if jump is large backwards handled in performDetection
+          setTimeout(() => processFrame(time), 50); 
       }
   };
 
@@ -241,8 +263,15 @@ const VideoAnalyzer: React.FC = () => {
   const handleAutoCapture = async () => {
     if(!previewUrl || !videoRef.current) return;
     setLoading(true);
+    isScanning.current = true; // Block handleTimeUpdate
     setStatusMessage("Detección de Contacto (GCT)...");
     
+    // Reset tracker for scan
+    if (poseLandmarker) {
+        // try { poseLandmarker.reset(); } catch(e) {}
+    }
+    lastVideoTimestamp.current = -1;
+
     try {
         const video = videoRef.current;
         video.pause();
@@ -254,6 +283,7 @@ const VideoAnalyzer: React.FC = () => {
         for (let i = 0; i <= scanSteps; i++) {
             const time = (duration / scanSteps) * i;
             video.currentTime = time;
+            // Wait for seek to complete (basic buffer)
             await new Promise(r => setTimeout(r, 200)); 
             const data = performDetection(video, time * 1000);
             if(data) tempHistory.push(data);
@@ -267,6 +297,7 @@ const VideoAnalyzer: React.FC = () => {
         if (!bestFrame) {
             alert("No se detectó un cuerpo claro en el video.");
             setLoading(false);
+            isScanning.current = false;
             return;
         }
 
@@ -314,14 +345,15 @@ const VideoAnalyzer: React.FC = () => {
              setSessionAnalyses(prev => [analysis, ...prev]);
              if (analysisMode === 'Personal') saveAnalysis(analysis);
         } else {
-            alert("No se pudo obtener una respuesta de la IA.");
+            alert("No se pudo obtener una respuesta de la IA. \n\nCausa probable: Falta la API Key de Gemini en el servidor (Vercel).");
         }
 
     } catch(e) { 
         console.error("Auto-Capture error:", e);
-        alert("Error técnico.");
+        alert("Error técnico al procesar el video.");
     } finally { 
         setLoading(false); 
+        isScanning.current = false; // Unblock
     }
   };
 

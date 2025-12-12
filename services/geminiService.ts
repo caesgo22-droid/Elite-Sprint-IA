@@ -1,5 +1,4 @@
-
-import { GoogleGenAI, Type, Schema, FunctionDeclaration } from "@google/genai";
+import { GoogleGenAI, Type, Schema, FunctionDeclaration, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { TrainingPlan, BiomechanicalAnalysis, UserProfile, NexusInsight } from "../types";
 import { getStructureForPhase, DRILL_DATABASE } from "./trainingDatabase";
 
@@ -19,7 +18,7 @@ let ai: GoogleGenAI | null = null;
 if (apiKey) {
   ai = new GoogleGenAI({ apiKey });
 } else {
-  console.warn("CRITICAL: VITE_GEMINI_API_KEY is missing.");
+  console.warn("CRITICAL: VITE_GEMINI_API_KEY is missing. App will run in offline mode.");
 }
 
 // --- UTILITY: Robust JSON Parser ---
@@ -286,7 +285,7 @@ export const generateTrainingPlan = async (
         id: Date.now().toString(), 
         createdAt: new Date().toISOString(), 
         focusEvent: focusEvent || profile.events[0], 
-        acwrStatus: acwr as any,
+        acwrStatus: acwr as any, 
         phase: phaseName as any,
         weeklyGoal,
         rationale,
@@ -308,7 +307,11 @@ export const generateTrainingPlan = async (
 };
 
 export const analyzeTechnique = async (images: string[], bioData: any = null, advancedMetrics: any = null, analysisMode: 'Personal' | 'External' = 'Personal'): Promise<BiomechanicalAnalysis | null> => {
-  if (!ai) return null;
+  if (!ai) {
+    console.error("Gemini AI instance not initialized. Missing API Key.");
+    return null;
+  }
+  
   try {
     const hasMetrics = advancedMetrics && advancedMetrics.velocity !== '-';
     
@@ -357,7 +360,17 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: { parts },
-      config: { responseMimeType: 'application/json', responseSchema: ANALYSIS_SCHEMA }
+      config: { 
+          responseMimeType: 'application/json', 
+          responseSchema: ANALYSIS_SCHEMA,
+          // Safety Settings to avoid blocking sports analysis
+          safetySettings: [
+            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }
+          ]
+      }
     });
 
     if (response.text) {
@@ -367,7 +380,10 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
         }
     }
     return null;
-  } catch (error) { console.error("Analysis Error:", error); return null; }
+  } catch (error) { 
+      console.error("Analysis Error:", error); 
+      return null; 
+  }
 };
 
 export const chatWithCoach = async (history: any[], message: string, context: any) => {
