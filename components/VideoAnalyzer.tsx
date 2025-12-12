@@ -18,9 +18,12 @@ const VideoAnalyzer: React.FC = () => {
   const [viewHistory, setViewHistory] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [poseLandmarker, setPoseLandmarker] = useState<PoseLandmarker | null>(null);
-  const [measuredData, setMeasuredData] = useState<any>(null);
-  const [advancedMetrics, setAdvancedMetrics] = useState<AdvancedMetrics>({ strideLength: '-', velocity: '-' });
+  
+  // UI State for data display (may lag slightly behind real calc)
+  const [displayData, setDisplayData] = useState<any>(null);
+  const [displayAdvanced, setDisplayAdvanced] = useState<AdvancedMetrics>({ strideLength: '-', velocity: '-' });
   const [comLocation, setComLocation] = useState<{x:number, y:number} | null>(null);
+  
   const [analysisMode, setAnalysisMode] = useState<'Personal' | 'External'>('Personal');
   const [activeTooltip, setActiveTooltip] = useState<{title: string, text: string} | null>(null);
 
@@ -61,8 +64,8 @@ const VideoAnalyzer: React.FC = () => {
         setPreviewUrl(url);
         setSessionAnalyses([]);
         setIsVideo(file.type.startsWith('video/'));
-        setMeasuredData(null);
-        setAdvancedMetrics({ strideLength: '-', velocity: '-' });
+        setDisplayData(null);
+        setDisplayAdvanced({ strideLength: '-', velocity: '-' });
         setComLocation(null);
         physicsEngine.current.reset();
         setTimeout(() => { if(videoRef.current) { videoRef.current.load(); videoRef.current.currentTime = 0.1; } }, 500);
@@ -72,89 +75,79 @@ const VideoAnalyzer: React.FC = () => {
   const handleDrop = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]); };
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
 
-  const detectPose = async () => {
-      if (!poseLandmarker || !videoRef.current || !canvasRef.current) return;
+  // --- CORE DETECTION LOGIC (Returns data, doesn't just set state) ---
+  const performDetection = (video: HTMLVideoElement, timestamp: number) => {
+      if (!poseLandmarker) return null;
       
+      const result = poseLandmarker.detectForVideo(video, timestamp);
+      
+      if (result.landmarks && result.landmarks.length > 0) {
+          const landmarks = result.landmarks[0];
+          
+          // 1. Calculate CoM
+          const com = physicsEngine.current.calculateCenterOfMass(landmarks);
+          setComLocation(com); // UI update
+          
+          // 2. Calculate Mechanics
+          const mechanics = physicsEngine.current.calculateSprintMechanics(landmarks);
+          setDisplayData(mechanics); // UI update
+
+          // 3. Calculate Advanced Metrics
+          const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, timestamp, com);
+          setDisplayAdvanced(advanced); // UI update
+
+          // RETURN DATA FOR API USE
+          return { landmarks, mechanics, advanced, com };
+      }
+      return null;
+  };
+
+  const drawSkeleton = (landmarks: any, com: any) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      const drawLine = (i: number, j: number, color: string, width: number) => {
+          if(landmarks[i] && landmarks[j]) {
+              ctx.beginPath();
+              ctx.moveTo(landmarks[i].x * canvas.width, landmarks[i].y * canvas.height);
+              ctx.lineTo(landmarks[j].x * canvas.width, landmarks[j].y * canvas.height);
+              ctx.strokeStyle = color;
+              ctx.lineWidth = width;
+              ctx.stroke();
+          }
+      }
+      
+      const RIGHT_SIDE = "#00e5ff"; const LEFT_SIDE = "#ff007f"; const TRUNK = "#ffffff";
+
+      drawLine(12, 14, RIGHT_SIDE, 3); drawLine(14, 16, RIGHT_SIDE, 3);
+      drawLine(24, 26, RIGHT_SIDE, 4); drawLine(26, 28, RIGHT_SIDE, 4);
+      drawLine(11, 13, LEFT_SIDE, 3); drawLine(13, 15, LEFT_SIDE, 3);
+      drawLine(23, 25, LEFT_SIDE, 4); drawLine(25, 27, LEFT_SIDE, 4);
+      drawLine(11, 12, TRUNK, 3); drawLine(23, 24, TRUNK, 3);
+      drawLine(11, 23, TRUNK, 3); drawLine(12, 24, TRUNK, 3);
+
+      if (com) {
+          const cx = com.x * canvas.width;
+          const cy = com.y * canvas.height;
+          ctx.beginPath(); ctx.fillStyle = "#ffff00"; ctx.arc(cx, cy, 8, 0, 2*Math.PI); ctx.fill();
+          ctx.beginPath(); ctx.strokeStyle = "#ffff00"; ctx.setLineDash([5, 5]); ctx.lineWidth = 2;
+          ctx.moveTo(cx, cy); ctx.lineTo(cx, canvas.height); ctx.stroke(); ctx.setLineDash([]);
+      }
+  };
+
+  const handleSeekedOrLoaded = () => {
+      if(!videoRef.current || !canvasRef.current) return;
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      const ctx = canvas.getContext("2d");
-      
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       
-      const startTimeMs = performance.now();
-      const result = poseLandmarker.detectForVideo(video, startTimeMs);
-
-      if (result.landmarks && result.landmarks.length > 0) {
-          const landmarks = result.landmarks[0];
-          const com = physicsEngine.current.calculateCenterOfMass(landmarks);
-          setComLocation(com);
-          
-          if(ctx) {
-              ctx.clearRect(0, 0, canvas.width, canvas.height);
-              
-              // --- PROFESSIONAL SKELETON RENDER (Improved Visibility) ---
-              const drawLine = (i: number, j: number, color: string, width: number) => {
-                  if(landmarks[i] && landmarks[j]) {
-                      ctx.beginPath();
-                      ctx.moveTo(landmarks[i].x * canvas.width, landmarks[i].y * canvas.height);
-                      ctx.lineTo(landmarks[j].x * canvas.width, landmarks[j].y * canvas.height);
-                      ctx.strokeStyle = color;
-                      ctx.lineWidth = width;
-                      ctx.stroke();
-                  }
-              }
-              
-              // High Contrast Colors for Dark/Red Track Backgrounds
-              const RIGHT_SIDE = "#00e5ff"; // Bright Cyan
-              const LEFT_SIDE = "#ff007f";  // Bright Magenta
-              const TRUNK = "#ffffff";      // White
-
-              drawLine(12, 14, RIGHT_SIDE, 3); // R Arm
-              drawLine(14, 16, RIGHT_SIDE, 3);
-              drawLine(24, 26, RIGHT_SIDE, 4); // R Leg
-              drawLine(26, 28, RIGHT_SIDE, 4);
-              
-              drawLine(11, 13, LEFT_SIDE, 3); // L Arm
-              drawLine(13, 15, LEFT_SIDE, 3);
-              drawLine(23, 25, LEFT_SIDE, 4); // L Leg
-              drawLine(25, 27, LEFT_SIDE, 4);
-
-              drawLine(11, 12, TRUNK, 3); // Shoulders
-              drawLine(23, 24, TRUNK, 3); // Hips
-              drawLine(11, 23, TRUNK, 3); // Spine L
-              drawLine(12, 24, TRUNK, 3); // Spine R
-
-              if (com) {
-                  const cx = com.x * canvas.width;
-                  const cy = com.y * canvas.height;
-                  
-                  ctx.beginPath();
-                  ctx.fillStyle = "#ffff00"; // Yellow
-                  ctx.arc(cx, cy, 8, 0, 2*Math.PI); // Bigger dot
-                  ctx.fill();
-                  ctx.strokeStyle = "black";
-                  ctx.lineWidth = 1;
-                  ctx.stroke();
-                  
-                  // Gravity Line
-                  ctx.beginPath();
-                  ctx.strokeStyle = "#ffff00";
-                  ctx.setLineDash([5, 5]);
-                  ctx.lineWidth = 2;
-                  ctx.moveTo(cx, cy);
-                  ctx.lineTo(cx, canvas.height); 
-                  ctx.stroke();
-                  ctx.setLineDash([]);
-              }
-          }
-
-          const mechanics = physicsEngine.current.calculateSprintMechanics(landmarks);
-          if(mechanics) setMeasuredData(mechanics);
-
-          const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, startTimeMs, com);
-          setAdvancedMetrics(advanced);
-      }
+      const data = performDetection(video, performance.now());
+      if (data) drawSkeleton(data.landmarks, data.com);
   };
 
   const seekTo = (video: HTMLVideoElement, time: number) => {
@@ -175,34 +168,38 @@ const VideoAnalyzer: React.FC = () => {
     
     try {
         const duration = videoRef.current.duration;
-        // OPTIMIZATION: Reduce to 2 key frames to save API quota (429 fix)
-        // Mid-acceleration (Drive) and Max Velocity (Upright) are the two critical phases.
-        const frames = [duration * 0.3, duration * 0.7]; 
+        const frames = [duration * 0.4, duration * 0.8]; 
         const capturedImages: string[] = [];
+        
+        // CRITICAL: We need to capture the bio data for the API here, locally
+        let capturedMechanics: any = null;
+        let capturedAdvanced: any = null;
         
         for (const time of frames) {
             await seekTo(videoRef.current, time);
-            await new Promise(r => setTimeout(r, 300)); // Increased buffer for reliable render
+            await new Promise(r => setTimeout(r, 300)); 
             
-            await detectPose(); 
+            // DIRECT CALL to detection logic
+            const data = performDetection(videoRef.current, performance.now());
+            if (data) {
+                drawSkeleton(data.landmarks, data.com);
+                // Save the data from the first frame for the API context
+                if (!capturedMechanics) {
+                    capturedMechanics = data.mechanics;
+                    capturedAdvanced = data.advanced;
+                }
+            }
             
-            // --- IMAGE RESIZING LOGIC (Critical for API Limits) ---
+            // Image Capture
             const canvas = document.createElement('canvas');
             const video = videoRef.current;
-            
-            // Limit max dimension strictly to 480px to prevent quota limit errors
-            // This is the sweet spot for Gemini 2.5 Flash
             const MAX_DIMENSION = 480;
             const scale = Math.min(1, MAX_DIMENSION / Math.max(video.videoWidth, video.videoHeight));
-            
             canvas.width = video.videoWidth * scale;
             canvas.height = video.videoHeight * scale;
-            
             const ctx = canvas.getContext('2d');
             if (ctx) {
-                // Draw scaled image
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                // Lower quality to 50% to ensure tiny payload (<100KB per image)
                 const dataUrl = canvas.toDataURL('image/jpeg', 0.5); 
                 capturedImages.push(dataUrl.split(',')[1]);
             }
@@ -210,14 +207,14 @@ const VideoAnalyzer: React.FC = () => {
         
         setStatusMessage("Consultando Motor de Física...");
         
-        const bioData = measuredData;
+        // Use the LOCALLY captured data, not state (which might be stale)
         const kinetics: KineticMetrics = {
-            verticalOscillation: advancedMetrics.verticalOscillation || "N/A",
-            forceApplicationIndex: advancedMetrics.forceFactor || 0,
-            comVelocity: advancedMetrics.velocity
+            verticalOscillation: capturedAdvanced?.verticalOscillation || "N/A",
+            forceApplicationIndex: capturedAdvanced?.forceFactor || 0,
+            comVelocity: capturedAdvanced?.velocity || "N/A"
         };
 
-        const result = await analyzeTechnique(capturedImages, bioData, advancedMetrics, analysisMode);
+        const result = await analyzeTechnique(capturedImages, capturedMechanics, capturedAdvanced, analysisMode);
         
         if(result) {
              const analysis: BiomechanicalAnalysis = { 
@@ -230,12 +227,12 @@ const VideoAnalyzer: React.FC = () => {
              setSessionAnalyses(prev => [analysis, ...prev]);
              if (analysisMode === 'Personal') saveAnalysis(analysis);
         } else {
-            alert("El servicio está saturado (Quota). Intenta de nuevo en 1 minuto.");
+            alert("No se pudo obtener una respuesta de la IA. Intenta con un video más claro.");
         }
 
     } catch(e) { 
         console.error("Analysis sequence error:", e);
-        alert("Error técnico. Verifica tu conexión o intenta con un video más corto.");
+        alert("Error técnico. Verifica tu conexión.");
     } finally { 
         setLoading(false); 
     }
@@ -253,40 +250,11 @@ const VideoAnalyzer: React.FC = () => {
   };
 
   const downloadReport = (analysis: BiomechanicalAnalysis) => {
-      const text = `
-REPORTE DE ANÁLISIS BIOMECÁNICO (${analysis.category.toUpperCase()})
-------------------------------------------------
-FECHA: ${new Date().toLocaleDateString()}
-ATLETA: ${userProfile.name} (Peso: ${userProfile.weight}kg)
-FASE DETECTADA: ${analysis.phaseDetected}
-PUNTUACIÓN TÉCNICA: ${analysis.score}/100
-
-FISICA & CINÉTICA:
-- Velocidad CoM: ${analysis.kinetics?.comVelocity || 'N/A'}
-- Oscilación Vertical: ${analysis.kinetics?.verticalOscillation || 'N/A'} (Eficiencia)
-- Indice de Fuerza: ${analysis.kinetics?.forceApplicationIndex || 'N/A'}/100
-
-DATOS BIOMECÁNICOS:
-- Rodilla: ${analysis.jointAngles?.knee || 'N/A'}
-- Cadera: ${analysis.jointAngles?.hip || 'N/A'}
-- Torso: ${analysis.jointAngles?.torso || 'N/A'}
-- GCT Est.: ${analysis.groundContactTimeEstimate}
-
-ERRORES CRÍTICOS:
-${analysis.criticalErrors.map(e => `- ${e}`).join('\n')}
-
-DRILLS CORRECTIVOS:
-${analysis.correctiveDrills.map(d => `- ${d}`).join('\n')}
-
-COACH CUES (Gritos):
-${analysis.coachShouts.join(', ')}
-------------------------------------------------
-Generated by Elite Sprint Coach AI
-      `;
+      const text = `REPORTE DE ANÁLISIS BIOMECÁNICO\n${new Date().toLocaleDateString()}\nScore: ${analysis.score}\nFase: ${analysis.phaseDetected}\n\nErrores:\n${analysis.criticalErrors.join('\n')}`;
       const element = document.createElement("a");
       const file = new Blob([text], {type: 'text/plain'});
       element.href = URL.createObjectURL(file);
-      element.download = `sprint_analysis_${Date.now()}.txt`;
+      element.download = `sprint_analysis.txt`;
       document.body.appendChild(element);
       element.click();
       setTimeout(() => document.body.removeChild(element), 100);
@@ -348,7 +316,7 @@ Generated by Elite Sprint Coach AI
                 <div className="space-y-6">
                     <div className="relative rounded-2xl overflow-hidden bg-black max-h-[60vh] mx-auto shadow-2xl border border-slate-800 ring-1 ring-white/10 flex justify-center items-center bg-contain">
                         {isVideo ? (
-                            <video ref={videoRef} src={previewUrl} className="w-full h-auto max-h-[60vh]" playsInline muted controls={false} onLoadedData={() => detectPose()} onSeeked={() => detectPose()} />
+                            <video ref={videoRef} src={previewUrl} className="w-full h-auto max-h-[60vh]" playsInline muted controls={false} onLoadedData={handleSeekedOrLoaded} onSeeked={handleSeekedOrLoaded} />
                         ) : <img src={previewUrl} className="w-full h-full object-contain" />}
                         <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-80" />
                         
@@ -360,56 +328,56 @@ Generated by Elite Sprint Coach AI
                         </div>
 
                         {/* DESKTOP HUD */}
-                        {measuredData && (
+                        {displayData && (
                             <div className="hidden md:grid absolute bottom-4 left-4 right-4 grid-cols-5 gap-2 pointer-events-none">
                                 <div className="bg-slate-950/80 backdrop-blur p-2 rounded-lg border border-slate-700 pointer-events-auto">
                                     <div className="text-[10px] text-slate-400 font-bold uppercase flex items-center">Rodilla <InfoButton title="Ángulo Rodilla" text="Mide la fase de recobro. <60° indica una mecánica eficiente de 'talón al glúteo'."/></div>
-                                    <div className={`text-sm font-mono font-bold ${measuredData.knee.color}`}>{measuredData.knee.value}</div>
+                                    <div className={`text-sm font-mono font-bold ${displayData.knee.color}`}>{displayData.knee.value}</div>
                                 </div>
                                 <div className="bg-slate-950/80 backdrop-blur p-2 rounded-lg border border-slate-700 pointer-events-auto">
                                     <div className="text-[10px] text-slate-400 font-bold uppercase flex items-center">Cadera <InfoButton title="Extensión Cadera" text="Mide la potencia aplicada al suelo. Busca >165° en el despegue."/></div>
-                                    <div className={`text-sm font-mono font-bold ${measuredData.hip.color}`}>{measuredData.hip.value}</div>
+                                    <div className={`text-sm font-mono font-bold ${displayData.hip.color}`}>{displayData.hip.value}</div>
                                 </div>
                                 <div className="bg-slate-900/90 backdrop-blur p-2 rounded-lg border border-cyan-900/50 pointer-events-auto">
                                     <div className="text-[10px] text-cyan-400 font-bold uppercase flex items-center">Velocidad</div>
-                                    <div className="text-sm font-mono font-bold text-white">{advancedMetrics.velocity}</div>
+                                    <div className="text-sm font-mono font-bold text-white">{displayAdvanced.velocity}</div>
                                 </div>
                                 <div className="bg-purple-900/90 backdrop-blur p-2 rounded-lg border border-purple-500/50 pointer-events-auto">
                                     <div className="text-[10px] text-purple-300 font-bold uppercase flex items-center">Oscilación <InfoButton title="Oscilación Vertical (Bounce)" text="Energía desperdiciada hacia arriba. En élite es menor a 4cm."/></div>
-                                    <div className="text-sm font-mono font-bold text-white">{advancedMetrics.verticalOscillation || '-'}</div>
+                                    <div className="text-sm font-mono font-bold text-white">{displayAdvanced.verticalOscillation || '-'}</div>
                                 </div>
                                 <div className="bg-slate-900/90 backdrop-blur p-2 rounded-lg border border-cyan-900/50 pointer-events-auto">
                                     <div className="text-[10px] text-cyan-400 font-bold uppercase flex items-center">Zancada <InfoButton title="Largo de Zancada" text="Distancia entre contactos. Aproximadamente 1.2x la altura del atleta."/></div>
-                                    <div className="text-sm font-mono font-bold text-white">{advancedMetrics.strideLength}</div>
+                                    <div className="text-sm font-mono font-bold text-white">{displayAdvanced.strideLength}</div>
                                 </div>
                             </div>
                         )}
                     </div>
 
                     {/* MOBILE HUD */}
-                    {measuredData && (
+                    {displayData && (
                         <div className="md:hidden grid grid-cols-3 gap-2 animate-in fade-in">
                             <div className="bg-slate-900 p-2 rounded-xl border border-slate-700 text-center relative pointer-events-auto">
                                 <div className="text-[9px] text-slate-400 font-bold uppercase flex justify-center items-center">Rodilla <InfoButton title="Rodilla" text="Recobro eficiente <60°."/></div>
-                                <div className={`text-lg font-bold ${measuredData.knee.color}`}>{measuredData.knee.value}</div>
+                                <div className={`text-lg font-bold ${displayData.knee.color}`}>{displayData.knee.value}</div>
                             </div>
                             <div className="bg-slate-900 p-2 rounded-xl border border-slate-700 text-center relative pointer-events-auto">
                                 <div className="text-[9px] text-slate-400 font-bold uppercase flex justify-center items-center">Cadera <InfoButton title="Cadera" text="Extensión completa >165°."/></div>
-                                <div className={`text-lg font-bold ${measuredData.hip.color}`}>{measuredData.hip.value}</div>
+                                <div className={`text-lg font-bold ${displayData.hip.color}`}>{displayData.hip.value}</div>
                             </div>
                             <div className="bg-slate-900 p-2 rounded-xl border border-slate-700 text-center">
                                 <div className="text-[9px] text-cyan-400 font-bold uppercase">Velocidad</div>
-                                <div className="text-lg font-bold text-white font-mono">{advancedMetrics.velocity}</div>
+                                <div className="text-lg font-bold text-white font-mono">{displayAdvanced.velocity}</div>
                             </div>
                             
                             <div className="col-span-3 grid grid-cols-2 gap-2 mt-1">
                                 <div className="bg-purple-900/20 p-2 rounded-xl border border-purple-500/30 flex justify-between items-center px-3 relative pointer-events-auto">
                                     <div className="text-[9px] text-purple-300 font-bold uppercase flex items-center gap-1"><LocateFixed size={10}/> Bounce <InfoButton title="Bounce" text="Oscilación Vertical."/></div>
-                                    <div className="text-lg font-bold text-white font-mono">{advancedMetrics.verticalOscillation || '-'}</div>
+                                    <div className="text-lg font-bold text-white font-mono">{displayAdvanced.verticalOscillation || '-'}</div>
                                 </div>
                                 <div className="bg-purple-900/20 p-2 rounded-xl border border-purple-500/30 flex justify-between items-center px-3 relative pointer-events-auto">
                                     <div className="text-[9px] text-purple-300 font-bold uppercase flex items-center gap-1"><Activity size={10}/> Force Idx <InfoButton title="Force Index" text="Eficiencia aplicación de fuerza (0-100)."/></div>
-                                    <div className="text-lg font-bold text-white font-mono">{advancedMetrics.forceFactor || '-'}</div>
+                                    <div className="text-lg font-bold text-white font-mono">{displayAdvanced.forceFactor || '-'}</div>
                                 </div>
                             </div>
                         </div>
@@ -462,7 +430,7 @@ Generated by Elite Sprint Coach AI
                             {analysis.coachShouts.length > 0 && (<div className="pt-2"><h4 className="text-[10px] text-slate-500 font-bold uppercase mb-1">Cues Verbales</h4><div className="flex flex-wrap gap-3">{analysis.coachShouts.map((s, i) => (<div key={i} className="bg-white text-black font-extrabold text-xs px-4 py-2 rounded-xl rounded-bl-none shadow-lg transform -rotate-1 hover:rotate-0 transition-transform cursor-default border-2 border-slate-300">{s.toUpperCase()}!</div>))}</div></div>)}
                         </div>
                     ))}
-                    {sessionAnalyses.length > 0 && (<button onClick={() => {setSessionAnalyses([]); setPreviewUrl(null); setMeasuredData(null);}} className="w-full border border-dashed border-slate-700 text-slate-400 py-4 rounded-xl text-sm hover:bg-slate-900 hover:text-white transition-colors">Analizar Otro Video</button>)}
+                    {sessionAnalyses.length > 0 && (<button onClick={() => {setSessionAnalyses([]); setPreviewUrl(null); setDisplayData(null); setDisplayAdvanced({ strideLength: '-', velocity: '-' }); setComLocation(null);}} className="w-full border border-dashed border-slate-700 text-slate-400 py-4 rounded-xl text-sm hover:bg-slate-900 hover:text-white transition-colors">Analizar Otro Video</button>)}
                 </div>
             )}
            </>

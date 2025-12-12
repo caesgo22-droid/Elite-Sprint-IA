@@ -30,72 +30,100 @@ const cleanAndParseJSON = (text: string) => {
   } catch (e) {
     try {
         let cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        // Sometimes gemini adds text before the JSON
+        const firstBrace = cleaned.indexOf('{');
+        const lastBrace = cleaned.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1) {
+            cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+        }
         return JSON.parse(cleaned);
     } catch (e2) {
-        try {
-            const firstBrace = text.indexOf('{');
-            const lastBrace = text.lastIndexOf('}');
-            if (firstBrace !== -1 && lastBrace !== -1) {
-                const subStr = text.substring(firstBrace, lastBrace + 1);
-                return JSON.parse(subStr);
-            }
-        } catch (e3) {
-            console.error("JSON Parse Critical Fail. Raw:", text);
-            return null;
-        }
+        console.error("JSON Parse Critical Fail. Raw:", text);
+        return null;
     }
     return null;
   }
 };
 
-// --- HELPER: Day Sorter ---
-const DAY_ORDER: { [key: string]: number } = {
-    'lunes': 1, 'martes': 2, 'miércoles': 3, 'miercoles': 3, 'jueves': 4, 'viernes': 5, 'sábado': 6, 'sabado': 6, 'domingo': 7,
-    'mon': 1, 'tue': 2, 'wed': 3, 'thu': 4, 'fri': 5, 'sat': 6, 'sun': 7
-};
-
+// --- HELPER: Day Sorter & Normalizer ---
 const normalizeDay = (d: string) => d.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
-const sortSessions = (sessions: any[]) => {
-    return sessions.sort((a, b) => {
-        const da = DAY_ORDER[normalizeDay(a.day)] || 99;
-        const db = DAY_ORDER[normalizeDay(b.day)] || 99;
-        return da - db;
-    });
+const dayMapES: {[key: string]: string} = {
+    'mon': 'Lunes', 'tue': 'Martes', 'wed': 'Miércoles', 'thu': 'Jueves', 'fri': 'Viernes', 'sat': 'Sábado', 'sun': 'Domingo',
+    'lunes': 'Lunes', 'martes': 'Martes', 'miércoles': 'Miércoles', 'miercoles': 'Miércoles', 'jueves': 'Jueves', 'viernes': 'Viernes', 'sábado': 'Sábado', 'sabado': 'Sábado', 'domingo': 'Domingo'
 };
 
-// --- ELITE FRAMEWORKS INJECTION (RAG Context) ---
-const ELITE_BIOMECHANICS_FRAMEWORK = `
-FRAMEWORK BIOMECÁNICO (RALPH MANN / ALTIS / FRANS BOSCH):
-1. **POSTURA (Posture):** La pelvis debe estar neutra. Evitar "Anterior Pelvic Tilt". El tronco estable.
-2. **CONTACTO (Ground Contact):** 
-   - Objetivo: Minimizar la "Braking Force" (Fuerza de frenado).
-   - Indicador: El pie debe contactar *debajo* o mínimamente delante del Centro de Masa (CoM).
-   - Si el pie aterriza muy adelante = Overstriding (Frenado excesivo, riesgo de isquios).
-3. **MECÁNICA FRONTAL (Frontside Mechanics):** 
-   - Maximizar la flexión de cadera y rodilla al frente.
-   - Evitar "Backside Mechanics" excesiva (talón subiendo demasiado atrás al despegar).
-4. **TIJERAS (Scissoring):** La acción de las piernas debe ser un pistoneo agresivo vertical, no un ciclo circular pasivo.
-`;
+const DAY_ORDER: { [key: string]: number } = {
+    'lunes': 1, 'martes': 2, 'miércoles': 3, 'jueves': 4, 'viernes': 5, 'sábado': 6, 'domingo': 7
+};
 
+// --- RICH FALLBACK SESSION GENERATOR ---
+// Used only when AI fails for a specific day, preventing "empty" plans
+const generateRichFallbackSession = (day: string, phase: string, index: number) => {
+    let focus = "Acceleration";
+    let intensity = "High";
+    let routine = [
+        "Calentamiento: Movilidad Articular + Activación Glúteo (15')",
+        "Drills: A-Skip, B-Skip, Straight Leg Bounds (3x20m)",
+    ];
+    let gym = [];
+    let kpi = "Postura Neutra";
+
+    // Logic based on day index/phase to mimic AI variance
+    if (index % 3 === 0) { // Accel / Power
+        focus = "Acceleration & Power";
+        intensity = "High";
+        routine.push("Main: Sled Pushes 4x20m (75% BW)");
+        routine.push("Main: Block Starts 4x10m (Enfoque salida)");
+        routine.push("Plyo: Broad Jumps 4x5");
+        kpi = "Proyección horizontal y 'Triple Extensión'";
+        gym = ["Clean Pulls 3x3", "Squats 3x5 @ 80%"];
+    } else if (index % 3 === 1) { // Tempo / Capacity
+        focus = "Tempo & Recovery";
+        intensity = "Low";
+        routine.push("Main: Extensive Tempo 10x100m @ 70% (Rec 2')");
+        routine.push("Core: Plank Circuit (3 rounds)");
+        kpi = "Relajación mecánica a velocidad sub-máxima";
+    } else { // Max V / Speed
+        focus = "Max Velocity";
+        intensity = "Max";
+        routine.push("Drills: Wicket Runs (Vallas de ritmo) 6 reps");
+        routine.push("Main: Flying 20m (30m buildup) x 4 reps (Rec 6')");
+        kpi = "Mecánica Frontal (Rodilla alta) y Contacto debajo del CoM";
+        gym = ["Nordic Hamstrings 3x5", "Calf Raises 3x10"];
+    }
+    routine.push("Cooldown: 5' Trote suave + Estiramientos estáticos");
+
+    return {
+        day: dayMapES[normalizeDay(day)] || day,
+        focus: focus,
+        trackRoutine: routine,
+        gymRoutine: gym,
+        biomechanicsKpi: kpi,
+        videoKeywords: [focus.toLowerCase()],
+        intensity: intensity
+    };
+};
+
+// --- SCHEMAS ---
 const PLAN_SCHEMA: Schema = {
   type: Type.OBJECT,
   properties: {
-    weeklyGoal: { type: Type.STRING, description: "Objetivo técnico/fisiológico preciso (ej: 'Mejorar stiffness en contacto')." },
-    phase: { type: Type.STRING, enum: ['General Prep', 'Specific Prep', 'Pre-Comp', 'Competition', 'Transition'] },
-    rationale: { type: Type.STRING, description: "Justificación científica Nivel 5 (mencionar sistemas de energía o mecánica)." },
+    weeklyGoal: { type: Type.STRING },
+    phase: { type: Type.STRING },
+    rationale: { type: Type.STRING },
     sessions: {
       type: Type.ARRAY,
       items: {
         type: Type.OBJECT,
         properties: {
           day: { type: Type.STRING },
-          focus: { type: Type.STRING, enum: ['Acceleration', 'Max Velocity', 'Speed Endurance', 'Tempo', 'Recovery', 'Strength', 'Plyometrics', 'Technical', 'Activation'] },
-          trackRoutine: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista detallada: Calentamiento, Drills, Main Set, Cooldown." },
+          focus: { type: Type.STRING },
+          trackRoutine: { type: Type.ARRAY, items: { type: Type.STRING } },
           gymRoutine: { type: Type.ARRAY, items: { type: Type.STRING } },
-          biomechanicsKpi: { type: Type.STRING, description: "Qué buscar visualmente (ej: 'Shin angle paralelo al torso')." },
+          biomechanicsKpi: { type: Type.STRING },
           videoKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
-          intensity: { type: Type.STRING, enum: ['Low', 'Medium', 'High', 'Max'] }
+          intensity: { type: Type.STRING }
         },
         required: ["day", "focus", "trackRoutine", "biomechanicsKpi", "intensity"]
       }
@@ -112,10 +140,25 @@ const ANALYSIS_SCHEMA: Schema = {
     groundContactTimeEstimate: { type: Type.STRING },
     criticalErrors: { type: Type.ARRAY, items: { type: Type.STRING } },
     correctiveDrills: { type: Type.ARRAY, items: { type: Type.STRING } },
-    coachShouts: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Cues verbales cortos (ej: '¡Pisa debajo!', '¡Rodilla arriba!')." },
+    coachShouts: { type: Type.ARRAY, items: { type: Type.STRING } },
     score: { type: Type.NUMBER }
   },
   required: ["phaseDetected", "criticalErrors", "correctiveDrills", "coachShouts", "score"]
+};
+
+const modifySessionTool: FunctionDeclaration = {
+  name: "modifySession",
+  description: "Modifica una sesión del plan actual.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      day: { type: Type.STRING },
+      newFocus: { type: Type.STRING },
+      newRoutine: { type: Type.ARRAY, items: { type: Type.STRING } },
+      newIntensity: { type: Type.STRING }
+    },
+    required: ["day"]
+  }
 };
 
 const NEXUS_SCHEMA: Schema = {
@@ -129,81 +172,7 @@ const NEXUS_SCHEMA: Schema = {
   required: ["status", "headline", "analysis", "recommendation"]
 };
 
-const modifySessionTool: FunctionDeclaration = {
-  name: "modifySession",
-  description: "Modifica una sesión del plan actual basándose en feedback.",
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      day: { type: Type.STRING },
-      newFocus: { type: Type.STRING },
-      newRoutine: { type: Type.ARRAY, items: { type: Type.STRING } },
-      newIntensity: { type: Type.STRING }
-    },
-    required: ["day"]
-  }
-};
-
-// --- DYNAMIC & RICH FALLBACK PLAN GENERATOR (Looks like AI) ---
-const generateFallbackPlan = (profile: UserProfile, phaseName: string, daysES: string[]): TrainingPlan => {
-    // 1. Clean and sort days to prevent duplicates
-    const uniqueDays = Array.from(new Set(daysES)).sort((a, b) => (DAY_ORDER[normalizeDay(a)] || 99) - (DAY_ORDER[normalizeDay(b)] || 99));
-
-    // 2. Generate RICH content from local database
-    const sessions = uniqueDays.map((day, index) => {
-        let focus = "Acceleration";
-        let intensity = "High";
-        let routine = [
-            "Calentamiento General + Movilidad (15')",
-            "Activación de Glúteo (Minibands)",
-            "Wall Drills (Pistón) 3x10s"
-        ];
-        
-        // Smart distribution based on index and phase
-        if (index % 3 === 0) { // Accel
-            focus = "Acceleration";
-            intensity = "High";
-            routine.push("Sled Pushes 4x20m (Carga Media)");
-            routine.push("Block Starts 3x10m (Enfoque en salida)");
-            routine.push("Plyo: Broad Jumps 3x5");
-            routine.push("Cooldown: 5' Trote + Estiramientos");
-        } else if (index % 3 === 1) { // Tempo
-            focus = "Tempo";
-            intensity = "Low";
-            routine = [
-                "Calentamiento General (10')",
-                "Extensive Tempo: 100m @ 70% x 8 (Rec 2')",
-                "Core Circuit (Planks/Side Planks)",
-                "Estiramiento Estático"
-            ];
-        } else { // Max V
-            focus = "Max Velocity";
-            intensity = "Max";
-            routine.push("Wicket Runs (Vallas de Ritmo) 6x");
-            routine.push("Flying 10m (30m Build-up) x 4");
-            routine.push("Cooldown: Trote Suave 5'");
-        }
-
-        return {
-            day: day,
-            focus: focus,
-            trackRoutine: routine,
-            gymRoutine: index === 0 ? ["Squats 3x5", "RDL 3x8"] : [],
-            biomechanicsKpi: "Postura Neutra y Ataque Vertical",
-            videoKeywords: [focus.toLowerCase()],
-            intensity: intensity
-        };
-    });
-
-    return {
-        id: Date.now().toString(),
-        createdAt: new Date().toISOString(),
-        weeklyGoal: "Desarrollo de Potencia y Eficiencia Mecánica (Protocolo Estándar)", 
-        phase: phaseName as any,
-        rationale: "Plan generado con base en protocolos estándar de World Athletics para garantizar la continuidad del entrenamiento.",
-        sessions: sessions as any
-    } as TrainingPlan; 
-};
+// --- MAIN FUNCTIONS ---
 
 export const generateTrainingPlan = async (
   profile: UserProfile, 
@@ -218,22 +187,29 @@ export const generateTrainingPlan = async (
   else if (currentMonth >= 5 && currentMonth <= 8) phaseName = "Competition"; 
   else if (currentMonth >= 9) phaseName = "General Prep";
 
-  // --- CRITICAL FIX: CLEAN AND SORT DAYS ---
+  // 1. DETERMINE REQUESTED DAYS (Strict Source of Truth)
   const rawDays = (profile.trainingDays && Array.isArray(profile.trainingDays) && profile.trainingDays.length > 0) 
         ? profile.trainingDays 
         : ['Mon', 'Wed', 'Fri'];
   
-  const dayMap: {[key:string]: string} = { 'Mon': 'Lunes', 'Tue': 'Martes', 'Wed': 'Miércoles', 'Thu': 'Jueves', 'Fri': 'Viernes', 'Sat': 'Sábado', 'Sun': 'Domingo' };
-  
-  // 1. Map to Spanish
-  // 2. Remove Duplicates (Set)
-  // 3. Sort Chronologically (Mon->Sun)
-  const userDaysES = Array.from(new Set(rawDays.map(d => dayMap[d] || d)))
+  // Normalize requested days to Spanish names for the Prompt and Sorting
+  // This creates the "Master List" of days we MUST populate.
+  const targetDaysES = Array.from(new Set(rawDays.map(d => dayMapES[normalizeDay(d)] || 'Lunes')))
       .sort((a, b) => (DAY_ORDER[normalizeDay(a)] || 99) - (DAY_ORDER[normalizeDay(b)] || 99));
 
   if (!ai) {
-      console.warn("AI not initialized, returning dynamic fallback plan");
-      return generateFallbackPlan(profile, phaseName, userDaysES);
+      // Offline fallback: Use the generator
+      const sessions = targetDaysES.map((day, idx) => generateRichFallbackSession(day, phaseName, idx));
+      return {
+          id: Date.now().toString(),
+          createdAt: new Date().toISOString(),
+          weeklyGoal: "Desarrollo Mecánico (Modo Offline)",
+          phase: phaseName as any,
+          rationale: "Plan generado localmente debido a falta de conexión API.",
+          sessions: sessions as any,
+          focusEvent: focusEvent || profile.events[0],
+          acwrStatus: acwr as any,
+      };
   }
 
   try {
@@ -248,15 +224,18 @@ export const generateTrainingPlan = async (
       - Fase: ${phaseName}.
       - Readiness: ${cnsScore.toFixed(1)}/10.
       
-      TAREA:
-      Generar un microciclo de entrenamiento ESTRICTAMENTE para estos ${userDaysES.length} días: ${userDaysES.join(", ")}.
+      TAREA CRÍTICA:
+      Generar un microciclo de entrenamiento DETALLADO.
       
-      **REGLAS DE ORO:**
-      1. Genera UN objeto sesión POR CADA día de la lista. Ni más, ni menos.
-      2. Si la lista pide "Lunes" y "Jueves", SOLO genera sesiones para "Lunes" y "Jueves".
-      3. **DETALLE:** El 'trackRoutine' debe ser rico y detallado (Calentamiento, Drills, Bloque Principal, Cooldown). No dejes sesiones vacías.
+      DÍAS REQUERIDOS: ${targetDaysES.join(", ")}.
       
-      SALIDA: JSON válido según esquema.
+      REGLAS DE ORO:
+      1. Genera sesiones SOLO para los días listados arriba.
+      2. EL "trackRoutine" DEBE SER RICO Y DETALLADO. No pongas solo "Sprints". 
+         Ejemplo Bueno: ["Calentamiento A (10')", "Drills de Vallas x 6", "4x30m Block Starts (Rec 3')", "Cooldown"].
+      3. Usa terminología de élite (Wickets, Flys, Sleds, Plyos).
+      
+      SALIDA: JSON estricto.
     `;
 
     const response = await ai.models.generateContent({
@@ -265,55 +244,80 @@ export const generateTrainingPlan = async (
       config: { responseMimeType: 'application/json', responseSchema: PLAN_SCHEMA }
     });
 
+    let aiSessions: any[] = [];
+    let weeklyGoal = "Desarrollo de Potencia";
+    let rationale = "Enfoque en calidad neuromuscular.";
+
     if (response.text) {
       const data = cleanAndParseJSON(response.text);
-      if (!data) throw new Error("Failed to parse JSON response");
-      
-      // --- CRITICAL FIX: FILTER HALLUCINATED DAYS ---
-      // Force sort AND filter the returned sessions
-      if (data.sessions && Array.isArray(data.sessions)) {
-          // 1. Remove duplicates by day name
-          const seenDays = new Set();
-          const uniqueSessions = data.sessions.filter((s:any) => {
-              const normalized = normalizeDay(s.day);
-              if (seenDays.has(normalized)) return false;
-              seenDays.add(normalized);
-              return true;
-          });
-
-          // 2. Strict Filter: Keep ONLY days that were requested
-          data.sessions = uniqueSessions.filter((s:any) => {
-              const sNorm = normalizeDay(s.day);
-              // Check if this day exists in the requested userDaysES list
-              return userDaysES.some(ud => normalizeDay(ud) === sNorm);
-          });
-          
-          // 3. Sort Chronologically
-          data.sessions = sortSessions(data.sessions);
+      if (data && data.sessions) {
+          aiSessions = data.sessions;
+          weeklyGoal = data.weeklyGoal || weeklyGoal;
+          rationale = data.rationale || rationale;
       }
-
-      return { id: Date.now().toString(), createdAt: new Date().toISOString(), focusEvent: focusEvent || profile.events[0], acwrStatus: acwr, ...data } as TrainingPlan;
     }
-    
-    return generateFallbackPlan(profile, phaseName, userDaysES);
+
+    // --- STRICT MAPPING STRATEGY ---
+    // Iterate through the REQUESTED days. Try to find a matching AI session.
+    // If found, use it. If not (or duplicate), generate a rich fallback.
+    // This ensures correct count, correct order, and no duplicates.
+    const finalSessions = targetDaysES.map((targetDay, index) => {
+        const normTarget = normalizeDay(targetDay);
+        
+        // Find best match in AI output
+        const match = aiSessions.find(s => normalizeDay(s.day) === normTarget);
+        
+        if (match) {
+            // Validate richness. If trackRoutine is empty/weak, replace it.
+            if (!match.trackRoutine || match.trackRoutine.length < 2) {
+                const fb = generateRichFallbackSession(targetDay, phaseName, index);
+                return { ...match, trackRoutine: fb.trackRoutine }; // Inject rich routine into AI logic
+            }
+            return match;
+        } else {
+            // AI missed this day -> Use rich fallback
+            return generateRichFallbackSession(targetDay, phaseName, index);
+        }
+    });
+
+    return { 
+        id: Date.now().toString(), 
+        createdAt: new Date().toISOString(), 
+        focusEvent: focusEvent || profile.events[0], 
+        acwrStatus: acwr as any,
+        phase: phaseName as any,
+        weeklyGoal,
+        rationale,
+        sessions: finalSessions as any 
+    };
 
   } catch (error) { 
-      console.error("Plan Gen Error (Using Dynamic Fallback):", error); 
-      return generateFallbackPlan(profile, phaseName, userDaysES);
+      console.error("Plan Gen Error:", error); 
+      // Error fallback
+      const sessions = targetDaysES.map((day, idx) => generateRichFallbackSession(day, phaseName, idx));
+      return {
+          id: Date.now().toString(),
+          createdAt: new Date().toISOString(),
+          weeklyGoal: "Recuperación Estructural (Fallback)",
+          phase: phaseName as any,
+          rationale: "Error de red. Plan generado con protocolos de seguridad.",
+          sessions: sessions as any
+      } as TrainingPlan;
   }
 };
 
 export const analyzeTechnique = async (images: string[], bioData: any = null, advancedMetrics: any = null, analysisMode: 'Personal' | 'External' = 'Personal'): Promise<BiomechanicalAnalysis | null> => {
   if (!ai) return null;
   try {
-    const isSequence = images.length > 1;
+    // Determine context richness
+    const hasMetrics = advancedMetrics && advancedMetrics.velocity !== '-';
     
-    const physicsContext = advancedMetrics ? `
+    const physicsContext = hasMetrics ? `
       DATOS CINÉTICOS (Physics Engine):
       - Velocidad Horizontal CoM: ${advancedMetrics.velocity}
       - Oscilación Vertical: ${advancedMetrics.verticalOscillation || 'N/A'}.
       - Force Index: ${advancedMetrics.forceFactor || 'N/A'}/100.
-    ` : "";
+    ` : "Datos cinéticos no disponibles (Video estático o error de tracking).";
 
     const bioContext = bioData ? `
       ÁNGULOS (MediaPipe):
@@ -321,11 +325,7 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
       - Cadera (Extensión): ${bioData.hip.value}
       - Torso (Inclinación): ${bioData.torso.value}
       ${physicsContext}
-    ` : "Estimación visual.";
-
-    const contextPrefix = analysisMode === 'Personal' 
-        ? "DIAGNÓSTICO CLÍNICO-DEPORTIVO (ATLETA PROPIO)." 
-        : "ANÁLISIS DE MODELO TÉCNICO (DIDÁCTICO).";
+    ` : "Estimación visual (Sin datos de sensor).";
 
     const promptText = `
       ACTÚA COMO: BIOMECÁNICO DEL DEPORTE (PHD).
@@ -339,6 +339,10 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
       1. Contacto: ¿Debajo del CoM o Overstriding?
       2. Recobro: ¿Talón cerrado al glúteo?
       3. Despegue: ¿Extensión completa de cadera?
+      
+      IMPORTANTE:
+      Si los datos del sensor indican velocidad baja o ángulos pobres, sé crítico.
+      Si los datos son buenos, elogia la técnica.
       
       SALIDA: JSON estricto.
     `;
@@ -370,7 +374,6 @@ export const chatWithCoach = async (history: any[], message: string, context: an
     const prunedHistory = history.slice(-6); 
     const recentLogs = context.logs?.slice(-3).map((l:any) => `[${l.date}] ${l.event}: ${l.time}s`).join("; ") || "Sin data.";
     
-    // Clinical Dossier
     const injuryReport = context.profile.injuries?.length > 0 
         ? context.profile.injuries.map((i:any) => `LESIÓN ACTIVA: ${i.location} (${i.severity})`).join(", ")
         : "Salud Óptima.";
@@ -380,14 +383,11 @@ export const chatWithCoach = async (history: any[], message: string, context: an
       
       EXPEDIENTE ATLETA:
       - Nombre: ${context.profile.name}
-      - Estado Salud: ${injuryReport} (SI HAY LESIÓN, PRIORIZA LA SEGURIDAD SOBRE EL RENDIMIENTO).
+      - Estado Salud: ${injuryReport} (SI HAY LESIÓN, PRIORIZA LA SEGURIDAD).
       - Carga Actual: ACWR ${context.acwr?.ratio || 'N/A'}.
       - Tiempos Recientes: ${recentLogs}
       
-      DIRECTRICES DE RESPUESTA:
-      1. Sé breve, técnico y basado en evidencia. No uses lenguaje de "animo", usa lenguaje de "alto rendimiento".
-      2. Si el atleta propone algo estúpido (ej: entrenar MaxV con dolor de isquios), PROHÍBELO tajantemente citando riesgos mecánicos.
-      3. Usa terminología correcta (SNC, Stiffness, RFD, Vector de Fuerza).
+      Responde breve, técnico y motivador.
     `;
 
     const chat = ai.chats.create({
@@ -406,13 +406,7 @@ export const generateNexusInsight = async (logs: any[], readiness: any, lastAnal
     try {
         const prompt = `
             ACTÚA COMO: ALGORITMO DE DETECCIÓN DE TALENTO Y RENDIMIENTO.
-            Analiza correlaciones no lineales entre:
-            1. Fisiología (Fatiga: ${JSON.stringify(readiness)})
-            2. Mecánica (Score Téc: ${lastAnalysis ? lastAnalysis.score : "N/A"})
-            3. Carga (ACWR: ${acwr?.ratio || 0})
-            
-            Busca anomalías: ¿Rendimiento bajando a pesar de carga baja? (Posible problema técnico o de salud). ¿Rendimiento subiendo con fatiga alta? (Supercompensación o riesgo inminente).
-            
+            Analiza correlaciones entre Fatiga (${JSON.stringify(readiness)}), Técnica (${lastAnalysis ? lastAnalysis.score : "N/A"}) y Carga ACWR (${acwr?.ratio || 0}).
             Salida JSON estricta.
         `;
 
