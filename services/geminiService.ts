@@ -178,7 +178,7 @@ const generateFallbackPlan = (profile: UserProfile, phaseName: string): Training
                 intensity: "Low"
             }
         ]
-    } as any; // Cast to bypass strict checks if needed
+    } as any; 
 };
 
 export const generateTrainingPlan = async (
@@ -188,7 +188,6 @@ export const generateTrainingPlan = async (
   focusEvent?: string,
   acwr?: { ratio: number; status: string }
 ): Promise<TrainingPlan | null> => {
-  // Always define phase name first to use in fallback if needed
   const currentMonth = new Date().getMonth(); 
   let phaseName = "General Prep";
   if (currentMonth >= 2 && currentMonth <= 4) phaseName = "Specific Prep"; 
@@ -222,13 +221,15 @@ export const generateTrainingPlan = async (
       - Estado SNC (Readiness): ${cnsScore.toFixed(1)}/10.
       - Carga (ACWR): ${acwr ? acwr.ratio : "N/A"}.
       
-      TAREA:
-      Diseñar el microciclo SOLAMENTE para los días: [ ${userDaysES.join(", ")} ].
-      Usa la base de datos de Drills para seleccionar ejercicios específicos (CE, SDE, SPE).
+      TAREA CRÍTICA:
+      Generar un microciclo de entrenamiento para EXACTAMENTE estos días: ${userDaysES.join(", ")}.
       
-      IMPORTANTE:
-      - Devuelve un objeto JSON válido que cumpla estrictamente con el esquema.
-      - Asegúrate de incluir todos los campos requeridos (weeklyGoal, rationale, sessions).
+      **DEBES GENERAR UN OBJETO "SESSION" PARA CADA UNO DE LOS DÍAS LISTADOS ARRIBA. NO OMITAS NINGÚN DÍA.**
+      
+      INSTRUCCIONES:
+      1. Usa la base de datos de Drills para seleccionar ejercicios específicos (CE, SDE, SPE).
+      2. Si el día es de recuperación, asigna "Tempo" o "Recovery".
+      3. Devuelve un objeto JSON válido que cumpla estrictamente con el esquema.
     `;
 
     const response = await ai.models.generateContent({
@@ -240,16 +241,13 @@ export const generateTrainingPlan = async (
     if (response.text) {
       const data = cleanAndParseJSON(response.text);
       if (!data) throw new Error("Failed to parse JSON response");
-      // Add IDs to sessions if missing, or handle in frontend
       return { id: Date.now().toString(), createdAt: new Date().toISOString(), focusEvent: focusEvent || profile.events[0], acwrStatus: acwr, ...data } as TrainingPlan;
     }
     
-    // If no text response but no error thrown
     return generateFallbackPlan(profile, phaseName);
 
   } catch (error) { 
       console.error("Plan Gen Error (Using Fallback):", error); 
-      // CRITICAL: Return fallback instead of null to prevent UI freeze
       return generateFallbackPlan(profile, phaseName);
   }
 };
@@ -294,7 +292,7 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
       2. ¿Hay "Colapso" en la rodilla de apoyo durante la amortiguación? (Falta de Stiffness).
       3. ¿La pierna libre hace un recorrido circular (Backside) o lineal (Pistón)?
       
-      SALIDA JSON REQUERIDA.
+      SALIDA JSON REQUERIDA. ASEGÚRATE DE DEVOLVER UN JSON VÁLIDO.
     `;
 
     const parts: any[] = [];

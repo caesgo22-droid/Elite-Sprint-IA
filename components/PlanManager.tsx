@@ -3,10 +3,8 @@ import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
-import { auth } from '../services/firebase';
-import { signOut } from 'firebase/auth';
-import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle, LogOut, Briefcase } from 'lucide-react';
-import { TrainingSession, UserProfile, Injury, Coach } from '../types';
+import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle } from 'lucide-react';
+import { TrainingSession, UserProfile, Injury } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { getPlanHistory } from '../services/firebase';
 import { calculateRecovery } from '../utils/recoveryEngine';
@@ -151,7 +149,6 @@ export const PlanManager: React.FC = () => {
       alert("Copiado al portapapeles"); 
   };
 
-  // WHATSAPP SHARE FOR FULL PLAN
   const shareToWhatsapp = () => {
       if(!currentPlan) return;
       const text = `*ELITE SPRINT AI - MICRO-CICLO*\n\n*Fase:* ${currentPlan.phase}\n*Objetivo:* ${currentPlan.weeklyGoal}\n\nGenerado por Elite Sprint Coach AI.`;
@@ -159,25 +156,17 @@ export const PlanManager: React.FC = () => {
       window.open(url, '_blank');
   };
 
-  const handleLogout = async () => {
-      await signOut(auth);
-      window.location.reload();
-  };
-
-  // DIRECT ROLE SWITCHER (Testing Feature)
-  const toggleRole = () => {
-      const newRole = userProfile.role === 'staff' ? 'athlete' : 'staff';
-      updateProfile({ ...userProfile, role: newRole });
-      alert(`Rol cambiado a: ${newRole.toUpperCase()}. Refrescando interfaz...`);
-  };
-
-  // ... Profile Helpers ...
+  // Profile Helpers
   const toggleEventSelection = (e: string) => { const current = tempProfile.events || []; if (current.includes(e)) setTempProfile({ ...tempProfile, events: current.filter(ev => ev !== e) }); else setTempProfile({ ...tempProfile, events: [...current, e] }); };
   const toggleTrainingDay = (day: string) => { const current = tempProfile.trainingDays || []; if (current.includes(day)) setTempProfile({ ...tempProfile, trainingDays: current.filter(d => d !== day) }); else setTempProfile({ ...tempProfile, trainingDays: [...current, day] }); };
   const addInjury = () => { setTempProfile({ ...tempProfile, injuries: [...(tempProfile.injuries || []), { type: 'Muscular', location: 'Isquios', severity: 'Leve', status: 'Activa' }] }); };
   const updateInjury = (index: number, field: keyof Injury, value: string) => { const updated = [...(tempProfile.injuries || [])]; updated[index] = { ...updated[index], [field]: value }; setTempProfile({ ...tempProfile, injuries: updated }); };
   const removeInjury = (index: number) => { setTempProfile({ ...tempProfile, injuries: tempProfile.injuries?.filter((_, i) => i !== index) }); };
   const showTooltip = (title: string, text: string) => { setActiveTooltip({title, text}); };
+  const updatePB = (event: '100m'|'200m'|'400m', field: 'time'|'date', value: string) => {
+      const newPBs = { ...tempProfile.pbs, [event]: { ...tempProfile.pbs[event], [field]: value } };
+      setTempProfile({ ...tempProfile, pbs: newPBs });
+  };
 
   const handleExportHistory = () => {
       if(planHistoryState.length === 0) return;
@@ -261,12 +250,10 @@ export const PlanManager: React.FC = () => {
             <button onClick={() => setShowProfileConfig(false)} className="p-2 bg-slate-800 rounded-full"><X/></button>
         </div>
         
-        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 space-y-6">
+        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 space-y-6 max-h-[75vh] overflow-y-auto">
           <section className="space-y-4">
              <h3 className="text-sm font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-2"><UserCog size={14}/> Identidad Atlética</h3>
              <div><label className="text-xs text-slate-400 block mb-1">Nombre</label><input type="text" value={tempProfile.name} onChange={e => setTempProfile({...tempProfile, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" /></div>
-             
-             {/* Note: Role switcher moved to main screen for better visibility */}
              
              <div className="grid grid-cols-2 gap-3">
                  <div><label className="text-xs text-slate-400 block mb-1">Edad</label><input type="number" value={tempProfile.age} onChange={e => setTempProfile({...tempProfile, age: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" /></div>
@@ -275,7 +262,7 @@ export const PlanManager: React.FC = () => {
              <div><label className="text-xs text-slate-400 block mb-1">Nivel</label><select value={tempProfile.experienceLevel} onChange={e => setTempProfile({...tempProfile, experienceLevel: e.target.value as any})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white"><option value="Beginner">Principiante</option><option value="Intermediate">Intermedio</option><option value="Advanced">Avanzado</option><option value="Elite">Élite</option></select></div>
           </section>
 
-          {/* ... Rest of profile sections (Injuries, Biometrics, Availability, Tests) ... */}
+          {/* RESTORED: Clinical Injuries */}
           <section className="space-y-4 pt-4 border-t border-slate-800">
              <div className="flex justify-between items-center">
                  <h3 className="text-sm font-bold text-red-400 uppercase tracking-wider flex items-center gap-2"><Stethoscope size={14}/> Lesiones</h3>
@@ -295,17 +282,80 @@ export const PlanManager: React.FC = () => {
              </div>
           </section>
 
+          {/* RESTORED: Biometrics */}
           <section className="space-y-4 pt-4 border-t border-slate-800">
-              <h3 className="text-sm font-bold text-blue-400 uppercase tracking-wider flex items-center gap-2"><Calendar size={14}/> Días Entrenamiento</h3>
-              <div className="flex flex-wrap gap-2">
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-                      <button key={day} onClick={() => toggleTrainingDay(day)} className={`w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center transition-colors ${tempProfile.trainingDays.includes(day) ? 'bg-blue-600 text-white' : 'bg-slate-950 text-slate-600 border border-slate-800'}`}>{day.charAt(0)}</button>
+             <h3 className="text-sm font-bold text-pink-400 uppercase tracking-wider flex items-center gap-2"><HeartPulse size={14}/> Biometría Avanzada</h3>
+             <div className="grid grid-cols-2 gap-3">
+                 <div>
+                     <label className="text-xs text-slate-400 flex items-center mb-1">HR Reposo</label>
+                     <input type="number" placeholder="bpm" value={tempProfile.restingHR || ''} onChange={e => setTempProfile({...tempProfile, restingHR: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" />
+                 </div>
+                 <div>
+                     <label className="text-xs text-slate-400 flex items-center mb-1">HRV (ms)</label>
+                     <input type="number" placeholder="ms" value={tempProfile.hrv || ''} onChange={e => setTempProfile({...tempProfile, hrv: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" />
+                 </div>
+             </div>
+             <div><label className="text-xs text-slate-400 block mb-1">Condiciones Médicas</label><textarea placeholder="Asma, Diabetes, etc..." value={tempProfile.medicalConditions || ''} onChange={e => setTempProfile({...tempProfile, medicalConditions: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white h-20" /></div>
+          </section>
+
+          {/* RESTORED: Availability */}
+          <section className="space-y-4 pt-4 border-t border-slate-800">
+              <h3 className="text-sm font-bold text-blue-400 uppercase tracking-wider flex items-center gap-2"><Calendar size={14}/> Disponibilidad</h3>
+              <div>
+                  <label className="text-xs text-slate-500 block mb-2">Días de Entrenamiento</label>
+                  <div className="flex flex-wrap gap-2">
+                      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+                          <button 
+                            key={day} 
+                            onClick={() => toggleTrainingDay(day)}
+                            className={`w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center transition-colors ${tempProfile.trainingDays.includes(day) ? 'bg-blue-600 text-white' : 'bg-slate-950 text-slate-600 border border-slate-800'}`}
+                          >
+                              {day.charAt(0)}
+                          </button>
+                      ))}
+                  </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                  <div>
+                      <label className="text-xs text-slate-500 block mb-1">Horas/Día</label>
+                      <input type="number" value={tempProfile.hoursPerDay} onChange={e => setTempProfile({...tempProfile, hoursPerDay: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-white"/>
+                  </div>
+                  <div>
+                      <label className="text-xs text-slate-500 block mb-1">Horario Pref.</label>
+                      <select value={tempProfile.preferredTime} onChange={e => setTempProfile({...tempProfile, preferredTime: e.target.value as any})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-white">
+                          <option value="Morning">Mañana</option>
+                          <option value="Afternoon">Tarde</option>
+                          <option value="Evening">Noche</option>
+                      </select>
+                  </div>
+              </div>
+          </section>
+
+          {/* RESTORED: Detailed PBs */}
+          <section className="space-y-4 pt-4 border-t border-slate-800">
+              <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2"><Target size={14}/> Eventos & Marcas (PBs)</h3>
+              <div className="flex gap-2 mb-2">
+                  {['100m', '200m', '400m'].map(e => (
+                      <button key={e} onClick={() => toggleEventSelection(e)} className={`flex-1 py-2 rounded-lg border text-xs font-bold ${tempProfile.events.includes(e) ? 'bg-cyan-600 border-cyan-500 text-white' : 'bg-slate-950 border-slate-700 text-slate-500'}`}>{e}</button>
+                  ))}
+              </div>
+              <div className="space-y-2">
+                  {(['100m', '200m', '400m'] as const).map(ev => tempProfile.events.includes(ev) && (
+                      <div key={ev} className="grid grid-cols-2 gap-2 bg-slate-950 p-2 rounded border border-slate-800">
+                          <div>
+                              <label className="text-[10px] text-slate-500 block uppercase">PB {ev}</label>
+                              <input type="text" placeholder="10.50" value={tempProfile.pbs[ev]?.time || ''} onChange={e => updatePB(ev, 'time', e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-white font-mono"/>
+                          </div>
+                          <div>
+                              <label className="text-[10px] text-slate-500 block uppercase">Fecha</label>
+                              <input type="date" value={tempProfile.pbs[ev]?.date || ''} onChange={e => updatePB(ev, 'date', e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"/>
+                          </div>
+                      </div>
                   ))}
               </div>
           </section>
 
           <button onClick={handleSaveProfile} className="w-full bg-cyan-600 text-white font-bold py-4 rounded-xl mt-4 shadow-lg shadow-cyan-900/20">Guardar Perfil</button>
-          <button onClick={handleLogout} className="w-full bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900/50 font-bold py-3 rounded-xl mt-2 flex items-center justify-center gap-2 transition-colors"><LogOut size={16}/> Cerrar Sesión</button>
         </div>
       </div>
     );
@@ -316,10 +366,6 @@ export const PlanManager: React.FC = () => {
       <div className="flex justify-between items-end border-b border-slate-800/50 pb-4">
         <div><h2 className="text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-slate-100 to-slate-400">Microciclo</h2><p className="text-slate-500 text-sm font-medium mt-1">Nivel V World Athletics</p></div>
         <div className="flex gap-2">
-            {/* FORCE VISIBLE ROLE SWITCHER BUTTON FOR AUDIT */}
-            <button onClick={toggleRole} className={`p-2 rounded-full border ${userProfile.role === 'staff' ? 'bg-purple-900/30 border-purple-500 text-purple-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`} title={`Cambiar Rol (Actual: ${userProfile.role})`}>
-                <Briefcase size={18} />
-            </button>
             <button onClick={() => setShowProfileConfig(true)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-full text-slate-300"><UserCog size={18} /></button>
         </div>
       </div>
