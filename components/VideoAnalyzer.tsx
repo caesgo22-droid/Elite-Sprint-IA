@@ -180,7 +180,7 @@ const VideoAnalyzer: React.FC = () => {
         
         for (const time of frames) {
             await seekTo(videoRef.current, time);
-            await new Promise(r => setTimeout(r, 200)); // Increased buffer for render
+            await new Promise(r => setTimeout(r, 250)); // Buffer for render
             
             await detectPose(); 
             
@@ -188,8 +188,8 @@ const VideoAnalyzer: React.FC = () => {
             const canvas = document.createElement('canvas');
             const video = videoRef.current;
             
-            // Limit max dimension to 800px to reduce payload size
-            const MAX_DIMENSION = 800;
+            // Limit max dimension strictly to 512px to reduce payload size drastically
+            const MAX_DIMENSION = 512;
             const scale = Math.min(1, MAX_DIMENSION / Math.max(video.videoWidth, video.videoHeight));
             
             canvas.width = video.videoWidth * scale;
@@ -199,7 +199,8 @@ const VideoAnalyzer: React.FC = () => {
             if (ctx) {
                 // Draw scaled image
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.8); // 80% Quality
+                // Lower quality to 60% to ensure small payload
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.6); 
                 capturedImages.push(dataUrl.split(',')[1]);
             }
         }
@@ -226,12 +227,12 @@ const VideoAnalyzer: React.FC = () => {
              setSessionAnalyses(prev => [analysis, ...prev]);
              if (analysisMode === 'Personal') saveAnalysis(analysis);
         } else {
-            alert("No se pudo generar el análisis. Intenta con un video más corto.");
+            alert("No se pudo generar el análisis. Es posible que el video sea demasiado largo o pesado. Intenta cortarlo a menos de 5 segundos.");
         }
 
     } catch(e) { 
         console.error("Analysis sequence error:", e);
-        alert("Error técnico durante el análisis.");
+        alert("Error técnico durante el análisis. Verifica tu conexión.");
     } finally { 
         setLoading(false); 
     }

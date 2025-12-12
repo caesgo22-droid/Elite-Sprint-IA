@@ -48,6 +48,22 @@ const cleanAndParseJSON = (text: string) => {
   }
 };
 
+// --- HELPER: Day Sorter ---
+const DAY_ORDER: { [key: string]: number } = {
+    'lunes': 1, 'martes': 2, 'miércoles': 3, 'miercoles': 3, 'jueves': 4, 'viernes': 5, 'sábado': 6, 'sabado': 6, 'domingo': 7,
+    'mon': 1, 'tue': 2, 'wed': 3, 'thu': 4, 'fri': 5, 'sat': 6, 'sun': 7
+};
+
+const normalizeDay = (d: string) => d.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+const sortSessions = (sessions: any[]) => {
+    return sessions.sort((a, b) => {
+        const da = DAY_ORDER[normalizeDay(a.day)] || 99;
+        const db = DAY_ORDER[normalizeDay(b.day)] || 99;
+        return da - db;
+    });
+};
+
 // --- ELITE FRAMEWORKS INJECTION (RAG Context) ---
 const ELITE_BIOMECHANICS_FRAMEWORK = `
 FRAMEWORK BIOMECÁNICO (RALPH MANN / ALTIS / FRANS BOSCH):
@@ -60,19 +76,6 @@ FRAMEWORK BIOMECÁNICO (RALPH MANN / ALTIS / FRANS BOSCH):
    - Maximizar la flexión de cadera y rodilla al frente.
    - Evitar "Backside Mechanics" excesiva (talón subiendo demasiado atrás al despegar).
 4. **TIJERAS (Scissoring):** La acción de las piernas debe ser un pistoneo agresivo vertical, no un ciclo circular pasivo.
-`;
-
-const ELITE_PLANNING_FRAMEWORK = `
-FRAMEWORK DE PERIODIZACIÓN (BONDARCHUK / CHARLIE FRANCIS):
-1. **CLASIFICACIÓN DE EJERCICIOS:**
-   - CE (Competitivo Específico): El evento completo (ej. 100m, salidas de taco).
-   - SDE (Desarrollo Específico): Partes del evento (ej. Flys, Sleds, Split Runs).
-   - SPE (Preparación Especial): Ejercicios de fuerza que imitan el gesto (ej. Step-ups, Cleans).
-   - GPE (Preparación General): Construcción de base (ej. Circuitos, Tempo).
-2. **GESTIÓN DEL SNC (Sistema Nervioso Central):**
-   - High Intensity (HI): >95% velocidad. Drena SNC. Requiere 48h+ recup.
-   - Low Intensity (LI): <75% velocidad (Tempo). Regenera y construye capilares.
-   - **REGLA DE ORO:** Nunca mezclar HI y LI en la misma sesión de forma que compitan. High/Low approach.
 `;
 
 const PLAN_SCHEMA: Schema = {
@@ -143,22 +146,20 @@ const modifySessionTool: FunctionDeclaration = {
 
 // --- DYNAMIC FALLBACK PLAN GENERATOR ---
 const generateFallbackPlan = (profile: UserProfile, phaseName: string, daysES: string[]): TrainingPlan => {
-    // Dynamic fallback that generates a session for EACH requested day
-    const sessions = daysES.map((day, index) => {
-        // Simple rotation logic for fallback: Accel -> Tempo -> MaxV -> Recovery
+    // Ensure days are unique and sorted for fallback
+    const uniqueDays = Array.from(new Set(daysES)).sort((a, b) => (DAY_ORDER[normalizeDay(a)] || 99) - (DAY_ORDER[normalizeDay(b)] || 99));
+
+    const sessions = uniqueDays.map((day, index) => {
         let focus = "Acceleration";
         let intensity = "High";
         let routine = ["Wall Drills 3x30s", "A-Skip 3x20m", "Sled Push 4x20m"];
         
-        if (index % 3 === 1) {
+        // Simple Logic: Alternate High/Low based on day index
+        if (index % 2 !== 0) {
             focus = "Tempo";
             intensity = "Low";
             routine = ["100m @ 70% x 10", "Core Circuit"];
-        } else if (index % 3 === 2) {
-            focus = "Max Velocity";
-            intensity = "Max";
-            routine = ["Wicket Runs 6x", "Fly 10m x 4"];
-        }
+        } 
 
         return {
             day: day,
@@ -194,12 +195,18 @@ export const generateTrainingPlan = async (
   else if (currentMonth >= 5 && currentMonth <= 8) phaseName = "Competition"; 
   else if (currentMonth >= 9) phaseName = "General Prep";
 
-  // Prepare Days List
-  const trainingDays = (profile.trainingDays && Array.isArray(profile.trainingDays) && profile.trainingDays.length > 0) 
+  // --- CRITICAL FIX: CLEAN AND SORT DAYS ---
+  const rawDays = (profile.trainingDays && Array.isArray(profile.trainingDays) && profile.trainingDays.length > 0) 
         ? profile.trainingDays 
         : ['Mon', 'Wed', 'Fri'];
+  
   const dayMap: {[key:string]: string} = { 'Mon': 'Lunes', 'Tue': 'Martes', 'Wed': 'Miércoles', 'Thu': 'Jueves', 'Fri': 'Viernes', 'Sat': 'Sábado', 'Sun': 'Domingo' };
-  const userDaysES = trainingDays.map(d => dayMap[d] || d);
+  
+  // 1. Map to Spanish
+  // 2. Remove Duplicates (Set)
+  // 3. Sort Chronologically (Mon->Sun)
+  const userDaysES = Array.from(new Set(rawDays.map(d => dayMap[d] || d)))
+      .sort((a, b) => (DAY_ORDER[normalizeDay(a)] || 99) - (DAY_ORDER[normalizeDay(b)] || 99));
 
   if (!ai) {
       console.warn("AI not initialized, returning dynamic fallback plan");
@@ -213,24 +220,21 @@ export const generateTrainingPlan = async (
       ACTÚA COMO: DIRECTOR DE ALTO RENDIMIENTO (WORLD ATHLETICS LEVEL V).
       
       PACIENTE (ATLETA):
-      - Nombre: ${profile.name || 'Atleta'}
       - Nivel: ${profile.experienceLevel || 'Intermedio'}
       - Evento: ${focusEvent || "100m"}
-      - Contexto: Fase ${phaseName}.
-      - Estado SNC (Readiness): ${cnsScore.toFixed(1)}/10.
-      - Carga (ACWR): ${acwr ? acwr.ratio : "N/A"}.
+      - Fase: ${phaseName}.
+      - Readiness: ${cnsScore.toFixed(1)}/10.
       
-      TAREA CRÍTICA:
-      Generar un microciclo de entrenamiento EXACTAMENTE para los siguientes días: ${userDaysES.join(", ")}.
+      TAREA:
+      Generar un microciclo de entrenamiento ESTRICTAMENTE para estos ${userDaysES.length} días: ${userDaysES.join(", ")}.
       
-      **REGLAS ESTRICTAS DE SALIDA:**
-      1. El array "sessions" debe tener una longitud exacta de ${userDaysES.length}.
-      2. CADA uno de los días listados (${userDaysES.join(", ")}) debe tener su propio objeto de sesión.
-      3. NO omitas ningún día. Si es día de descanso activo, marca el focus como "Recovery".
+      **REGLAS DE ORO (Fallo = Despido):**
+      1. Genera UN objeto sesión POR CADA día de la lista. Ni más, ni menos.
+      2. Si la lista pide "Lunes" y "Jueves", solo genera sesiones para "Lunes" y "Jueves".
+      3. NO DUPLIQUES DÍAS.
+      4. Respeta el orden cronológico de la semana.
       
-      INSTRUCCIONES DE ENTRENAMIENTO:
-      1. Usa la base de datos de Drills para seleccionar ejercicios específicos (CE, SDE, SPE).
-      2. Devuelve un objeto JSON válido que cumpla estrictamente con el esquema.
+      SALIDA: JSON válido según esquema.
     `;
 
     const response = await ai.models.generateContent({
@@ -242,6 +246,20 @@ export const generateTrainingPlan = async (
     if (response.text) {
       const data = cleanAndParseJSON(response.text);
       if (!data) throw new Error("Failed to parse JSON response");
+      
+      // --- CRITICAL FIX: POST-PROCESS SORTING ---
+      // Force sort the returned sessions to match the calendar week order
+      if (data.sessions && Array.isArray(data.sessions)) {
+          data.sessions = sortSessions(data.sessions);
+          
+          // Safety: Filter out days that weren't requested if AI hallucinated extras
+          // Strict check: Keep only if the normalized day name matches one of the requested ones
+          data.sessions = data.sessions.filter((s:any) => {
+              const sNorm = normalizeDay(s.day);
+              return userDaysES.some(ud => normalizeDay(ud) === sNorm);
+          });
+      }
+
       return { id: Date.now().toString(), createdAt: new Date().toISOString(), focusEvent: focusEvent || profile.events[0], acwrStatus: acwr, ...data } as TrainingPlan;
     }
     
@@ -261,7 +279,7 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
     const physicsContext = advancedMetrics ? `
       DATOS CINÉTICOS (Physics Engine):
       - Velocidad Horizontal CoM: ${advancedMetrics.velocity}
-      - Oscilación Vertical (Bouncing): ${advancedMetrics.verticalOscillation || 'N/A'}. (Elite < 4-5cm).
+      - Oscilación Vertical: ${advancedMetrics.verticalOscillation || 'N/A'}.
       - Force Index: ${advancedMetrics.forceFactor || 'N/A'}/100.
     ` : "";
 
@@ -279,24 +297,22 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
 
     const promptText = `
       ACTÚA COMO: BIOMECÁNICO DEL DEPORTE (PHD).
-      MODO: ${contextPrefix}
-      
-      ${ELITE_BIOMECHANICS_FRAMEWORK}
-      
-      DATOS DE ENTRADA: ${bioContext}
       
       TAREA:
-      Analiza las imágenes proporcionadas (Kinograma). Busca discrepancias con el "Modelo Oro" (Ralph Mann).
+      Analiza las imágenes del sprint (Kinograma).
       
-      CRITERIOS DE EVALUACIÓN:
-      1. ¿Aterriza el pie delante del CoM (Overstriding/Frenado)? Esto es CRÍTICO.
-      2. ¿Hay "Colapso" en la rodilla de apoyo durante la amortiguación? (Falta de Stiffness).
-      3. ¿La pierna libre hace un recorrido circular (Backside) o lineal (Pistón)?
+      DATOS SENSOR: ${bioContext}
       
-      SALIDA JSON REQUERIDA. ASEGÚRATE DE DEVOLVER UN JSON VÁLIDO.
+      CRITERIOS (Modelo Ralph Mann):
+      1. Contacto: ¿Debajo del CoM o Overstriding?
+      2. Recobro: ¿Talón cerrado al glúteo?
+      3. Despegue: ¿Extensión completa de cadera?
+      
+      SALIDA: JSON estricto.
     `;
 
     const parts: any[] = [];
+    // Ensure images are properly formatted
     images.forEach(img => parts.push({ inlineData: { mimeType: 'image/jpeg', data: img } }));
     parts.push({ text: promptText });
 
