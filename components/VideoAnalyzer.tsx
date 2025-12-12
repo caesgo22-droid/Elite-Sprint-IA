@@ -175,12 +175,14 @@ const VideoAnalyzer: React.FC = () => {
     
     try {
         const duration = videoRef.current.duration;
-        const frames = [duration * 0.2, duration * 0.5, duration * 0.8]; 
+        // OPTIMIZATION: Reduce to 2 key frames to save API quota (429 fix)
+        // Mid-acceleration (Drive) and Max Velocity (Upright) are the two critical phases.
+        const frames = [duration * 0.3, duration * 0.7]; 
         const capturedImages: string[] = [];
         
         for (const time of frames) {
             await seekTo(videoRef.current, time);
-            await new Promise(r => setTimeout(r, 250)); // Buffer for render
+            await new Promise(r => setTimeout(r, 300)); // Increased buffer for reliable render
             
             await detectPose(); 
             
@@ -188,8 +190,9 @@ const VideoAnalyzer: React.FC = () => {
             const canvas = document.createElement('canvas');
             const video = videoRef.current;
             
-            // Limit max dimension strictly to 512px to reduce payload size drastically
-            const MAX_DIMENSION = 512;
+            // Limit max dimension strictly to 480px to prevent quota limit errors
+            // This is the sweet spot for Gemini 2.5 Flash
+            const MAX_DIMENSION = 480;
             const scale = Math.min(1, MAX_DIMENSION / Math.max(video.videoWidth, video.videoHeight));
             
             canvas.width = video.videoWidth * scale;
@@ -199,8 +202,8 @@ const VideoAnalyzer: React.FC = () => {
             if (ctx) {
                 // Draw scaled image
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                // Lower quality to 60% to ensure small payload
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.6); 
+                // Lower quality to 50% to ensure tiny payload (<100KB per image)
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.5); 
                 capturedImages.push(dataUrl.split(',')[1]);
             }
         }
@@ -221,18 +224,18 @@ const VideoAnalyzer: React.FC = () => {
                  ...result, 
                  id: Date.now().toString(), 
                  type: 'Sequence' as const, 
-                 thumbnail: `data:image/jpeg;base64,${capturedImages[1]}`, 
+                 thumbnail: `data:image/jpeg;base64,${capturedImages[0]}`, 
                  kinetics: kinetics
              };
              setSessionAnalyses(prev => [analysis, ...prev]);
              if (analysisMode === 'Personal') saveAnalysis(analysis);
         } else {
-            alert("No se pudo generar el análisis. Es posible que el video sea demasiado largo o pesado. Intenta cortarlo a menos de 5 segundos.");
+            alert("El servicio está saturado (Quota). Intenta de nuevo en 1 minuto.");
         }
 
     } catch(e) { 
         console.error("Analysis sequence error:", e);
-        alert("Error técnico durante el análisis. Verifica tu conexión.");
+        alert("Error técnico. Verifica tu conexión o intenta con un video más corto.");
     } finally { 
         setLoading(false); 
     }
