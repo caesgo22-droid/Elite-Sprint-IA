@@ -374,6 +374,13 @@ export const chatWithCoach = async (history: any[], message: string, context: an
     const prunedHistory = history.slice(-6); 
     const recentLogs = context.logs?.slice(-3).map((l:any) => `[${l.date}] ${l.event}: ${l.time}s`).join("; ") || "Sin data.";
     
+    // Extract recent feedback explicitly
+    const recentFeedback = context.plan?.sessions
+        ?.filter((s:any) => s.feedback && s.feedback.completed)
+        ?.slice(-2)
+        ?.map((s:any) => `[${s.day}]: RPE ${s.feedback.rpe}/10, Dolor ${s.feedback.painLevel}/10, Notas: ${s.feedback.notes}`)
+        ?.join("; ") || "Sin feedback reciente.";
+
     const injuryReport = context.profile.injuries?.length > 0 
         ? context.profile.injuries.map((i:any) => `LESIÓN ACTIVA: ${i.location} (${i.severity})`).join(", ")
         : "Salud Óptima.";
@@ -385,9 +392,14 @@ export const chatWithCoach = async (history: any[], message: string, context: an
       - Nombre: ${context.profile.name}
       - Estado Salud: ${injuryReport} (SI HAY LESIÓN, PRIORIZA LA SEGURIDAD).
       - Carga Actual: ACWR ${context.acwr?.ratio || 'N/A'}.
-      - Tiempos Recientes: ${recentLogs}
+      - Feedback Reciente: ${recentFeedback}
       
-      Responde breve, técnico y motivador.
+      INSTRUCCIONES CLAVE (COMUNICACIÓN DE ÉLITE):
+      1. Si el atleta reportó DOLOR alto (>3) en las últimas sesiones, pregúntale explícitamente por ello antes de dar consejos de intensidad.
+      2. Sé breve, técnico y basado en evidencia.
+      3. Si te piden un cambio de plan, usa la herramienta 'modifySession'.
+      
+      Responde con autoridad pero empatía técnica.
     `;
 
     const chat = ai.chats.create({

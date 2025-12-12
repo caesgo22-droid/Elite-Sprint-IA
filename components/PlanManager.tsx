@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
-import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle } from 'lucide-react';
+import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle, MessageSquare } from 'lucide-react';
 import { TrainingSession, UserProfile, Injury } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { getPlanHistory } from '../services/firebase';
@@ -36,15 +36,24 @@ const InfoButton = ({ title, text, onClick }: { title: string, text: string, onC
     </button> 
 );
 
-const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessionFeedbackModal, onShowRecovery }: any) => {
+const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessionFeedbackModal, onShowRecovery, isStaff, updateSessionNote }: any) => {
     const isExpanded = expandedDay === session.day;
     const isDone = session.feedback?.completed;
     const intensityColor = session.intensity === 'Max' ? 'text-red-400 border-red-900/50 bg-red-900/20' : session.intensity === 'High' ? 'text-orange-400 border-orange-900/50 bg-orange-900/20' : session.intensity === 'Medium' ? 'text-yellow-400 border-yellow-900/50 bg-yellow-900/20' : 'text-emerald-400 border-emerald-900/50 bg-emerald-900/20';
     
+    const [note, setNote] = useState(session.coachNotes || "");
+    const [isEditingNote, setIsEditingNote] = useState(false);
+
+    const saveNote = (e: any) => {
+        e.stopPropagation();
+        updateSessionNote(session.day, note);
+        setIsEditingNote(false);
+    };
+
     // WHATSAPP SHARE BUTTON FOR INDIVIDUAL SESSION
     const shareSession = (e: React.MouseEvent) => {
         e.stopPropagation();
-        const text = `*ELITE SPRINT AI - Sesión (${session.day})*\n\n*Enfoque:* ${session.focus}\n*Rutina:* ${session.trackRoutine.join(', ')}\n*Intensidad:* ${session.intensity}`;
+        const text = `*ELITE SPRINT AI - Sesión (${session.day})*\n\n*Enfoque:* ${session.focus}\n*Rutina:* ${session.trackRoutine.join(', ')}\n*Intensidad:* ${session.intensity}\n${session.coachNotes ? `*Nota Coach:* ${session.coachNotes}` : ''}`;
         const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
         window.open(url, '_blank');
     };
@@ -54,7 +63,13 @@ const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessi
         <div className="p-4 flex justify-between items-center cursor-pointer select-none">
           <div className="flex items-center gap-4">
              <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center font-bold text-sm bg-slate-800 border border-slate-700 ${isDone ? 'text-emerald-400 border-emerald-900/50' : 'text-slate-200'}`}> {isDone ? <CheckSquare size={18} /> : <span className="text-[10px] text-slate-400 uppercase leading-none">{session.day.substring(0, 3)}</span>} </div>
-             <div> <h4 className={`font-bold text-lg tracking-tight ${isDone ? 'text-slate-400 line-through' : 'text-slate-100'}`}>{session.focus}</h4> <div className="flex items-center gap-2 mt-1"><span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wide ${intensityColor}`}>{session.intensity}</span></div> </div>
+             <div> 
+                 <h4 className={`font-bold text-lg tracking-tight ${isDone ? 'text-slate-400 line-through' : 'text-slate-100'}`}>{session.focus}</h4> 
+                 <div className="flex items-center gap-2 mt-1">
+                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wide ${intensityColor}`}>{session.intensity}</span>
+                     {session.coachNotes && <span className="text-[10px] bg-blue-900/30 text-blue-300 px-2 py-0.5 rounded border border-blue-500/30 flex items-center gap-1"><MessageSquare size={10}/> Nota</span>}
+                 </div> 
+             </div>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={shareSession} className="text-emerald-500 bg-emerald-900/20 p-2 rounded-full mr-1 hover:bg-emerald-900/40 z-10 relative">
@@ -65,6 +80,25 @@ const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessi
         </div>
         {isExpanded && (
           <div className="px-5 pb-5 space-y-5 border-t border-slate-700/50 pt-4 animate-in slide-in-from-top-2">
+            
+            {/* COACH NOTE SECTION (Communication Logic) */}
+            {(isStaff || session.coachNotes) && (
+                <div className="bg-blue-900/10 border-l-2 border-blue-500 pl-3 py-2 rounded-r relative group" onClick={e => e.stopPropagation()}>
+                    <div className="flex justify-between items-center mb-1">
+                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1"><UserCog size={12}/> Instrucción del Staff</span>
+                        {isStaff && !isEditingNote && <button onClick={() => setIsEditingNote(true)} className="text-slate-500 hover:text-white"><Wrench size={12}/></button>}
+                    </div>
+                    {isStaff && isEditingNote ? (
+                        <div className="flex gap-2">
+                            <input type="text" value={note} onChange={e => setNote(e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white" placeholder="Ej: Enfócate en el recobro..." autoFocus/>
+                            <button onClick={saveNote} className="bg-blue-600 px-2 rounded text-xs font-bold text-white">OK</button>
+                        </div>
+                    ) : (
+                        <p className="text-sm text-slate-300 italic">{session.coachNotes || (isStaff ? "Añadir nota técnica..." : "")}</p>
+                    )}
+                </div>
+            )}
+
             <div>
                 <div className="flex items-center gap-2 mb-3 text-cyan-400 text-xs font-bold uppercase tracking-wider"><Zap size={14} /> Rutina de Pista</div>
                 <ul className="space-y-2">
@@ -87,7 +121,7 @@ const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessi
                 
                 {isDone && (
                     <button onClick={(e) => { e.stopPropagation(); onShowRecovery(session); }} className="w-full bg-emerald-900/20 border border-emerald-500/30 hover:bg-emerald-900/40 text-emerald-400 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors"> 
-                        <BatteryCharging size={16}/> Fuel & Recovery
+                        <BatteryCharging size={16}/> Recuperación
                     </button>
                 )}
             </div>
@@ -99,7 +133,7 @@ const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessi
 
 export const PlanManager: React.FC = () => {
   const { user, userProfile, updateProfile, currentPlan, setPlan, updateSession, lastAnalysis } = useApp();
-  const [searchParams] = useSearchParams(); // Hook to read URL params
+  const [searchParams] = useSearchParams();
   
   const [loading, setLoading] = useState(false);
   const [showProfileConfig, setShowProfileConfig] = useState(false);
@@ -117,6 +151,8 @@ export const PlanManager: React.FC = () => {
   const [sessionFeedbackModal, setSessionFeedbackModal] = useState<TrainingSession | null>(null);
   const [activeTooltip, setActiveTooltip] = useState<{title: string, text: string} | null>(null);
   const [viewingRecovery, setViewingRecovery] = useState<any>(null);
+
+  const isStaff = userProfile.role === 'staff';
 
   // Initialize: Check for ?edit=true param or missing name
   useEffect(() => {
@@ -145,7 +181,6 @@ export const PlanManager: React.FC = () => {
       updateProfile(tempProfile); 
       setShowProfileConfig(false); 
       if (!tempProfile.events.includes(focusEvent)) setFocusEvent(tempProfile.events[0]);
-      // Clear URL param if present (optional UX polish)
       if (window.history.pushState) {
           const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '#/plan';
           window.history.pushState({path:newUrl},'',newUrl);
@@ -175,6 +210,10 @@ export const PlanManager: React.FC = () => {
       const text = `*ELITE SPRINT AI - MICRO-CICLO*\n\n*Fase:* ${currentPlan.phase}\n*Objetivo:* ${currentPlan.weeklyGoal}\n\nGenerado por Elite Sprint Coach AI.`;
       const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
       window.open(url, '_blank');
+  };
+
+  const updateSessionNote = (day: string, note: string) => {
+      updateSession(day, { coachNotes: note });
   };
 
   // Profile Helpers
@@ -272,11 +311,11 @@ export const PlanManager: React.FC = () => {
         </div>
         
         <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+          {/* ... (Existing Profile Sections) ... */}
           <section className="space-y-4">
              <h3 className="text-sm font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-2"><UserCog size={14}/> Identidad Atlética</h3>
              <div><label className="text-xs text-slate-400 block mb-1">Nombre</label><input type="text" value={tempProfile.name} onChange={e => setTempProfile({...tempProfile, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" /></div>
-             
-             {/* RESTORED: Age, Height, Weight, Experience */}
+             {/* ... (Rest of fields) ... */}
              <div className="grid grid-cols-2 gap-3">
                  <div>
                      <label className="text-xs text-slate-400 block mb-1">Edad</label>
@@ -307,7 +346,6 @@ export const PlanManager: React.FC = () => {
              </div>
           </section>
 
-          {/* RESTORED: Clinical Injuries */}
           <section className="space-y-4 pt-4 border-t border-slate-800">
              <div className="flex justify-between items-center">
                  <h3 className="text-sm font-bold text-red-400 uppercase tracking-wider flex items-center gap-2"><Stethoscope size={14}/> Lesiones</h3>
@@ -327,7 +365,6 @@ export const PlanManager: React.FC = () => {
              </div>
           </section>
 
-          {/* RESTORED: Biometrics */}
           <section className="space-y-4 pt-4 border-t border-slate-800">
              <h3 className="text-sm font-bold text-pink-400 uppercase tracking-wider flex items-center gap-2"><HeartPulse size={14}/> Biometría Avanzada</h3>
              <div className="grid grid-cols-2 gap-3">
@@ -343,7 +380,6 @@ export const PlanManager: React.FC = () => {
              <div><label className="text-xs text-slate-400 block mb-1">Condiciones Médicas</label><textarea placeholder="Asma, Diabetes, etc..." value={tempProfile.medicalConditions || ''} onChange={e => setTempProfile({...tempProfile, medicalConditions: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white h-20" /></div>
           </section>
 
-          {/* RESTORED: Availability */}
           <section className="space-y-4 pt-4 border-t border-slate-800">
               <h3 className="text-sm font-bold text-blue-400 uppercase tracking-wider flex items-center gap-2"><Calendar size={14}/> Disponibilidad</h3>
               <div>
@@ -376,7 +412,6 @@ export const PlanManager: React.FC = () => {
               </div>
           </section>
 
-          {/* RESTORED: Detailed PBs */}
           <section className="space-y-4 pt-4 border-t border-slate-800">
               <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2"><Target size={14}/> Eventos & Marcas (PBs)</h3>
               <div className="flex gap-2 mb-2">
@@ -418,7 +453,7 @@ export const PlanManager: React.FC = () => {
       {!currentPlan ? (
         <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 space-y-6">
           <div className="text-center"><h3 className="text-lg font-bold text-white">Biomarcadores Diarios</h3><p className="text-slate-400 text-xs mt-1">El Consejo de Expertos analizará tu estado.</p></div>
-          {acwr && ( <div className="space-y-2"> <div className="flex justify-between text-xs text-slate-400 uppercase font-bold tracking-wider items-center"> <span>ACWR <InfoButton title="ACWR" text="Acute:Chronic Workload Ratio." onClick={showTooltip}/></span> <span>{acwr.ratio}</span> </div> <div className="h-4 bg-slate-800 rounded-full overflow-hidden relative"> <div className={`h-full transition-all duration-500 ${acwr.status === 'High Risk' ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(acwr.ratio * 50, 100)}%` }} /> </div> </div> )}
+          {acwr && ( <div className="space-y-2"> <div className="flex justify-between text-xs text-slate-400 uppercase font-bold tracking-wider items-center"> <span>ACWR <InfoButton title="ACWR" text="Acute:Chronic Workload Ratio." onClick={showTooltip}/></span> <span>{acwr.ratio}</span> </div> <div className="h-4 bg-slate-800 rounded-full overflow-hidden relative"> <div className={`h-full transition-all duration-500 ${acwr.status === 'Alto Riesgo' ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(acwr.ratio * 50, 100)}%` }} /> </div> </div> )}
           
           <div className="space-y-4 max-w-sm mx-auto pt-4 border-t border-slate-800">
             <BiomarkerSlider label="Fatiga" value={fatigue} setter={setFatigue} color="cyan" minLabel="Fresco" maxLabel="Exhausto" />
@@ -470,7 +505,7 @@ export const PlanManager: React.FC = () => {
            
            <div className="space-y-3 pb-8">
                {currentPlan.sessions.map((session: TrainingSession, idx: number) => (
-                   <SessionCard key={idx} session={session} expandedDay={expandedDay} setExpandedDay={setExpandedDay} setSessionFeedbackModal={setSessionFeedbackModal} onShowRecovery={handleCalculateRecovery} />
+                   <SessionCard key={idx} session={session} expandedDay={expandedDay} setExpandedDay={setExpandedDay} setSessionFeedbackModal={setSessionFeedbackModal} onShowRecovery={handleCalculateRecovery} isStaff={isStaff} updateSessionNote={updateSessionNote} />
                ))}
            </div>
         </div>

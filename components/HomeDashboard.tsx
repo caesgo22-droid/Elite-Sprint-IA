@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { Zap, TrendingUp, CalendarCheck, CheckSquare, X, BatteryCharging, ArrowRight, BrainCircuit, Sparkles, Activity, Clock, MapPin, Info, MessageCircle } from 'lucide-react';
+import { Zap, TrendingUp, CalendarCheck, CheckSquare, X, BatteryCharging, ArrowRight, BrainCircuit, Sparkles, Activity, Clock, MapPin, Info, MessageCircle, HeartPulse, Stethoscope, AlertTriangle, UserCog } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { calculateRecovery } from '../utils/recoveryEngine';
@@ -10,18 +10,19 @@ import { generateNexusInsight } from '../services/geminiService';
 import { NexusInsight } from '../types';
 
 export const HomeDashboard: React.FC = () => {
-  const { userProfile, currentPlan, logs, updateSession, lastAnalysis, acwrStats, nexusInsight, setNexusInsight } = useApp();
+  const { userProfile, currentPlan, logs, updateSession, lastAnalysis, acwrStats, nexusInsight, setNexusInsight, addLog } = useApp();
   const navigate = useNavigate();
   
   const [showFeedbackModal, setShowFeedbackModal] = useState<any>(null);
   const [showSundayPrompt, setShowSundayPrompt] = useState(false);
   const [activeTooltip, setActiveTooltip] = useState<{title: string, text: string} | null>(null);
   const [recoveryPlan, setRecoveryPlan] = useState<any>(null);
+  const [showTherapyModal, setShowTherapyModal] = useState(false);
   
-  // Nexus Local Loading State (data is in context)
+  // Nexus Local Loading State
   const [loadingNexus, setLoadingNexus] = useState(false);
 
-  // Biomarkers State (Local for now, could be in context)
+  // Biomarkers State
   const [readiness, setReadiness] = useState({ fatigue: 5, sleep: 7, soreness: 3, stress: 4 });
 
   useEffect(() => {
@@ -29,11 +30,9 @@ export const HomeDashboard: React.FC = () => {
     if (today.getDay() === 0) setShowSundayPrompt(true);
   }, []);
 
-  // Generate Nexus Insight only if not exists or stale
+  // Generate Nexus Insight
   useEffect(() => {
       const fetchNexus = async () => {
-          // If we already have a fresh insight (e.g. less than 1 hour old), don't refetch
-          // Simple check: if exists, skip for now to save API calls in this demo
           if (nexusInsight) return;
 
           if (logs.length > 0 || lastAnalysis || acwrStats) {
@@ -82,7 +81,7 @@ export const HomeDashboard: React.FC = () => {
     updateSession(showFeedbackModal.day, {
         feedback: { completed: true, rpe, painLevel, duration, surface: surface as any, notes: fbNotes, timestamp: new Date().toISOString() }
     });
-    const weight = (userProfile.weight && userProfile.weight > 0) ? userProfile.weight : 70; // Fallback weight
+    const weight = (userProfile.weight && userProfile.weight > 0) ? userProfile.weight : 70; 
     const rec = calculateRecovery(showFeedbackModal.intensity, duration, weight, rpe);
     setRecoveryPlan(rec);
     setShowFeedbackModal(null);
@@ -103,6 +102,29 @@ export const HomeDashboard: React.FC = () => {
       window.open(url, '_blank');
   };
 
+  const handleTherapyLog = (type: string) => {
+      // 1. Log the event
+      addLog({
+          id: Date.now().toString(),
+          date: new Date().toISOString().split('T')[0],
+          event: 'Therapy',
+          type: 'Recovery',
+          location: 'Clínica / Casa',
+          time: 0,
+          notes: `Sesión de ${type}`
+      });
+
+      // 2. Reduce Readiness Stress/Soreness (Simulated impact)
+      setReadiness(prev => ({
+          ...prev,
+          soreness: Math.max(1, prev.soreness - 2),
+          fatigue: Math.max(1, prev.fatigue - 1)
+      }));
+
+      setShowTherapyModal(false);
+      alert("✅ Sesión registrada. La IA detectará la carga 0 para reducir el ACWR.");
+  };
+
   const InfoButton = ({ title, text }: { title: string, text: string }) => (
       <button 
         type="button"
@@ -112,6 +134,16 @@ export const HomeDashboard: React.FC = () => {
           <Info size={10} />
       </button>
   );
+
+  const getNexusStatusES = (status: string) => {
+      switch(status) {
+          case 'Peak': return 'Pico de Forma';
+          case 'Warning': return 'Alerta';
+          case 'Recovery': return 'Recuperación';
+          case 'Neutral': return 'Neutral';
+          default: return status;
+      }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
@@ -132,7 +164,7 @@ export const HomeDashboard: React.FC = () => {
                       nexusInsight.status === 'Recovery' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' :
                       'bg-slate-700 text-slate-300'
                   }`}>
-                      {nexusInsight.status}
+                      {getNexusStatusES(nexusInsight.status)}
                   </span>
               )}
           </div>
@@ -165,6 +197,17 @@ export const HomeDashboard: React.FC = () => {
               <button onClick={() => navigate('/plan')} className="bg-white text-cyan-900 text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1">Planificar <ArrowRight size={12}/></button>
           </div>
       )}
+
+      {/* QUICK ACTIONS ROW */}
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+          <button onClick={() => setShowTherapyModal(true)} className="flex items-center gap-2 px-4 py-3 bg-slate-900/80 border border-slate-800 rounded-xl hover:bg-slate-800 transition-all shrink-0">
+              <Stethoscope size={16} className="text-emerald-400" />
+              <div className="text-left">
+                  <div className="text-xs font-bold text-white">Bitácora Terapia</div>
+                  <div className="text-[9px] text-emerald-400">Bajar ACWR</div>
+              </div>
+          </button>
+      </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div onClick={() => navigate('/tracker')} className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex flex-col justify-between relative overflow-hidden cursor-pointer hover:bg-slate-900/80 transition-colors">
@@ -205,6 +248,15 @@ export const HomeDashboard: React.FC = () => {
         <div className="p-5 overflow-y-auto">
           {todaysSession ? (
             <div className="space-y-5">
+              
+              {/* COACH NOTE ALERT */}
+              {todaysSession.coachNotes && (
+                  <div className="bg-blue-900/20 border-l-4 border-blue-500 p-3 rounded-r-lg animate-in slide-in-from-left-2">
+                      <h4 className="text-xs font-bold text-blue-400 uppercase flex items-center gap-1 mb-1"><UserCog size={12}/> Instrucción del Staff</h4>
+                      <p className="text-sm text-white font-medium italic">"{todaysSession.coachNotes}"</p>
+                  </div>
+              )}
+
               <div><span className="text-slate-400 text-xs uppercase tracking-wider block mb-1">Enfoque Principal</span><p className="text-xl font-medium text-white">{todaysSession.focus}</p></div>
               <div><span className="text-slate-400 text-xs uppercase tracking-wider block mb-2 flex items-center gap-2"><Zap size={12} /> Rutina de Pista</span><ul className="space-y-2">{todaysSession.trackRoutine.map((drill, idx) => (<li key={idx} className="flex items-start gap-2 text-sm text-slate-300"><span className="w-1.5 h-1.5 mt-1.5 rounded-full bg-cyan-500 shrink-0"></span>{drill}</li>))}</ul></div>
               <div className="pt-2 border-t border-slate-800 mt-2">
@@ -223,6 +275,36 @@ export const HomeDashboard: React.FC = () => {
           )}
         </div>
       </div>
+
+      {showTherapyModal && (
+          <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
+              <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm animate-in zoom-in-95">
+                  <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-bold text-white flex items-center gap-2"><Stethoscope size={18} className="text-emerald-400"/> Registrar Recuperación</h3>
+                      <button onClick={() => setShowTherapyModal(false)}><X className="text-slate-400"/></button>
+                  </div>
+                  <p className="text-xs text-slate-400 mb-4">Esto registrará un evento de <strong className="text-emerald-400">Carga 0</strong>, reduciendo tu ACWR.</p>
+                  <div className="grid grid-cols-2 gap-3">
+                      <button onClick={() => handleTherapyLog('Fisioterapia')} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 p-4 rounded-xl flex flex-col items-center gap-2 transition-colors">
+                          <HeartPulse size={24} className="text-red-400"/>
+                          <span className="text-xs font-bold text-white">Fisioterapia</span>
+                      </button>
+                      <button onClick={() => handleTherapyLog('Masaje')} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 p-4 rounded-xl flex flex-col items-center gap-2 transition-colors">
+                          <Activity size={24} className="text-cyan-400"/>
+                          <span className="text-xs font-bold text-white">Masaje</span>
+                      </button>
+                      <button onClick={() => handleTherapyLog('Crioterapia')} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 p-4 rounded-xl flex flex-col items-center gap-2 transition-colors">
+                          <div className="text-2xl">❄️</div>
+                          <span className="text-xs font-bold text-white">Hielo / Crio</span>
+                      </button>
+                      <button onClick={() => handleTherapyLog('Descanso Activo')} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 p-4 rounded-xl flex flex-col items-center gap-2 transition-colors">
+                          <div className="text-2xl">🧘</div>
+                          <span className="text-xs font-bold text-white">Descanso Activo</span>
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
 
       {showFeedbackModal && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">

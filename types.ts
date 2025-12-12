@@ -56,6 +56,7 @@ export interface TrainingSession {
   videoKeywords: string[];
   intensity: 'Low' | 'Medium' | 'High' | 'Max';
   feedback?: SessionFeedback;
+  coachNotes?: string; // NEW: Direct instruction from Staff/AI to Athlete specific for this day
 }
 
 export interface TrainingPlan {
@@ -95,10 +96,10 @@ export interface BiomechanicalAnalysis {
 export interface PerformanceLog {
   id: string;
   date: string;
-  event: '100m' | '200m' | '400m';
-  type: 'Training' | 'Competition';
+  event: '100m' | '200m' | '400m' | 'Therapy'; // Added Therapy
+  type: 'Training' | 'Competition' | 'Recovery'; // Added Recovery
   location: string;
-  time: number;
+  time: number; // 0 for therapy
   notes: string;
 }
 
