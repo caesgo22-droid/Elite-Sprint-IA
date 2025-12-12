@@ -3,9 +3,9 @@ import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { analyzeTechnique } from '../services/geminiService';
-import { ElitePhysicsEngine, AdvancedMetrics } from '../utils/biomechanicsUtils';
+import { ElitePhysicsEngine, AdvancedMetrics, calculateAngle } from '../utils/biomechanicsUtils';
 import { BiomechanicalAnalysis, KineticMetrics } from '../types';
-import { Loader2, AlertTriangle, CheckCircle, History, ScanLine, UploadCloud, Play, Video, Share, Info, UserCircle2, GraduationCap, FileText, MessageCircle, Activity, LocateFixed } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle, History, ScanLine, UploadCloud, Play, Video, Share, Info, UserCircle2, GraduationCap, FileText, MessageCircle, Activity, LocateFixed, Eye, X, Table2, MousePointerClick, Maximize2 } from 'lucide-react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 
 const VideoAnalyzer: React.FC = () => {
@@ -19,13 +19,19 @@ const VideoAnalyzer: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [poseLandmarker, setPoseLandmarker] = useState<PoseLandmarker | null>(null);
   
-  // UI State for data display (may lag slightly behind real calc)
+  // DATA STATE
   const [displayData, setDisplayData] = useState<any>(null);
   const [displayAdvanced, setDisplayAdvanced] = useState<AdvancedMetrics>({ strideLength: '-', velocity: '-' });
   const [comLocation, setComLocation] = useState<{x:number, y:number} | null>(null);
   
+  // FRAME PERFECT STATE
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [frameCache, setFrameCache] = useState<any[]>([]); // Stores landmarks for every scanned frame
+  
   const [analysisMode, setAnalysisMode] = useState<'Personal' | 'External'>('Personal');
   const [activeTooltip, setActiveTooltip] = useState<{title: string, text: string} | null>(null);
+  const [showReportModal, setShowReportModal] = useState<BiomechanicalAnalysis | null>(null);
 
   const physicsEngine = useRef<ElitePhysicsEngine>(new ElitePhysicsEngine());
   const isMounted = useRef(true);
@@ -67,8 +73,9 @@ const VideoAnalyzer: React.FC = () => {
         setDisplayData(null);
         setDisplayAdvanced({ strideLength: '-', velocity: '-' });
         setComLocation(null);
+        setFrameCache([]); // Reset cache
         physicsEngine.current.reset();
-        setTimeout(() => { if(videoRef.current) { videoRef.current.load(); videoRef.current.currentTime = 0.1; } }, 500);
+        setTimeout(() => { if(videoRef.current) { videoRef.current.load(); } }, 500);
     }
   };
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files?.[0]) handleFile(e.target.files[0]); };
@@ -86,18 +93,18 @@ const VideoAnalyzer: React.FC = () => {
           
           // 1. Calculate CoM
           const com = physicsEngine.current.calculateCenterOfMass(landmarks);
-          setComLocation(com); // UI update
+          setComLocation(com);
           
           // 2. Calculate Mechanics
           const mechanics = physicsEngine.current.calculateSprintMechanics(landmarks);
-          setDisplayData(mechanics); // UI update
+          setDisplayData(mechanics);
 
-          // 3. Calculate Advanced Metrics
+          // 3. Calculate Advanced Metrics (now with GCT state)
           const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, timestamp, com);
-          setDisplayAdvanced(advanced); // UI update
+          setDisplayAdvanced(advanced);
 
           // RETURN DATA FOR API USE
-          return { landmarks, mechanics, advanced, com };
+          return { landmarks, mechanics, advanced, com, timestamp };
       }
       return null;
   };
@@ -120,9 +127,33 @@ const VideoAnalyzer: React.FC = () => {
               ctx.stroke();
           }
       }
+
+      // Draw Angle Arc Helper
+      const drawAngleVisual = (p1: any, p2: any, p3: any, label: string, colorCode: string) => {
+          if (!p1 || !p2 || !p3) return;
+          const radius = 20;
+          const ax = p2.x * canvas.width;
+          const ay = p2.y * canvas.height;
+          const startAngle = Math.atan2(p1.y - p2.y, p1.x - p2.x);
+          const endAngle = Math.atan2(p3.y - p2.y, p3.x - p2.x);
+          
+          ctx.beginPath();
+          ctx.arc(ax, ay, radius, startAngle, endAngle, false); // Arc depends on vector direction
+          ctx.strokeStyle = colorCode === 'green' ? '#10b981' : colorCode === 'yellow' ? '#facc15' : '#ef4444';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Label
+          ctx.fillStyle = "rgba(0,0,0,0.7)";
+          ctx.fillRect(ax + 10, ay - 20, 35, 14);
+          ctx.fillStyle = "white";
+          ctx.font = "bold 10px monospace";
+          ctx.fillText(label, ax + 12, ay - 10);
+      };
       
       const RIGHT_SIDE = "#00e5ff"; const LEFT_SIDE = "#ff007f"; const TRUNK = "#ffffff";
 
+      // Limbs
       drawLine(12, 14, RIGHT_SIDE, 3); drawLine(14, 16, RIGHT_SIDE, 3);
       drawLine(24, 26, RIGHT_SIDE, 4); drawLine(26, 28, RIGHT_SIDE, 4);
       drawLine(11, 13, LEFT_SIDE, 3); drawLine(13, 15, LEFT_SIDE, 3);
@@ -130,109 +161,165 @@ const VideoAnalyzer: React.FC = () => {
       drawLine(11, 12, TRUNK, 3); drawLine(23, 24, TRUNK, 3);
       drawLine(11, 23, TRUNK, 3); drawLine(12, 24, TRUNK, 3);
 
+      // CoM
       if (com) {
           const cx = com.x * canvas.width;
           const cy = com.y * canvas.height;
-          ctx.beginPath(); ctx.fillStyle = "#ffff00"; ctx.arc(cx, cy, 8, 0, 2*Math.PI); ctx.fill();
-          ctx.beginPath(); ctx.strokeStyle = "#ffff00"; ctx.setLineDash([5, 5]); ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.fillStyle = "#ffff00"; ctx.arc(cx, cy, 6, 0, 2*Math.PI); ctx.fill();
+          ctx.beginPath(); ctx.strokeStyle = "#ffff00"; ctx.setLineDash([5, 5]); ctx.lineWidth = 1;
           ctx.moveTo(cx, cy); ctx.lineTo(cx, canvas.height); ctx.stroke(); ctx.setLineDash([]);
+      }
+
+      // AUGMENTED REALITY ANGLES
+      if(landmarks[23] && landmarks[25] && landmarks[27]) {
+          const angle = calculateAngle(landmarks[23], landmarks[25], landmarks[27]);
+          const color = angle < 60 ? 'green' : 'yellow';
+          drawAngleVisual(landmarks[23], landmarks[25], landmarks[27], `${angle}°`, color);
+      }
+      if(landmarks[11] && landmarks[23] && landmarks[25]) {
+          const angle = calculateAngle(landmarks[11], landmarks[23], landmarks[25]);
+          const color = angle > 165 ? 'green' : 'yellow';
+          drawAngleVisual(landmarks[11], landmarks[23], landmarks[25], `${angle}°`, color);
       }
   };
 
-  const handleSeekedOrLoaded = () => {
+  const processFrame = (time: number) => {
       if(!videoRef.current || !canvasRef.current) return;
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
       
-      const data = performDetection(video, performance.now());
-      if (data) drawSkeleton(data.landmarks, data.com);
+      // If we have cached data for this roughly this time, use it
+      const cached = frameCache.find(f => Math.abs(f.timestamp - time) < 0.05); // 50ms tolerance
+      
+      if (cached) {
+          drawSkeleton(cached.landmarks, cached.com);
+          setDisplayData(cached.mechanics);
+          setDisplayAdvanced(cached.advanced);
+      } else {
+          // New detection
+          const data = performDetection(videoRef.current, time * 1000);
+          if (data) {
+              drawSkeleton(data.landmarks, data.com);
+              setFrameCache(prev => [...prev, { ...data, timestamp: time }]);
+          }
+      }
   };
 
-  const seekTo = (video: HTMLVideoElement, time: number) => {
-      return new Promise((resolve) => {
-          const onSeeked = () => {
-              video.removeEventListener('seeked', onSeeked);
-              resolve(true);
-          };
-          video.addEventListener('seeked', onSeeked);
-          video.currentTime = time;
-      });
+  const handleTimeUpdate = () => {
+      if(videoRef.current) {
+          setCurrentTime(videoRef.current.currentTime);
+          if(!videoRef.current.paused) processFrame(videoRef.current.currentTime);
+      }
   };
 
-  const handleAutoSequence = async () => {
+  const handleManualScrub = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const time = parseFloat(e.target.value);
+      if(videoRef.current) {
+          videoRef.current.pause();
+          videoRef.current.currentTime = time;
+          setCurrentTime(time);
+          setTimeout(() => processFrame(time), 50); // Slight delay to ensure frame render
+      }
+  };
+
+  const handleLoadedMetadata = () => {
+      if(videoRef.current) {
+          setVideoDuration(videoRef.current.duration);
+          canvasRef.current!.width = videoRef.current.videoWidth;
+          canvasRef.current!.height = videoRef.current.videoHeight;
+      }
+  };
+
+  const handleVerifyAnalysis = (analysis: BiomechanicalAnalysis) => {
+      if (videoRef.current && analysis.timestamp) {
+          videoRef.current.currentTime = analysis.timestamp;
+          videoRef.current.pause();
+          setTimeout(() => processFrame(analysis.timestamp!), 200);
+      } else {
+          alert("Este análisis antiguo no tiene marca de tiempo guardada.");
+      }
+  };
+
+  const handleAutoCapture = async () => {
     if(!previewUrl || !videoRef.current) return;
     setLoading(true);
-    setStatusMessage("Escaneando Puntos Biomecánicos...");
+    setStatusMessage("Detección de Contacto (GCT)...");
     
     try {
-        const duration = videoRef.current.duration;
-        const frames = [duration * 0.4, duration * 0.8]; 
-        const capturedImages: string[] = [];
-        
-        // CRITICAL: We need to capture the bio data for the API here, locally
-        let capturedMechanics: any = null;
-        let capturedAdvanced: any = null;
-        
-        for (const time of frames) {
-            await seekTo(videoRef.current, time);
-            await new Promise(r => setTimeout(r, 300)); 
-            
-            // DIRECT CALL to detection logic
-            const data = performDetection(videoRef.current, performance.now());
-            if (data) {
-                drawSkeleton(data.landmarks, data.com);
-                // Save the data from the first frame for the API context
-                if (!capturedMechanics) {
-                    capturedMechanics = data.mechanics;
-                    capturedAdvanced = data.advanced;
-                }
-            }
-            
-            // Image Capture
-            const canvas = document.createElement('canvas');
-            const video = videoRef.current;
-            const MAX_DIMENSION = 480;
-            const scale = Math.min(1, MAX_DIMENSION / Math.max(video.videoWidth, video.videoHeight));
-            canvas.width = video.videoWidth * scale;
-            canvas.height = video.videoHeight * scale;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.5); 
-                capturedImages.push(dataUrl.split(',')[1]);
-            }
+        const video = videoRef.current;
+        video.pause();
+        const duration = video.duration;
+        const scanSteps = 15;
+        const tempHistory: any[] = [];
+
+        // 1. SCAN PHASE
+        for (let i = 0; i <= scanSteps; i++) {
+            const time = (duration / scanSteps) * i;
+            video.currentTime = time;
+            await new Promise(r => setTimeout(r, 200)); 
+            const data = performDetection(video, time * 1000);
+            if(data) tempHistory.push(data);
         }
+
+        // 2. LOGIC PHASE
+        setStatusMessage("Analizando Puntos Críticos...");
+        const { maxFlexionFrame, maxExtensionFrame } = physicsEngine.current.detectSprintPhases(tempHistory);
+        const bestFrame = maxExtensionFrame || maxFlexionFrame || tempHistory[Math.floor(tempHistory.length/2)];
         
+        if (!bestFrame) {
+            alert("No se detectó un cuerpo claro en el video.");
+            setLoading(false);
+            return;
+        }
+
+        // Jump to best frame
+        video.currentTime = bestFrame.timestamp / 1000;
+        await new Promise(r => setTimeout(r, 300));
+        drawSkeleton(bestFrame.landmarks, bestFrame.com); 
+
+        // 3. CAPTURE PHASE
+        const canvas = document.createElement('canvas');
+        const MAX_DIMENSION = 640;
+        const scale = Math.min(1, MAX_DIMENSION / Math.max(video.videoWidth, video.videoHeight));
+        canvas.width = video.videoWidth * scale;
+        canvas.height = video.videoHeight * scale;
+        const ctx = canvas.getContext('2d');
+        let capturedImageBase64 = "";
+        
+        if (ctx) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            capturedImageBase64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+        }
+
         setStatusMessage("Consultando Motor de Física...");
         
-        // Use the LOCALLY captured data, not state (which might be stale)
         const kinetics: KineticMetrics = {
-            verticalOscillation: capturedAdvanced?.verticalOscillation || "N/A",
-            forceApplicationIndex: capturedAdvanced?.forceFactor || 0,
-            comVelocity: capturedAdvanced?.velocity || "N/A"
+            verticalOscillation: bestFrame.advanced?.verticalOscillation || "N/A",
+            forceApplicationIndex: bestFrame.advanced?.forceFactor || 0,
+            comVelocity: bestFrame.advanced?.velocity || "N/A",
+            groundContactTime: bestFrame.advanced?.groundContactTime,
+            airTime: bestFrame.advanced?.airTime,
+            strideFreq: bestFrame.advanced?.frequency
         };
 
-        const result = await analyzeTechnique(capturedImages, capturedMechanics, capturedAdvanced, analysisMode);
+        const result = await analyzeTechnique([capturedImageBase64], bestFrame.mechanics, bestFrame.advanced, analysisMode);
         
         if(result) {
              const analysis: BiomechanicalAnalysis = { 
                  ...result, 
                  id: Date.now().toString(), 
-                 type: 'Sequence' as const, 
-                 thumbnail: `data:image/jpeg;base64,${capturedImages[0]}`, 
-                 kinetics: kinetics
+                 type: 'Single', 
+                 thumbnail: `data:image/jpeg;base64,${capturedImageBase64}`, 
+                 kinetics: kinetics,
+                 timestamp: bestFrame.timestamp / 1000 
              };
              setSessionAnalyses(prev => [analysis, ...prev]);
              if (analysisMode === 'Personal') saveAnalysis(analysis);
         } else {
-            alert("No se pudo obtener una respuesta de la IA. Intenta con un video más claro.");
+            alert("No se pudo obtener una respuesta de la IA.");
         }
 
     } catch(e) { 
-        console.error("Analysis sequence error:", e);
-        alert("Error técnico. Verifica tu conexión.");
+        console.error("Auto-Capture error:", e);
+        alert("Error técnico.");
     } finally { 
         setLoading(false); 
     }
@@ -249,17 +336,6 @@ const VideoAnalyzer: React.FC = () => {
     window.open(url, '_blank');
   };
 
-  const downloadReport = (analysis: BiomechanicalAnalysis) => {
-      const text = `REPORTE DE ANÁLISIS BIOMECÁNICO\n${new Date().toLocaleDateString()}\nScore: ${analysis.score}\nFase: ${analysis.phaseDetected}\n\nErrores:\n${analysis.criticalErrors.join('\n')}`;
-      const element = document.createElement("a");
-      const file = new Blob([text], {type: 'text/plain'});
-      element.href = URL.createObjectURL(file);
-      element.download = `sprint_analysis.txt`;
-      document.body.appendChild(element);
-      element.click();
-      setTimeout(() => document.body.removeChild(element), 100);
-  };
-
   const InfoButton = ({ title, text }: { title: string, text: string }) => (
       <button onClick={(e) => { e.stopPropagation(); setActiveTooltip({ title, text }); }} className="text-slate-400 hover:text-white ml-1 inline-flex pointer-events-auto"><Info size={10} /></button>
   );
@@ -267,7 +343,7 @@ const VideoAnalyzer: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-16">
        <div className="flex justify-between items-end border-b border-slate-800 pb-4">
-          <div><h2 className="text-2xl font-bold">Bio-Mecánica</h2><p className="text-slate-400 text-sm">Laboratorio de Análisis de Movimiento</p></div>
+          <div><h2 className="text-2xl font-bold">Bio-Mecánica</h2><p className="text-slate-400 text-sm">Laboratorio de Precisión</p></div>
           <button onClick={() => setViewHistory(!viewHistory)} className="text-xs bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700 hover:text-cyan-400"><History size={12} className="inline mr-1"/> Historial</button>
        </div>
 
@@ -314,81 +390,92 @@ const VideoAnalyzer: React.FC = () => {
                 </div>
             ) : (
                 <div className="space-y-6">
-                    <div className="relative rounded-2xl overflow-hidden bg-black max-h-[60vh] mx-auto shadow-2xl border border-slate-800 ring-1 ring-white/10 flex justify-center items-center bg-contain">
+                    <div className="relative rounded-2xl overflow-hidden bg-black max-h-[65vh] mx-auto shadow-2xl border border-slate-800 ring-1 ring-white/10 flex flex-col items-center bg-contain">
                         {isVideo ? (
-                            <video ref={videoRef} src={previewUrl} className="w-full h-auto max-h-[60vh]" playsInline muted controls={false} onLoadedData={handleSeekedOrLoaded} onSeeked={handleSeekedOrLoaded} />
+                            <video 
+                                ref={videoRef} 
+                                src={previewUrl} 
+                                className="w-full h-auto max-h-[60vh]" 
+                                playsInline 
+                                muted 
+                                onLoadedMetadata={handleLoadedMetadata}
+                                onTimeUpdate={handleTimeUpdate}
+                            />
                         ) : <img src={previewUrl} className="w-full h-full object-contain" />}
-                        <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-80" />
+                        <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-90" />
                         
-                        {/* Legend */}
-                        <div className="absolute top-2 left-2 bg-black/60 p-2 rounded border border-white/10 pointer-events-none backdrop-blur-md">
-                            <div className="flex items-center gap-2 mb-1"><span className="w-2 h-2 rounded-full bg-yellow-400 shadow-lg border border-black"></span> <span className="text-[10px] text-white font-mono">CoM</span></div>
-                            <div className="flex items-center gap-2 mb-1"><span className="w-4 h-0.5 bg-green-500"></span> <span className="text-[10px] text-white font-mono">Fuerza</span></div>
-                            <div className="flex items-center gap-2"><span className="w-0.5 h-3 bg-yellow-400 border-l border-dashed border-yellow-400"></span> <span className="text-[10px] text-white font-mono">Gravedad</span></div>
-                        </div>
+                        {/* Interactive Scrubber Layer */}
+                        {isVideo && (
+                            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 to-transparent">
+                                <input 
+                                    type="range" 
+                                    min="0" 
+                                    max={videoDuration} 
+                                    step="0.01" 
+                                    value={currentTime} 
+                                    onChange={handleManualScrub}
+                                    className="w-full accent-cyan-500 cursor-pointer h-2 bg-white/20 rounded-lg appearance-none"
+                                />
+                                <div className="flex justify-between text-[10px] text-slate-400 font-mono mt-1">
+                                    <span>{currentTime.toFixed(2)}s</span>
+                                    <span>{videoDuration.toFixed(2)}s</span>
+                                </div>
+                            </div>
+                        )}
 
                         {/* DESKTOP HUD */}
                         {displayData && (
-                            <div className="hidden md:grid absolute bottom-4 left-4 right-4 grid-cols-5 gap-2 pointer-events-none">
-                                <div className="bg-slate-950/80 backdrop-blur p-2 rounded-lg border border-slate-700 pointer-events-auto">
-                                    <div className="text-[10px] text-slate-400 font-bold uppercase flex items-center">Rodilla <InfoButton title="Ángulo Rodilla" text="Mide la fase de recobro. <60° indica una mecánica eficiente de 'talón al glúteo'."/></div>
+                            <div className="hidden md:grid absolute top-4 right-4 gap-2 pointer-events-none">
+                                <div className="bg-slate-950/80 backdrop-blur p-2 rounded-lg border border-slate-700 pointer-events-auto w-24">
+                                    <div className="text-[10px] text-slate-400 font-bold uppercase">Rodilla</div>
                                     <div className={`text-sm font-mono font-bold ${displayData.knee.color}`}>{displayData.knee.value}</div>
                                 </div>
-                                <div className="bg-slate-950/80 backdrop-blur p-2 rounded-lg border border-slate-700 pointer-events-auto">
-                                    <div className="text-[10px] text-slate-400 font-bold uppercase flex items-center">Cadera <InfoButton title="Extensión Cadera" text="Mide la potencia aplicada al suelo. Busca >165° en el despegue."/></div>
-                                    <div className={`text-sm font-mono font-bold ${displayData.hip.color}`}>{displayData.hip.value}</div>
-                                </div>
-                                <div className="bg-slate-900/90 backdrop-blur p-2 rounded-lg border border-cyan-900/50 pointer-events-auto">
-                                    <div className="text-[10px] text-cyan-400 font-bold uppercase flex items-center">Velocidad</div>
-                                    <div className="text-sm font-mono font-bold text-white">{displayAdvanced.velocity}</div>
-                                </div>
-                                <div className="bg-purple-900/90 backdrop-blur p-2 rounded-lg border border-purple-500/50 pointer-events-auto">
-                                    <div className="text-[10px] text-purple-300 font-bold uppercase flex items-center">Oscilación <InfoButton title="Oscilación Vertical (Bounce)" text="Energía desperdiciada hacia arriba. En élite es menor a 4cm."/></div>
-                                    <div className="text-sm font-mono font-bold text-white">{displayAdvanced.verticalOscillation || '-'}</div>
-                                </div>
-                                <div className="bg-slate-900/90 backdrop-blur p-2 rounded-lg border border-cyan-900/50 pointer-events-auto">
-                                    <div className="text-[10px] text-cyan-400 font-bold uppercase flex items-center">Zancada <InfoButton title="Largo de Zancada" text="Distancia entre contactos. Aproximadamente 1.2x la altura del atleta."/></div>
-                                    <div className="text-sm font-mono font-bold text-white">{displayAdvanced.strideLength}</div>
+                                <div className="bg-slate-950/80 backdrop-blur p-2 rounded-lg border border-slate-700 pointer-events-auto w-24">
+                                    <div className="text-[10px] text-slate-400 font-bold uppercase">GCT (s)</div>
+                                    <div className="text-sm font-mono font-bold text-cyan-400">{displayAdvanced.groundContactTime || '-'}</div>
                                 </div>
                             </div>
                         )}
                     </div>
 
-                    {/* MOBILE HUD */}
+                    {/* MOBILE HUD - COMPACT ELITE */}
                     {displayData && (
-                        <div className="md:hidden grid grid-cols-3 gap-2 animate-in fade-in">
-                            <div className="bg-slate-900 p-2 rounded-xl border border-slate-700 text-center relative pointer-events-auto">
-                                <div className="text-[9px] text-slate-400 font-bold uppercase flex justify-center items-center">Rodilla <InfoButton title="Rodilla" text="Recobro eficiente <60°."/></div>
-                                <div className={`text-lg font-bold ${displayData.knee.color}`}>{displayData.knee.value}</div>
-                            </div>
-                            <div className="bg-slate-900 p-2 rounded-xl border border-slate-700 text-center relative pointer-events-auto">
-                                <div className="text-[9px] text-slate-400 font-bold uppercase flex justify-center items-center">Cadera <InfoButton title="Cadera" text="Extensión completa >165°."/></div>
-                                <div className={`text-lg font-bold ${displayData.hip.color}`}>{displayData.hip.value}</div>
+                        <div className="grid grid-cols-4 gap-2 animate-in fade-in">
+                            <div className="bg-slate-900 p-2 rounded-xl border border-slate-700 text-center">
+                                <div className="text-[9px] text-slate-400 font-bold uppercase">Rodilla</div>
+                                <div className={`text-sm font-bold ${displayData.knee.color}`}>{displayData.knee.value}</div>
                             </div>
                             <div className="bg-slate-900 p-2 rounded-xl border border-slate-700 text-center">
                                 <div className="text-[9px] text-cyan-400 font-bold uppercase">Velocidad</div>
-                                <div className="text-lg font-bold text-white font-mono">{displayAdvanced.velocity}</div>
+                                <div className="text-sm font-bold text-white font-mono">{displayAdvanced.velocity}</div>
                             </div>
-                            
-                            <div className="col-span-3 grid grid-cols-2 gap-2 mt-1">
-                                <div className="bg-purple-900/20 p-2 rounded-xl border border-purple-500/30 flex justify-between items-center px-3 relative pointer-events-auto">
-                                    <div className="text-[9px] text-purple-300 font-bold uppercase flex items-center gap-1"><LocateFixed size={10}/> Bounce <InfoButton title="Bounce" text="Oscilación Vertical."/></div>
-                                    <div className="text-lg font-bold text-white font-mono">{displayAdvanced.verticalOscillation || '-'}</div>
-                                </div>
-                                <div className="bg-purple-900/20 p-2 rounded-xl border border-purple-500/30 flex justify-between items-center px-3 relative pointer-events-auto">
-                                    <div className="text-[9px] text-purple-300 font-bold uppercase flex items-center gap-1"><Activity size={10}/> Force Idx <InfoButton title="Force Index" text="Eficiencia aplicación de fuerza (0-100)."/></div>
-                                    <div className="text-lg font-bold text-white font-mono">{displayAdvanced.forceFactor || '-'}</div>
-                                </div>
+                            <div className="bg-slate-900 p-2 rounded-xl border border-slate-700 text-center relative overflow-hidden">
+                                <div className="text-[9px] text-purple-400 font-bold uppercase">GCT (s)</div>
+                                <div className="text-sm font-bold text-white font-mono z-10 relative">{displayAdvanced.groundContactTime || '-'}</div>
+                                {displayAdvanced.groundContactTime && parseFloat(displayAdvanced.groundContactTime) < 0.110 && <div className="absolute inset-0 bg-emerald-500/10 animate-pulse"></div>}
+                            </div>
+                            <div className="bg-slate-900 p-2 rounded-xl border border-slate-700 text-center">
+                                <div className="text-[9px] text-orange-400 font-bold uppercase">Freq</div>
+                                <div className="text-sm font-bold text-white font-mono">{displayAdvanced.frequency || '-'}</div>
                             </div>
                         </div>
                     )}
                     
                     <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 flex flex-col gap-3 backdrop-blur-sm sticky bottom-20 z-10 shadow-lg">
                         <div className="flex gap-2">
-                            <button onClick={handleAutoSequence} disabled={loading || !poseLandmarker} className={`flex-1 bg-gradient-to-r ${analysisMode === 'Personal' ? 'from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500' : 'from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500'} text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 text-sm shadow-lg active:scale-95 transition-all`}>
-                                {loading ? <Loader2 className="animate-spin" /> : <ScanLine />} {loading ? statusMessage : '✨ Diagnóstico Nivel V'}
+                            <button onClick={handleAutoCapture} disabled={loading || !poseLandmarker} className={`flex-1 bg-gradient-to-r ${analysisMode === 'Personal' ? 'from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500' : 'from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500'} text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 text-sm shadow-lg active:scale-95 transition-all`}>
+                                {loading ? <Loader2 className="animate-spin" /> : <ScanLine />} {loading ? statusMessage : '⚡ Detectar Biomecánica'}
                             </button>
-                            <a href={previewUrl} download="analysis.mp4" className="p-3 bg-slate-800 rounded-lg text-slate-300 hover:text-white border border-slate-700" title="Descargar Video"><Video size={20}/></a>
+                            
+                            <button onClick={() => { 
+                                if(videoRef.current) { 
+                                    if(videoRef.current.paused) videoRef.current.play(); else videoRef.current.pause(); 
+                                } 
+                            }} className="p-3 bg-slate-800 rounded-lg text-slate-300 hover:text-white border border-slate-700 flex-1 flex items-center justify-center gap-2 font-bold text-xs">
+                                <Play size={16}/> Play/Pause
+                            </button>
+
+                            <button onClick={() => {setSessionAnalyses([]); setPreviewUrl(null); setDisplayData(null); setDisplayAdvanced({ strideLength: '-', velocity: '-' }); setComLocation(null);}} className="p-3 bg-slate-800 rounded-lg text-slate-300 hover:text-white border border-slate-700" title="Nuevo Video"><UploadCloud size={20}/></button>
                         </div>
                     </div>
                     
@@ -397,24 +484,34 @@ const VideoAnalyzer: React.FC = () => {
                             <div className="flex justify-between items-start border-b border-slate-800 pb-3">
                                 <div>
                                     <h3 className="font-bold text-xl text-white tracking-tight">{analysis.phaseDetected}</h3>
-                                    <span className="text-xs text-slate-500 uppercase tracking-widest">{analysis.type === 'Sequence' ? 'Kinograma Completo' : 'Frame Único'}</span>
+                                    <span className="text-xs text-slate-500 uppercase tracking-widest">{analysis.type === 'Sequence' ? 'Kinograma Completo' : 'Smart Capture'}</span>
                                 </div>
                                 <div className="flex gap-2">
                                     <span className={`px-3 py-1 rounded-lg text-sm font-bold ${analysis.score > 80 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{analysis.score}</span>
-                                    <button onClick={() => shareAnalysisWhatsapp(analysis)} className="p-1.5 bg-emerald-900/30 border border-emerald-500/30 rounded text-emerald-400 hover:text-emerald-300 transition-colors" title="Compartir WhatsApp"><MessageCircle size={16}/></button>
-                                    <button onClick={() => downloadReport(analysis)} className="p-1.5 bg-slate-800 rounded hover:text-cyan-400 transition-colors" title="Descargar Reporte TXT"><FileText size={16}/></button>
-                                    <button onClick={() => copyAnalysis(analysis)} className="p-1.5 bg-slate-800 rounded hover:text-cyan-400 transition-colors" title="Copiar"><Share size={16}/></button>
                                 </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                                <button onClick={() => handleVerifyAnalysis(analysis)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded-lg font-bold border border-slate-600 flex items-center justify-center gap-1">
+                                    <Eye size={14} className="text-cyan-400"/> 📍 Ir al Frame
+                                </button>
+                                <button onClick={() => setShowReportModal(analysis)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded-lg font-bold border border-slate-600 flex items-center justify-center gap-1">
+                                    <Table2 size={14} className="text-purple-400"/> 📑 Reporte Completo
+                                </button>
                             </div>
                             
                             {analysis.kinetics && (
-                                <div className="grid grid-cols-2 gap-2 bg-slate-950/50 p-2 rounded-lg border border-slate-800">
+                                <div className="grid grid-cols-3 gap-2 bg-slate-950/50 p-2 rounded-lg border border-slate-800">
                                     <div className="text-center">
-                                        <div className="text-[10px] text-slate-500 uppercase font-bold">Oscilación Vertical</div>
+                                        <div className="text-[10px] text-slate-500 uppercase font-bold">Oscilación</div>
                                         <div className="text-sm font-mono text-white">{analysis.kinetics.verticalOscillation}</div>
                                     </div>
                                     <div className="text-center border-l border-slate-800">
-                                        <div className="text-[10px] text-slate-500 uppercase font-bold">Eficiencia Fuerza</div>
+                                        <div className="text-[10px] text-slate-500 uppercase font-bold">GCT</div>
+                                        <div className={`text-sm font-mono font-bold ${analysis.kinetics.groundContactTime && parseFloat(analysis.kinetics.groundContactTime) < 0.12 ? 'text-emerald-400' : 'text-white'}`}>{analysis.kinetics.groundContactTime || '-'}</div>
+                                    </div>
+                                    <div className="text-center border-l border-slate-800">
+                                        <div className="text-[10px] text-slate-500 uppercase font-bold">Force Eff.</div>
                                         <div className="text-sm font-mono text-white">{analysis.kinetics.forceApplicationIndex}/100</div>
                                     </div>
                                 </div>
@@ -427,13 +524,94 @@ const VideoAnalyzer: React.FC = () => {
                                 <div className="flex flex-wrap gap-2">{analysis.correctiveDrills.map((drill, i) => (<a key={i} href={`https://www.youtube.com/results?search_query=track+and+field+drill+${drill.replace(/\s/g, '+')}`} target="_blank" rel="noopener noreferrer" className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors"><Play size={10} fill="currentColor"/> {drill}</a>))}</div>
                             </div>
                             
-                            {analysis.coachShouts.length > 0 && (<div className="pt-2"><h4 className="text-[10px] text-slate-500 font-bold uppercase mb-1">Cues Verbales</h4><div className="flex flex-wrap gap-3">{analysis.coachShouts.map((s, i) => (<div key={i} className="bg-white text-black font-extrabold text-xs px-4 py-2 rounded-xl rounded-bl-none shadow-lg transform -rotate-1 hover:rotate-0 transition-transform cursor-default border-2 border-slate-300">{s.toUpperCase()}!</div>))}</div></div>)}
+                            <div className="flex gap-2 pt-2 border-t border-slate-800 justify-end">
+                                <button onClick={() => shareAnalysisWhatsapp(analysis)} className="text-emerald-400 hover:text-emerald-300 text-xs font-bold flex items-center gap-1"><MessageCircle size={14}/> Enviar WA</button>
+                                <button onClick={() => copyAnalysis(analysis)} className="text-slate-400 hover:text-white text-xs font-bold flex items-center gap-1"><Share size={14}/> Copiar Texto</button>
+                            </div>
                         </div>
                     ))}
-                    {sessionAnalyses.length > 0 && (<button onClick={() => {setSessionAnalyses([]); setPreviewUrl(null); setDisplayData(null); setDisplayAdvanced({ strideLength: '-', velocity: '-' }); setComLocation(null);}} className="w-full border border-dashed border-slate-700 text-slate-400 py-4 rounded-xl text-sm hover:bg-slate-900 hover:text-white transition-colors">Analizar Otro Video</button>)}
                 </div>
             )}
            </>
+       )}
+
+       {/* REPORT MODAL */}
+       {showReportModal && (
+           <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in" onClick={() => setShowReportModal(null)}>
+               <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+                   <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-4 border-b border-slate-700 flex justify-between items-center">
+                       <div>
+                           <h3 className="font-bold text-white flex items-center gap-2"><Activity className="text-cyan-400"/> Reporte Biomecánico</h3>
+                           <p className="text-[10px] text-slate-400 uppercase tracking-widest">{new Date().toLocaleDateString()} | Elite Sprint AI</p>
+                       </div>
+                       <button onClick={() => setShowReportModal(null)}><X className="text-slate-400 hover:text-white"/></button>
+                   </div>
+                   
+                   <div className="p-4 space-y-4">
+                       {/* Header Stats */}
+                       <div className="flex gap-2">
+                           <div className="flex-1 bg-slate-950 p-3 rounded-lg border border-slate-800 text-center">
+                               <div className="text-[10px] text-slate-500 uppercase font-bold">Score Técnico</div>
+                               <div className={`text-2xl font-bold ${showReportModal.score > 80 ? 'text-emerald-400' : 'text-yellow-400'}`}>{showReportModal.score}</div>
+                           </div>
+                           <div className="flex-1 bg-slate-950 p-3 rounded-lg border border-slate-800 text-center">
+                               <div className="text-[10px] text-slate-500 uppercase font-bold">Fase</div>
+                               <div className="text-sm font-bold text-white mt-1 leading-tight">{showReportModal.phaseDetected}</div>
+                           </div>
+                       </div>
+
+                       {/* Data Table */}
+                       <div className="border border-slate-700 rounded-lg overflow-hidden">
+                           <table className="w-full text-xs text-left">
+                               <thead className="bg-slate-950 text-slate-400 font-bold uppercase">
+                                   <tr>
+                                       <th className="p-2">Métrica</th>
+                                       <th className="p-2">Valor</th>
+                                       <th className="p-2 text-right">Estado</th>
+                                   </tr>
+                               </thead>
+                               <tbody className="divide-y divide-slate-800 bg-slate-900">
+                                   <tr>
+                                       <td className="p-2 text-slate-300">GCT (Contacto)</td>
+                                       <td className="p-2 font-mono text-cyan-400 font-bold">{showReportModal.kinetics?.groundContactTime || '-'}</td>
+                                       <td className="p-2 text-right"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span></td>
+                                   </tr>
+                                   <tr>
+                                       <td className="p-2 text-slate-300">Vuelo</td>
+                                       <td className="p-2 font-mono text-white">{showReportModal.kinetics?.airTime || '-'}</td>
+                                       <td className="p-2 text-right"><span className="w-2 h-2 rounded-full bg-slate-500 inline-block"></span></td>
+                                   </tr>
+                                   <tr>
+                                       <td className="p-2 text-slate-300">Rodilla (Recobro)</td>
+                                       <td className="p-2 font-mono text-white">{showReportModal.jointAngles.knee || '-'}</td>
+                                       <td className="p-2 text-right"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span></td>
+                                   </tr>
+                                   <tr>
+                                       <td className="p-2 text-slate-300">Force Index</td>
+                                       <td className="p-2 font-mono text-white">{showReportModal.kinetics?.forceApplicationIndex || '-'}</td>
+                                       <td className="p-2 text-right"><span className="w-2 h-2 rounded-full bg-cyan-500 inline-block"></span></td>
+                                   </tr>
+                               </tbody>
+                           </table>
+                       </div>
+
+                       {/* Coach Notes */}
+                       <div>
+                           <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Correcciones Prioritarias</h4>
+                           <ul className="space-y-1">
+                               {showReportModal.criticalErrors.map((err, i) => (
+                                   <li key={i} className="text-xs text-red-300 bg-red-900/10 px-2 py-1 rounded border border-red-900/30">• {err}</li>
+                               ))}
+                           </ul>
+                       </div>
+                   </div>
+                   
+                   <div className="bg-slate-950 p-4 border-t border-slate-800 text-center">
+                       <p className="text-[10px] text-slate-500 mb-2">Captura esta pantalla para compartir</p>
+                       <button onClick={() => setShowReportModal(null)} className="w-full bg-slate-800 text-white font-bold py-2 rounded-lg text-sm">Cerrar</button>
+                   </div>
+               </div>
+           </div>
        )}
 
        {activeTooltip && (

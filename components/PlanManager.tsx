@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
-import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle, MessageSquare } from 'lucide-react';
+import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle, MessageSquare, Table2 } from 'lucide-react';
 import { TrainingSession, UserProfile, Injury } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { getPlanHistory } from '../services/firebase';
@@ -151,9 +151,11 @@ export const PlanManager: React.FC = () => {
   const [sessionFeedbackModal, setSessionFeedbackModal] = useState<TrainingSession | null>(null);
   const [activeTooltip, setActiveTooltip] = useState<{title: string, text: string} | null>(null);
   const [viewingRecovery, setViewingRecovery] = useState<any>(null);
+  const [showPlanTable, setShowPlanTable] = useState(false);
 
   const isStaff = userProfile.role === 'staff';
 
+  // ... (Keep existing UseEffects and Helper Functions same as before) ...
   // Initialize: Check for ?edit=true param or missing name
   useEffect(() => {
       const isEditing = searchParams.get('edit') === 'true';
@@ -216,7 +218,7 @@ export const PlanManager: React.FC = () => {
       updateSession(day, { coachNotes: note });
   };
 
-  // Profile Helpers
+  // Profile Helpers (Same as before)
   const toggleEventSelection = (e: string) => { const current = tempProfile.events || []; if (current.includes(e)) setTempProfile({ ...tempProfile, events: current.filter(ev => ev !== e) }); else setTempProfile({ ...tempProfile, events: [...current, e] }); };
   const toggleTrainingDay = (day: string) => { const current = tempProfile.trainingDays || []; if (current.includes(day)) setTempProfile({ ...tempProfile, trainingDays: current.filter(d => d !== day) }); else setTempProfile({ ...tempProfile, trainingDays: [...current, day] }); };
   const addInjury = () => { setTempProfile({ ...tempProfile, injuries: [...(tempProfile.injuries || []), { type: 'Muscular', location: 'Isquios', severity: 'Leve', status: 'Activa' }] }); };
@@ -485,7 +487,7 @@ export const PlanManager: React.FC = () => {
                     <div className="flex items-center gap-2"><span className="inline-flex items-center gap-1 px-2 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded text-[10px] font-bold uppercase tracking-widest"><Layers size={10} /> {currentPlan.phase}</span></div>
                     <div className="flex gap-2">
                         <button onClick={() => setShowMacroModal(true)} className="bg-slate-700/50 hover:bg-slate-600 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 border border-slate-600"><Brain size={12} className="text-purple-400"/> Lógica</button>
-                        <button onClick={sharePlan} className="bg-slate-700/50 hover:bg-slate-600 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 border border-slate-600" title="Copiar"><Share size={12} className="text-slate-300"/></button>
+                        <button onClick={() => setShowPlanTable(true)} className="bg-slate-700/50 hover:bg-slate-600 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 border border-slate-600" title="Ver Tabla Visual"><Table2 size={12} className="text-cyan-400"/> Tabla</button>
                         {/* FORCE WHATSAPP BUTTON VISIBILITY */}
                         <button onClick={shareToWhatsapp} className="bg-emerald-600 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1 shadow-lg shadow-emerald-900/20 hover:bg-emerald-500 transition-colors" title="Enviar por WhatsApp"><MessageCircle size={14}/></button>
                     </div>
@@ -512,6 +514,55 @@ export const PlanManager: React.FC = () => {
       )}
       
       {showMacroModal && currentPlan?.rationale && ( <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowMacroModal(false)}> <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm"> <h3 className="text-xl font-bold text-white mb-4">Estrategia Técnica</h3> <p className="text-slate-300 text-sm leading-relaxed">{currentPlan.rationale}</p> </div> </div> )}
+      
+      {/* PLAN TABLE MODAL */}
+      {showPlanTable && currentPlan && (
+          <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-2 backdrop-blur-sm" onClick={() => setShowPlanTable(false)}>
+              <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-3xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                  <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800">
+                      <div><h3 className="font-bold text-white text-lg">Microciclo Elite</h3><p className="text-xs text-slate-400">{currentPlan.phase} - {new Date(currentPlan.createdAt).toLocaleDateString()}</p></div>
+                      <button onClick={() => setShowPlanTable(false)}><X className="text-slate-400 hover:text-white"/></button>
+                  </div>
+                  <div className="overflow-y-auto p-0">
+                      <div className="min-w-full inline-block align-middle">
+                          <div className="border rounded-lg overflow-hidden">
+                              <table className="min-w-full divide-y divide-slate-700">
+                                  <thead className="bg-slate-950">
+                                      <tr>
+                                          <th scope="col" className="px-3 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Día</th>
+                                          <th scope="col" className="px-3 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Enfoque</th>
+                                          <th scope="col" className="px-3 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Detalle</th>
+                                          <th scope="col" className="px-3 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Vol</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-800 bg-slate-900">
+                                      {currentPlan.sessions.map((s, idx) => (
+                                          <tr key={idx} className={idx % 2 === 0 ? 'bg-slate-900' : 'bg-slate-800/50'}>
+                                              <td className="px-3 py-3 whitespace-nowrap text-xs font-bold text-white">{s.day.substring(0,3)}</td>
+                                              <td className="px-3 py-3 whitespace-nowrap text-xs text-cyan-400 font-medium">{s.focus}</td>
+                                              <td className="px-3 py-3 text-xs text-slate-300">
+                                                  <ul className="list-disc pl-3 space-y-1">
+                                                      {s.trackRoutine.slice(0,3).map((d, i) => <li key={i}>{d.split(':')[0]}</li>)}
+                                                  </ul>
+                                              </td>
+                                              <td className="px-3 py-3 whitespace-nowrap text-xs">
+                                                  <span className={`px-2 py-1 rounded ${s.intensity === 'Max' ? 'bg-red-900/50 text-red-300' : 'bg-green-900/50 text-green-300'}`}>{s.intensity}</span>
+                                              </td>
+                                          </tr>
+                                      ))}
+                                  </tbody>
+                              </table>
+                          </div>
+                      </div>
+                  </div>
+                  <div className="p-3 bg-slate-950 border-t border-slate-700 text-center">
+                      <p className="text-[10px] text-slate-500 mb-2">Captura pantalla para compartir</p>
+                      <button onClick={() => setShowPlanTable(false)} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-2 rounded text-sm">Cerrar</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {sessionFeedbackModal && <FeedbackModal />}
       {viewingRecovery && (<div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md animate-in zoom-in-95 duration-300"><div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-6 w-full max-w-sm shadow-2xl relative overflow-hidden"><div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-cyan-500"></div><div className="flex justify-between items-start mb-4"><div><h3 className="font-bold text-xl text-white flex items-center gap-2"><BatteryCharging className="text-emerald-400"/> Fuel & Recovery</h3></div><button onClick={() => setViewingRecovery(null)}><X className="text-slate-400 hover:text-white"/></button></div><div className="space-y-4"><div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800"><div className="text-xs text-slate-500 font-bold uppercase mb-2">Nutrición</div><div className="grid grid-cols-3 gap-2 text-center"><div className="bg-slate-900 p-2 rounded-lg border border-slate-800"><div className="text-lg font-bold text-white">{viewingRecovery.nutrition.carbs}</div><div className="text-[10px] text-slate-400">Carbs</div></div><div className="bg-slate-900 p-2 rounded-lg border border-slate-800"><div className="text-lg font-bold text-white">{viewingRecovery.nutrition.protein}</div><div className="text-[10px] text-slate-400">Proteína</div></div><div className="bg-slate-900 p-2 rounded-lg border border-slate-800"><div className="text-lg font-bold text-white">{viewingRecovery.nutrition.hydration}</div><div className="text-[10px] text-slate-400">Agua</div></div></div></div><div><div className="text-xs text-slate-500 font-bold uppercase mb-2">Protocolos</div><ul className="space-y-2">{viewingRecovery.protocols.map((p: string, i: number) => (<li key={i} className="flex items-center gap-2 text-sm text-slate-300 bg-slate-800/50 p-2 rounded-lg"><CheckSquare size={14} className="text-cyan-500"/> {p}</li>))}</ul></div></div><button onClick={() => setViewingRecovery(null)} className="w-full mt-6 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors">Entendido</button></div></div>)}
       {activeTooltip && ( <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-6 backdrop-blur-sm" onClick={() => setActiveTooltip(null)}> <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}> <h4 className="font-bold text-white mb-2">{activeTooltip.title}</h4> <p className="text-sm text-slate-300 leading-relaxed">{activeTooltip.text}</p> <button onClick={() => setActiveTooltip(null)} className="mt-4 w-full bg-slate-800 text-slate-300 py-2 rounded-lg text-sm font-bold">Entendido</button> </div> </div> )}

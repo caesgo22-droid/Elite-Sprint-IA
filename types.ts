@@ -75,6 +75,9 @@ export interface KineticMetrics {
   verticalOscillation: string; // "4.2 cm"
   forceApplicationIndex: number; // 0-100 scale of efficiency
   comVelocity: string; // Center of Mass Velocity
+  groundContactTime?: string; // NEW: "0.108s"
+  airTime?: string; // NEW: "0.142s"
+  strideFreq?: string; // NEW: "4.5 Hz"
 }
 
 export interface BiomechanicalAnalysis {
@@ -84,13 +87,14 @@ export interface BiomechanicalAnalysis {
   phaseDetected: string;
   jointAngles: { knee?: string; hip?: string; torso?: string; shin?: string; };
   kinetics?: KineticMetrics; // NEW: Advanced Physics Data
-  groundContactTimeEstimate: string;
+  groundContactTimeEstimate: string; // Legacy AI estimate, kept for fallback
   criticalErrors: string[];
   correctiveDrills: string[];
   coachShouts: string[];
   score: number;
   thumbnail?: string;
   savedAt?: string;
+  timestamp?: number; // Exact video timestamp for verification
 }
 
 export interface PerformanceLog {

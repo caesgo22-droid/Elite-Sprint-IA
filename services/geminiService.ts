@@ -193,12 +193,11 @@ export const generateTrainingPlan = async (
         : ['Mon', 'Wed', 'Fri'];
   
   // Normalize requested days to Spanish names for the Prompt and Sorting
-  // This creates the "Master List" of days we MUST populate.
   const targetDaysES = Array.from(new Set(rawDays.map(d => dayMapES[normalizeDay(d)] || 'Lunes')))
       .sort((a, b) => (DAY_ORDER[normalizeDay(a)] || 99) - (DAY_ORDER[normalizeDay(b)] || 99));
 
   if (!ai) {
-      // Offline fallback: Use the generator
+      // Offline fallback
       const sessions = targetDaysES.map((day, idx) => generateRichFallbackSession(day, phaseName, idx));
       return {
           id: Date.now().toString(),
@@ -215,6 +214,14 @@ export const generateTrainingPlan = async (
   try {
     const cnsScore = ((readiness.sleep) + (10 - readiness.fatigue) + (10 - readiness.soreness) + (10 - readiness.stress) + (readiness.hydration)) / 5; 
     
+    // BLINDAJE DE SEGURIDAD (ACWR Safety Lock)
+    let safetyLockProtocol = "";
+    if (acwr && acwr.ratio > 1.3) {
+        safetyLockProtocol = `¡ALERTA ROJA! ACWR ES ${acwr.ratio} (ALTO RIESGO). PROHIBIDO ASIGNAR INTENSIDAD 'MAX' O 'PLYOMETRICS'. SE REQUIERE DESCARGA TÉCNICA O TEMPO EXTENSIVO.`;
+    } else if (readiness.soreness > 7 || readiness.fatigue > 8) {
+        safetyLockProtocol = `ALERTA DE FATIGA: El atleta reporta dolor/fatiga severa. Asigna SOLO sesiones de recuperación o movilidad.`;
+    }
+
     const prompt = `
       ACTÚA COMO: DIRECTOR DE ALTO RENDIMIENTO (WORLD ATHLETICS LEVEL V).
       
@@ -223,17 +230,18 @@ export const generateTrainingPlan = async (
       - Evento: ${focusEvent || "100m"}
       - Fase: ${phaseName}.
       - Readiness: ${cnsScore.toFixed(1)}/10.
+      - ACWR: ${acwr ? acwr.ratio : 'N/A'}.
+      
+      PROTOCOLO DE SEGURIDAD ACTIVO: ${safetyLockProtocol}
       
       TAREA CRÍTICA:
-      Generar un microciclo de entrenamiento DETALLADO.
+      Generar un microciclo de entrenamiento DETALLADO para: ${targetDaysES.join(", ")}.
       
-      DÍAS REQUERIDOS: ${targetDaysES.join(", ")}.
-      
-      REGLAS DE ORO:
-      1. Genera sesiones SOLO para los días listados arriba.
-      2. EL "trackRoutine" DEBE SER RICO Y DETALLADO. No pongas solo "Sprints". 
-         Ejemplo Bueno: ["Calentamiento A (10')", "Drills de Vallas x 6", "4x30m Block Starts (Rec 3')", "Cooldown"].
-      3. Usa terminología de élite (Wickets, Flys, Sleds, Plyos).
+      REGLAS DE ORO (VERACIDAD TÉCNICA):
+      1. Genera sesiones SOLO para los días listados.
+      2. EL "trackRoutine" DEBE SER RICO: Calentamiento específico + Drills (Wickets/Sleds) + Trabajo Principal + Cooldown.
+      3. Usa terminología de élite (Fly 10m, Freelap, Triple Extension, Dorsiflexion).
+      4. Si el protocolo de seguridad prohíbe intensidad MAX, obedece estrictamente.
       
       SALIDA: JSON estricto.
     `;
@@ -257,25 +265,19 @@ export const generateTrainingPlan = async (
       }
     }
 
-    // --- STRICT MAPPING STRATEGY ---
-    // Iterate through the REQUESTED days. Try to find a matching AI session.
-    // If found, use it. If not (or duplicate), generate a rich fallback.
-    // This ensures correct count, correct order, and no duplicates.
+    // STRICT MAPPING & VALIDATION
     const finalSessions = targetDaysES.map((targetDay, index) => {
         const normTarget = normalizeDay(targetDay);
-        
-        // Find best match in AI output
         const match = aiSessions.find(s => normalizeDay(s.day) === normTarget);
         
         if (match) {
-            // Validate richness. If trackRoutine is empty/weak, replace it.
+            // Validate richness
             if (!match.trackRoutine || match.trackRoutine.length < 2) {
                 const fb = generateRichFallbackSession(targetDay, phaseName, index);
-                return { ...match, trackRoutine: fb.trackRoutine }; // Inject rich routine into AI logic
+                return { ...match, trackRoutine: fb.trackRoutine };
             }
             return match;
         } else {
-            // AI missed this day -> Use rich fallback
             return generateRichFallbackSession(targetDay, phaseName, index);
         }
     });
@@ -293,7 +295,6 @@ export const generateTrainingPlan = async (
 
   } catch (error) { 
       console.error("Plan Gen Error:", error); 
-      // Error fallback
       const sessions = targetDaysES.map((day, idx) => generateRichFallbackSession(day, phaseName, idx));
       return {
           id: Date.now().toString(),
@@ -309,12 +310,15 @@ export const generateTrainingPlan = async (
 export const analyzeTechnique = async (images: string[], bioData: any = null, advancedMetrics: any = null, analysisMode: 'Personal' | 'External' = 'Personal'): Promise<BiomechanicalAnalysis | null> => {
   if (!ai) return null;
   try {
-    // Determine context richness
     const hasMetrics = advancedMetrics && advancedMetrics.velocity !== '-';
     
+    // Injecting the new calculated GCT and Air Time into the prompt context
     const physicsContext = hasMetrics ? `
-      DATOS CINÉTICOS (Physics Engine):
+      DATOS CINÉTICOS (Calculados por Physics Engine 2.0):
       - Velocidad Horizontal CoM: ${advancedMetrics.velocity}
+      - Tiempo de Contacto (GCT): ${advancedMetrics.groundContactTime || "N/A"} (CRÍTICO: Élite < 0.100s)
+      - Tiempo de Vuelo: ${advancedMetrics.airTime || "N/A"}
+      - Frecuencia: ${advancedMetrics.frequency || "N/A"}
       - Oscilación Vertical: ${advancedMetrics.verticalOscillation || 'N/A'}.
       - Force Index: ${advancedMetrics.forceFactor || 'N/A'}/100.
     ` : "Datos cinéticos no disponibles (Video estático o error de tracking).";
@@ -333,22 +337,20 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
       TAREA:
       Analiza las imágenes del sprint (Kinograma).
       
-      DATOS SENSOR: ${bioContext}
+      DATOS SENSOR (HARD DATA): ${bioContext}
       
       CRITERIOS (Modelo Ralph Mann):
-      1. Contacto: ¿Debajo del CoM o Overstriding?
+      1. Contacto: Si el GCT es > 0.120s en Max V, critícalo duramente (Demasiado tiempo en el suelo).
       2. Recobro: ¿Talón cerrado al glúteo?
       3. Despegue: ¿Extensión completa de cadera?
       
       IMPORTANTE:
-      Si los datos del sensor indican velocidad baja o ángulos pobres, sé crítico.
-      Si los datos son buenos, elogia la técnica.
+      Usa los datos "HARD DATA" para validar tu análisis visual. Si el GCT es bajo (<0.100s), elogia la reactividad.
       
       SALIDA: JSON estricto.
     `;
 
     const parts: any[] = [];
-    // Ensure images are properly formatted
     images.forEach(img => parts.push({ inlineData: { mimeType: 'image/jpeg', data: img } }));
     parts.push({ text: promptText });
 
@@ -374,32 +376,31 @@ export const chatWithCoach = async (history: any[], message: string, context: an
     const prunedHistory = history.slice(-6); 
     const recentLogs = context.logs?.slice(-3).map((l:any) => `[${l.date}] ${l.event}: ${l.time}s`).join("; ") || "Sin data.";
     
-    // Extract recent feedback explicitly
     const recentFeedback = context.plan?.sessions
         ?.filter((s:any) => s.feedback && s.feedback.completed)
         ?.slice(-2)
-        ?.map((s:any) => `[${s.day}]: RPE ${s.feedback.rpe}/10, Dolor ${s.feedback.painLevel}/10, Notas: ${s.feedback.notes}`)
+        ?.map((s:any) => `[${s.day}]: RPE ${s.feedback.rpe}/10, Dolor ${s.feedback.painLevel}/10`)
         ?.join("; ") || "Sin feedback reciente.";
 
     const injuryReport = context.profile.injuries?.length > 0 
         ? context.profile.injuries.map((i:any) => `LESIÓN ACTIVA: ${i.location} (${i.severity})`).join(", ")
         : "Salud Óptima.";
 
+    // Hardened System Prompt
     const systemPrompt = `
       ERES: El Staff Técnico Completo (Entrenador, Biomecánico, Fisio) de Nivel Mundial.
       
       EXPEDIENTE ATLETA:
       - Nombre: ${context.profile.name}
-      - Estado Salud: ${injuryReport} (SI HAY LESIÓN, PRIORIZA LA SEGURIDAD).
-      - Carga Actual: ACWR ${context.acwr?.ratio || 'N/A'}.
-      - Feedback Reciente: ${recentFeedback}
+      - Estado Salud: ${injuryReport}.
+      - ACWR: ${context.acwr?.ratio || 'N/A'} (Si > 1.3, eres MUY conservador).
+      - Feedback: ${recentFeedback}
       
-      INSTRUCCIONES CLAVE (COMUNICACIÓN DE ÉLITE):
-      1. Si el atleta reportó DOLOR alto (>3) en las últimas sesiones, pregúntale explícitamente por ello antes de dar consejos de intensidad.
-      2. Sé breve, técnico y basado en evidencia.
-      3. Si te piden un cambio de plan, usa la herramienta 'modifySession'.
+      INSTRUCCIONES DE BLINDAJE:
+      1. Si el usuario pide entrenar más duro pero tiene dolor o ACWR alto, NIÉGATE educadamente y explica la fisiología.
+      2. Sé breve, técnico y basado en evidencia (Altis, Charlie Francis).
       
-      Responde con autoridad pero empatía técnica.
+      Responde con autoridad.
     `;
 
     const chat = ai.chats.create({
@@ -419,6 +420,7 @@ export const generateNexusInsight = async (logs: any[], readiness: any, lastAnal
         const prompt = `
             ACTÚA COMO: ALGORITMO DE DETECCIÓN DE TALENTO Y RENDIMIENTO.
             Analiza correlaciones entre Fatiga (${JSON.stringify(readiness)}), Técnica (${lastAnalysis ? lastAnalysis.score : "N/A"}) y Carga ACWR (${acwr?.ratio || 0}).
+            Si el GCT en el último análisis fue > 0.12s, menciona la necesidad de pliometría reactiva.
             Salida JSON estricta.
         `;
 
