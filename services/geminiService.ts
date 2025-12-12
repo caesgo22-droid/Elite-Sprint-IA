@@ -24,20 +24,29 @@ if (apiKey) {
 
 // --- UTILITY: Robust JSON Parser ---
 const cleanAndParseJSON = (text: string) => {
+  if (!text) return null;
   try {
-    let cleaned = text.replace(/```json/g, "").replace(/```/g, "");
-    cleaned = cleaned.trim();
-    return JSON.parse(cleaned);
+    // 1. Try direct parse
+    return JSON.parse(text);
   } catch (e) {
-    console.error("JSON Parse Error. Raw text:", text);
+    // 2. Try Markdown cleaning
     try {
-      const firstBrace = text.indexOf('{');
-      const lastBrace = text.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace !== -1) {
-        const subStr = text.substring(firstBrace, lastBrace + 1);
-        return JSON.parse(subStr);
-      }
-    } catch (e2) { return null; }
+        let cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        return JSON.parse(cleaned);
+    } catch (e2) {
+        // 3. Brute force extraction (Find outer brackets)
+        try {
+            const firstBrace = text.indexOf('{');
+            const lastBrace = text.lastIndexOf('}');
+            if (firstBrace !== -1 && lastBrace !== -1) {
+                const subStr = text.substring(firstBrace, lastBrace + 1);
+                return JSON.parse(subStr);
+            }
+        } catch (e3) {
+            console.error("JSON Parse Critical Fail. Raw:", text);
+            return null;
+        }
+    }
     return null;
   }
 };
@@ -254,28 +263,35 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
 export const chatWithCoach = async (history: any[], message: string, context: any) => {
   if (!ai) return { text: "⚠️ API Key faltante.", functionCall: null };
   try {
-    const prunedHistory = history.slice(-10);
+    // 1. OPTIMIZATION: Slice history to prevent context window overflow
+    const prunedHistory = history.slice(-8); // Keep only last 8 exchanges
+    
+    // 2. OPTIMIZATION: Summarize Logs (Pass only the last 5 records, not 500)
+    const recentLogs = context.logs?.slice(-5).map((l:any) => 
+        `[${l.date}] ${l.event}: ${l.time}s (${l.type})`
+    ).join("; ") || "Sin registros recientes.";
+
     const staffContext = context.profile.coaches?.length ? `STAFF REGISTRADO: ${context.profile.coaches.map((c:any)=>`${c.name} (${c.role})`).join(', ')}` : "Sin staff registrado.";
     
     // --- BUILD OMNI-CONSCIOUS DOSSIER ---
     
-    // 1. Injuries
+    // Injuries
     const injuryReport = context.profile.injuries?.length > 0 
         ? context.profile.injuries.map((i:any) => `${i.location} (${i.severity}) - Estado: ${i.status}`).join(", ")
         : "Sin lesiones activas.";
     
-    // 2. Competitions
+    // Competitions (Next 2 only)
     const compReport = context.profile.competitions?.length > 0
-        ? context.profile.competitions.map((c:any) => `${c.name} (${c.date})`).join(", ")
+        ? context.profile.competitions.slice(0, 2).map((c:any) => `${c.name} (${c.date})`).join(", ")
         : "Sin competiciones programadas.";
         
-    // 3. Technical Evolution (Personal Videos Only)
+    // Technical Evolution (Last 2 Personal Videos)
     const personalAnalyses = context.analysisHistory?.filter((a:any) => a.category === 'Personal') || [];
-    const techReport = personalAnalyses.slice(0, 3).map((a:any) => 
+    const techReport = personalAnalyses.slice(0, 2).map((a:any) => 
         `[${new Date(a.savedAt).toLocaleDateString()}] Score ${a.score}: ${a.criticalErrors.join(', ')}`
     ).join("\n") || "Sin historial de análisis técnico.";
 
-    // 4. Plan Context
+    // Plan Context
     const currentPhase = context.plan ? context.plan.phase : "No Plan Active";
     const weeklyGoal = context.plan ? context.plan.weeklyGoal : "N/A";
 
@@ -290,6 +306,7 @@ export const chatWithCoach = async (history: any[], message: string, context: an
       [SALUD & LESIONES]: ${injuryReport}
       [CARGA DE TRABAJO]: ACWR ${context.acwr?.ratio || 'N/A'} (Status: ${context.acwr?.status || 'Unknown'}).
       [COMPETICIONES FUTURAS]: ${compReport}
+      [RENDIMIENTO RECIENTE]: ${recentLogs}
       [EVOLUCIÓN TÉCNICA]: 
       ${techReport}
       [PLAN ACTUAL]: Fase ${currentPhase}. Objetivo: ${weeklyGoal}.
@@ -308,8 +325,7 @@ export const chatWithCoach = async (history: any[], message: string, context: an
       
       INSTRUCCIONES DE RESPUESTA:
       - Si el usuario pregunta algo simple, responde simple pero fundamentado en SU contexto.
-      - "Veo que tienes una molestia en ${injuryReport}, así que hoy sugiero..."
-      - "Considerando que tu competencia en ${compReport} se acerca..."
+      - Sé conciso.
     `;
 
     const chat = ai.chats.create({
@@ -320,7 +336,7 @@ export const chatWithCoach = async (history: any[], message: string, context: an
 
     const result = await chat.sendMessage({ message });
     return { text: result.text || "...", functionCall: result.functionCalls?.[0] || null };
-  } catch (error) { return { text: "Error de conexión con el Staff.", functionCall: null }; }
+  } catch (error) { console.error("Chat Error", error); return { text: "Error de conexión con el Staff. Intenta de nuevo.", functionCall: null }; }
 };
 
 export const generateNexusInsight = async (
@@ -331,22 +347,22 @@ export const generateNexusInsight = async (
 ): Promise<NexusInsight | null> => {
     if(!ai) return null;
     try {
-        const recentLogs = logs.slice(-3);
+        const recentLogs = logs.slice(-3); // Limit to last 3
         const prompt = `
             ROL: DIRECTOR DE ALTO RENDIMIENTO (OMNI-CONSCIENTE).
             TAREA: Síntesis de datos cruzados (Nexus).
 
             DATOS:
-            - Rendimiento (Tiempos): ${JSON.stringify(recentLogs)}
-            - Fisiología (Fatiga/Sueño): ${JSON.stringify(readiness)}
-            - Mecánica (Video): ${lastAnalysis ? `Score ${lastAnalysis.score} (${lastAnalysis.category}), Errores: ${lastAnalysis.criticalErrors.join(', ')}` : "Sin video personal reciente"}
+            - Rendimiento: ${JSON.stringify(recentLogs)}
+            - Fisiología: ${JSON.stringify(readiness)}
+            - Mecánica: ${lastAnalysis ? `Score ${lastAnalysis.score}, Errores: ${lastAnalysis.criticalErrors.join(', ')}` : "N/A"}
             - Carga (ACWR): ${acwr?.ratio || 0} (${acwr?.status || 'N/A'})
 
             MODELO MENTAL:
             Busca patrones no obvios.
             - ¿Baja velocidad + Alta Fatiga? -> Sobrecarga Neural.
             - ¿Baja velocidad + Baja Fatiga? -> Mecánica ineficiente o falta de intención.
-            - ¿Mejor marca personal + ACWR Alto? -> Riesgo de pico de estrés (Warning).
+            - ¿Mejor marca + ACWR Alto? -> Riesgo de pico de estrés (Warning).
             
             Salida: Insight corto, estilo "War Room".
         `;

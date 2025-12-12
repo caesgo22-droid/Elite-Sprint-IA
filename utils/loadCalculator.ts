@@ -13,9 +13,9 @@ export interface LoadStats {
  * Logic: Load = RPE * Duration (mins)
  */
 export const calculateACWR = (historyPlans: TrainingPlan[]): LoadStats => {
-    // 1. Extract all completed sessions with feedback
+    // 1. Extract all completed sessions with feedback AND valid timestamp
     const allSessions = historyPlans.flatMap(p => p.sessions)
-        .filter(s => s.feedback && s.feedback.completed && s.feedback.timestamp);
+        .filter(s => s.feedback && s.feedback.completed && s.feedback.timestamp && !isNaN(new Date(s.feedback.timestamp).getTime()));
 
     // Sort by date descending
     allSessions.sort((a, b) => 

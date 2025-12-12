@@ -20,7 +20,7 @@ const DrillItem = ({ name, colorClass }: { name: string, colorClass: string }) =
             href={`https://www.youtube.com/results?search_query=track+and+field+drill+${name.replace(/\s/g, '+')}`} 
             target="_blank" 
             rel="noopener noreferrer"
-            className="text-slate-500 hover:text-red-500 transition-colors p-2 bg-slate-800/50 rounded-full hover:bg-slate-800"
+            className="text-slate-500 hover:text-red-500 transition-colors p-2 bg-slate-800/50 rounded-full hover:bg-slate-800 visible"
             title="Ver video de referencia"
         >
             <Play size={14} fill="currentColor" />

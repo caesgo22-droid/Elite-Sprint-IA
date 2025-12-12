@@ -1,3 +1,4 @@
+
 import * as React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../contexts/AppContext';
@@ -87,10 +88,10 @@ export const LiveCoach: React.FC = () => {
   );
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] relative">
-      <div className="absolute top-0 left-0 right-0 h-12 bg-gradient-to-b from-slate-950 to-transparent z-10 pointer-events-none" />
+    <div className="flex flex-col h-[calc(100dvh-140px)] relative">
+      <div className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-slate-950 to-transparent z-10 pointer-events-none" />
       
-      <div className="flex-1 overflow-y-auto space-y-4 pb-2 pt-2 px-1">
+      <div className="flex-1 overflow-y-auto space-y-4 pb-2 pt-2 px-1 scrollbar-hide">
         {chatHistory.length === 0 && (
           <div className="text-center mt-20 text-slate-500 px-8">
             <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-800">
@@ -114,7 +115,7 @@ export const LiveCoach: React.FC = () => {
         <div ref={bottomRef} />
       </div>
 
-      <div className="mt-2 space-y-2 relative">
+      <div className="mt-auto pt-2 pb-1 relative">
         {showStaffSelector && <StaffSelector/>}
         
         <div className="bg-slate-900/90 backdrop-blur border border-slate-700 rounded-full p-1.5 flex items-center gap-2 shadow-lg">
