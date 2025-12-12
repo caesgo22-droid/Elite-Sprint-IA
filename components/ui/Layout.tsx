@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Home, Calendar, Activity, MessageSquare, Video, Users, ShieldCheck, Briefcase, Eye } from 'lucide-react';
 import { TechnicalWhitepaper } from '../TechnicalWhitepaper';
-import { useApp } from '../contexts/AppContext';
+import { useApp } from '../../contexts/AppContext';
 
 interface LayoutProps {
   children: React.ReactNode;
