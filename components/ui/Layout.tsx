@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Home, Calendar, Activity, MessageSquare, Video, Users, ShieldCheck, Briefcase, Eye } from 'lucide-react';
 import { TechnicalWhitepaper } from '../TechnicalWhitepaper';
+// IMPORTANTE: La ruta debe subir dos niveles (../../) porque este archivo esta en components/ui/
 import { useApp } from '../../contexts/AppContext';
 
 interface LayoutProps {
@@ -40,7 +41,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <h1 className="text-xl font-bold tracking-tighter bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">
             ELITE SPRINT AI
           </h1>
-          <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-mono">v2.1</span>
+          <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-mono">v2.1.2</span>
           {viewingAthleteId && (
               <div className="flex items-center gap-1 bg-indigo-900/50 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30 animate-pulse">
                   <Eye size={10}/>
