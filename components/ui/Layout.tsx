@@ -2,8 +2,9 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, Calendar, Activity, MessageSquare, Video, Users, ShieldCheck } from 'lucide-react';
+import { Home, Calendar, Activity, MessageSquare, Video, Users, ShieldCheck, Briefcase, Eye } from 'lucide-react';
 import { TechnicalWhitepaper } from '../TechnicalWhitepaper';
+import { useApp } from '../contexts/AppContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,13 +12,22 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [showScience, setShowScience] = useState(false);
+  const { userProfile, viewingAthleteId, switchAthlete } = useApp();
+
+  // Navigation Logic based on Role
+  const isStaff = userProfile.role === 'staff' && !viewingAthleteId; // "Real" staff dashboard view
 
   const navItems = [
     { to: '/', icon: Home, label: 'Inicio' },
     { to: '/plan', icon: Calendar, label: 'Plan' },
     { to: '/video', icon: Video, label: 'Análisis' },
     { to: '/tracker', icon: Activity, label: 'Stats' },
-    { to: '/staff', icon: Users, label: 'Staff' },
+    // If Staff: Show 'Roster' instead of 'Staff contact list'
+    { 
+        to: userProfile.role === 'staff' || viewingAthleteId ? '/coach-dashboard' : '/staff', 
+        icon: userProfile.role === 'staff' || viewingAthleteId ? Briefcase : Users, 
+        label: userProfile.role === 'staff' || viewingAthleteId ? 'Roster' : 'Staff' 
+    },
     { to: '/chat', icon: MessageSquare, label: 'Coach' },
   ];
 
@@ -30,8 +40,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <h1 className="text-xl font-bold tracking-tighter bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">
             ELITE SPRINT AI
           </h1>
-          <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-mono">v2.0</span>
-          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+          <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-mono">v2.1</span>
+          {viewingAthleteId && (
+              <div className="flex items-center gap-1 bg-indigo-900/50 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30 animate-pulse">
+                  <Eye size={10}/>
+                  <span className="text-[9px] font-bold uppercase">Obs. Mode</span>
+              </div>
+          )}
         </div>
         
         {/* Science/Technical Button - Low Prominence */}
@@ -43,6 +58,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <ShieldCheck size={20} strokeWidth={1.5} />
         </button>
       </header>
+
+      {/* Viewing Banner */}
+      {viewingAthleteId && (
+          <div className="bg-indigo-600 text-white text-xs font-bold text-center py-1 flex items-center justify-center gap-2">
+              <Eye size={12}/> VISTA PREVIA: {userProfile.name}
+              <button onClick={() => switchAthlete(null)} className="underline opacity-80 hover:opacity-100 ml-2">Salir</button>
+          </div>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 p-4 pb-24 overflow-y-auto max-w-2xl mx-auto w-full">
@@ -68,7 +91,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
       </nav>
 
-      {/* Science Modal Overlay - Now using the Dynamic Component */}
+      {/* Science Modal Overlay */}
       {showScience && <TechnicalWhitepaper onClose={() => setShowScience(false)} />}
     </div>
   );

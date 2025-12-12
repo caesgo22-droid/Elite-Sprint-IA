@@ -1,3 +1,4 @@
+
 import * as React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './contexts/AppContext';
@@ -8,6 +9,7 @@ import VideoAnalyzer from './components/VideoAnalyzer';
 import { LiveCoach } from './components/LiveCoach';
 import PerformanceTracker from './components/PerformanceTracker';
 import { StaffHub } from './components/StaffHub'; 
+import { CoachDashboard } from './components/CoachDashboard';
 import { AuthScreen } from './components/AuthScreen';
 import { Loader2 } from 'lucide-react';
 
@@ -36,6 +38,7 @@ const AppContent: React.FC = () => {
           <Route path="/video" element={<VideoAnalyzer />} />
           <Route path="/tracker" element={<PerformanceTracker />} />
           <Route path="/staff" element={<StaffHub />} />
+          <Route path="/coach-dashboard" element={<CoachDashboard />} />
           <Route path="/chat" element={<LiveCoach />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

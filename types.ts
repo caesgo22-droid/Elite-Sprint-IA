@@ -15,9 +15,13 @@ export interface Coach {
 
 export interface UserProfile {
   name: string;
+  email?: string; // Critical for Staff lookup
+  role: 'athlete' | 'staff'; // NEW: Role definition
+  roster?: string[]; // NEW: For staff, list of athlete UIDs they manage
+  
   age: number;
   height: number;
-  weight: number; // CRITICAL for Recovery Engine
+  weight: number; 
   restingHR?: number;
   hrv?: number;
   events: string[];

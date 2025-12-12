@@ -1,6 +1,7 @@
+
 import * as firebaseApp from "firebase/app";
 import * as firebaseAuth from "firebase/auth";
-import { getFirestore, doc, setDoc, getDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc, Firestore } from "firebase/firestore";
+import { getFirestore, doc, setDoc, getDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc, Firestore, where } from "firebase/firestore";
 
 // Helper to get env vars safely in Vite/Node
 const getEnv = (key: string) => {
@@ -60,7 +61,6 @@ try {
 export { auth, db, googleProvider, isInitialized };
 
 // --- Firestore Helpers (Safe Wrappers) ---
-// These functions check isInitialized before running to prevent crashes.
 
 export const saveUserProfile = async (uid: string, profile: any) => {
   if (!db || !isInitialized) return;
@@ -138,3 +138,23 @@ export const fetchUserData = async (uid: string) => {
     };
   } catch(e) { console.error(e); return { profile: null, currentPlan: null, logs: [] }; }
 };
+
+// --- STAFF / COACH FEATURES ---
+
+export const findAthleteByEmail = async (email: string) => {
+  if (!db || !isInitialized) return null;
+  try {
+    const usersRef = collection(db, "users");
+    const q = query(usersRef, where("profile.email", "==", email));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) return null;
+    
+    // Return first match
+    const doc = querySnapshot.docs[0];
+    return { uid: doc.id, ...doc.data() };
+  } catch(e) {
+    console.error("Error searching athlete:", e);
+    return null;
+  }
+}

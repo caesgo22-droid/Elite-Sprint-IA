@@ -26,15 +26,12 @@ if (apiKey) {
 const cleanAndParseJSON = (text: string) => {
   if (!text) return null;
   try {
-    // 1. Try direct parse
     return JSON.parse(text);
   } catch (e) {
-    // 2. Try Markdown cleaning
     try {
         let cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
         return JSON.parse(cleaned);
     } catch (e2) {
-        // 3. Brute force extraction (Find outer brackets)
         try {
             const firstBrace = text.indexOf('{');
             const lastBrace = text.lastIndexOf('}');
@@ -51,22 +48,49 @@ const cleanAndParseJSON = (text: string) => {
   }
 };
 
+// --- ELITE FRAMEWORKS INJECTION (RAG Context) ---
+const ELITE_BIOMECHANICS_FRAMEWORK = `
+FRAMEWORK BIOMECÁNICO (RALPH MANN / ALTIS / FRANS BOSCH):
+1. **POSTURA (Posture):** La pelvis debe estar neutra. Evitar "Anterior Pelvic Tilt". El tronco estable.
+2. **CONTACTO (Ground Contact):** 
+   - Objetivo: Minimizar la "Braking Force" (Fuerza de frenado).
+   - Indicador: El pie debe contactar *debajo* o mínimamente delante del Centro de Masa (CoM).
+   - Si el pie aterriza muy adelante = Overstriding (Frenado excesivo, riesgo de isquios).
+3. **MECÁNICA FRONTAL (Frontside Mechanics):** 
+   - Maximizar la flexión de cadera y rodilla al frente.
+   - Evitar "Backside Mechanics" excesiva (talón subiendo demasiado atrás al despegar).
+4. **TIJERAS (Scissoring):** La acción de las piernas debe ser un pistoneo agresivo vertical, no un ciclo circular pasivo.
+`;
+
+const ELITE_PLANNING_FRAMEWORK = `
+FRAMEWORK DE PERIODIZACIÓN (BONDARCHUK / CHARLIE FRANCIS):
+1. **CLASIFICACIÓN DE EJERCICIOS:**
+   - CE (Competitivo Específico): El evento completo (ej. 100m, salidas de taco).
+   - SDE (Desarrollo Específico): Partes del evento (ej. Flys, Sleds, Split Runs).
+   - SPE (Preparación Especial): Ejercicios de fuerza que imitan el gesto (ej. Step-ups, Cleans).
+   - GPE (Preparación General): Construcción de base (ej. Circuitos, Tempo).
+2. **GESTIÓN DEL SNC (Sistema Nervioso Central):**
+   - High Intensity (HI): >95% velocidad. Drena SNC. Requiere 48h+ recup.
+   - Low Intensity (LI): <75% velocidad (Tempo). Regenera y construye capilares.
+   - **REGLA DE ORO:** Nunca mezclar HI y LI en la misma sesión de forma que compitan. High/Low approach.
+`;
+
 const PLAN_SCHEMA: Schema = {
   type: Type.OBJECT,
   properties: {
-    weeklyGoal: { type: Type.STRING, description: "Objetivo técnico/fisiológico." },
+    weeklyGoal: { type: Type.STRING, description: "Objetivo técnico/fisiológico preciso (ej: 'Mejorar stiffness en contacto')." },
     phase: { type: Type.STRING, enum: ['General Prep', 'Specific Prep', 'Pre-Comp', 'Competition', 'Transition'] },
-    rationale: { type: Type.STRING, description: "Justificación técnica Nivel 5 basada en ACWR y biomarcadores." },
+    rationale: { type: Type.STRING, description: "Justificación científica Nivel 5 (mencionar sistemas de energía o mecánica)." },
     sessions: {
       type: Type.ARRAY,
       items: {
         type: Type.OBJECT,
         properties: {
-          day: { type: Type.STRING, description: "Día exacto (ej: Lunes)" },
-          focus: { type: Type.STRING, enum: ['Acceleration', 'Max Velocity', 'Speed Endurance', 'Tempo', 'Recovery', 'Strength', 'Plyometrics', 'Technical', 'Lactic Tolerance'] },
-          trackRoutine: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista de ejercicios con pausas." },
+          day: { type: Type.STRING },
+          focus: { type: Type.STRING, enum: ['Acceleration', 'Max Velocity', 'Speed Endurance', 'Tempo', 'Recovery', 'Strength', 'Plyometrics', 'Technical', 'Activation'] },
+          trackRoutine: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Ejercicios específicos con distancias y %." },
           gymRoutine: { type: Type.ARRAY, items: { type: Type.STRING } },
-          biomechanicsKpi: { type: Type.STRING },
+          biomechanicsKpi: { type: Type.STRING, description: "Qué buscar visualmente (ej: 'Shin angle paralelo al torso')." },
           videoKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
           intensity: { type: Type.STRING, enum: ['Low', 'Medium', 'High', 'Max'] }
         },
@@ -80,12 +104,12 @@ const PLAN_SCHEMA: Schema = {
 const ANALYSIS_SCHEMA: Schema = {
   type: Type.OBJECT,
   properties: {
-    phaseDetected: { type: Type.STRING },
+    phaseDetected: { type: Type.STRING, enum: ['Acceleration (Drive)', 'Max Velocity (Upright)', 'Transition', 'Deceleration'] },
     jointAngles: { type: Type.OBJECT, properties: { knee: { type: Type.STRING }, hip: { type: Type.STRING }, torso: { type: Type.STRING }, shin: { type: Type.STRING } } },
     groundContactTimeEstimate: { type: Type.STRING },
     criticalErrors: { type: Type.ARRAY, items: { type: Type.STRING } },
     correctiveDrills: { type: Type.ARRAY, items: { type: Type.STRING } },
-    coachShouts: { type: Type.ARRAY, items: { type: Type.STRING } },
+    coachShouts: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Cues verbales cortos (ej: '¡Pisa debajo!', '¡Rodilla arriba!')." },
     score: { type: Type.NUMBER }
   },
   required: ["phaseDetected", "criticalErrors", "correctiveDrills", "coachShouts", "score"]
@@ -104,7 +128,7 @@ const NEXUS_SCHEMA: Schema = {
 
 const modifySessionTool: FunctionDeclaration = {
   name: "modifySession",
-  description: "Modifica una sesión del plan.",
+  description: "Modifica una sesión del plan actual basándose en feedback.",
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -117,22 +141,6 @@ const modifySessionTool: FunctionDeclaration = {
   }
 };
 
-// --- MENTAL MODELS & ARCHITECTURE ---
-const ELITE_MENTAL_MODELS = `
-1. MODELO DE RENDIMIENTO (ALTIS/FRANS BOSCH):
-   - El sprint es una habilidad motora, no solo "fuerza". Prioriza la coordinación intermuscular.
-   - "Attractors" vs "Fluctuators": Corrige lo estable (Attractors: extensión de cadera, shin angle) y permite variabilidad en lo demás.
-   - Contextual Strength: La fuerza debe aplicarse en vectores específicos.
-
-2. PERIODIZACIÓN (BONDARCHUK HYBRID):
-   - Clasificación de ejercicios: CE (Competitivo Específico), SDE (Desarrollo Específico), GE (General).
-   - No mezclar señales contradictorias el mismo día (Neural vs Metabólico).
-
-3. MODELO DE SALUD (PAIN SCIENCE):
-   - El dolor es una señal de alarma del cerebro, no siempre daño tisular.
-   - "Load Management" > "Passive Rest". Es mejor reducir volumen que parar totalmente (Active Recovery).
-`;
-
 export const generateTrainingPlan = async (
   profile: UserProfile, 
   readiness: { fatigue: number; sleep: number; soreness: number; stress: number; hydration: number }, 
@@ -143,6 +151,8 @@ export const generateTrainingPlan = async (
   if (!ai) return null;
   try {
     const cnsScore = ((readiness.sleep) + (10 - readiness.fatigue) + (10 - readiness.soreness) + (10 - readiness.stress) + (readiness.hydration)) / 5; 
+    
+    // Auto-Phase Detection
     const currentMonth = new Date().getMonth(); 
     let phaseName = "General Prep";
     if (currentMonth >= 2 && currentMonth <= 4) phaseName = "Specific Prep"; 
@@ -150,34 +160,34 @@ export const generateTrainingPlan = async (
     else if (currentMonth >= 9) phaseName = "General Prep";
 
     const structure = getStructureForPhase(phaseName);
-    
-    // STRICT DAY MAPPING LOGIC
     const dayMap: {[key:string]: string} = { 'Mon': 'Lunes', 'Tue': 'Martes', 'Wed': 'Miércoles', 'Thu': 'Jueves', 'Fri': 'Viernes', 'Sat': 'Sábado', 'Sun': 'Domingo' };
     const userDaysES = profile.trainingDays.map(d => dayMap[d] || d);
     
-    // Convert template object to array of priorities to map sequentially to user days
     const templatePriorities = Object.values(structure.weeklyStructure);
 
     const prompt = `
-      ROL: DIRECTOR DE RENDIMIENTO (WORLD ATHLETICS LEVEL 5).
-      FILOSOFÍA: ${ELITE_MENTAL_MODELS}
+      ACTÚA COMO: DIRECTOR DE ALTO RENDIMIENTO (WORLD ATHLETICS LEVEL V).
       
-      TAREA: Diseñar microciclo para ${profile.name} (${profile.experienceLevel}, ${focusEvent}).
-      CONTEXTO: Fase ${phaseName}. CNS Readiness ${cnsScore.toFixed(1)}/10. ACWR ${acwr ? acwr.ratio : "N/A"}.
+      ${ELITE_PLANNING_FRAMEWORK}
       
-      ESTRATEGIA OMNI-CONSCIENTE:
-      - Si CNS es bajo (<5) o ACWR alto (>1.3): Activa el protocolo de "Deload" o "Active Recovery" automáticamente.
-      - Si estamos en Fase Competición: Elimina volumen basura. Todo debe ser al 95%+ o al 0% (Recuperación).
-      - Selecciona Drills específicos que corrijan la técnica, no solo ejercicios aleatorios.
-
-      *** REGLA CRÍTICA DE CALENDARIO ***
-      El atleta SOLO entrena estos días exactos: [ ${userDaysES.join(", ")} ].
-      NO generes sesiones para otros días. Si el template tiene 5 sesiones pero el usuario entrena 3 días, prioriza las sesiones de Calidad (Speed/Power) y elimina las de relleno (Tempo/General).
+      PACIENTE (ATLETA):
+      - Nombre: ${profile.name}
+      - Nivel: ${profile.experienceLevel}
+      - Evento: ${focusEvent || "100m"}
+      - Contexto: Fase ${phaseName}.
+      - Estado CNS (Readiness): ${cnsScore.toFixed(1)}/10.
+      - Carga (ACWR): ${acwr ? acwr.ratio : "N/A"}.
       
-      ESTRUCTURA DE FASE SUGERIDA (Prioridades): 
-      ${JSON.stringify(templatePriorities)}
+      PROTOCOLOS DE SEGURIDAD OBLIGATORIOS:
+      1. Si ACWR > 1.3 o Readiness < 5: Implementar "Unloading Week" (Reducir volumen 40%, mantener intensidad).
+      2. Si hay dolor muscular reportado > 3/10: Eliminar pliometría y MaxV. Sustituir por Tempo en Piscina o Bicicleta.
+      3. Fase Competición: Volumen mínimo efectivo. Enfoque Neural.
       
-      Instrucción: Mapea las prioridades de la fase secuencialmente a los días disponibles del usuario ([${userDaysES.join(", ")}]).
+      TAREA:
+      Diseñar el microciclo para los días: [ ${userDaysES.join(", ")} ].
+      Usa la base de datos de Drills para seleccionar ejercicios específicos (CE, SDE, SPE).
+      
+      SALIDA JSON REQUERIDA (Esquema definido).
     `;
 
     const response = await ai.models.generateContent({
@@ -199,45 +209,46 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
   if (!ai) return null;
   try {
     const isSequence = images.length > 1;
-    let promptText = "";
     
-    // Advanced Physics Context for Gemini
     const physicsContext = advancedMetrics ? `
-      CINÉTICA AVANZADA (Calculada por Physics Engine):
-      - Velocidad CoM: ${advancedMetrics.velocity}
-      - Zancada: ${advancedMetrics.strideLength}
-      - Oscilación Vertical (Bounce): ${advancedMetrics.verticalOscillation || 'N/A'} (Eficiencia Baja si >6cm en MaxV).
+      DATOS CINÉTICOS (Physics Engine):
+      - Velocidad Horizontal CoM: ${advancedMetrics.velocity}
+      - Oscilación Vertical (Bouncing): ${advancedMetrics.verticalOscillation || 'N/A'}. (Elite < 4-5cm).
       - Force Index: ${advancedMetrics.forceFactor || 'N/A'}/100.
     ` : "";
 
     const bioContext = bioData ? `
-      ANGULOS CLAVE (MediaPipe):
-      - Rodilla Recobro: ${bioData.knee.value}
-      - Extensión Cadera: ${bioData.hip.value}
-      - Torso: ${bioData.torso.value}
+      ÁNGULOS (MediaPipe):
+      - Rodilla (Recobro): ${bioData.knee.value}
+      - Cadera (Extensión): ${bioData.hip.value}
+      - Torso (Inclinación): ${bioData.torso.value}
       ${physicsContext}
     ` : "Estimación visual.";
 
     const contextPrefix = analysisMode === 'Personal' 
-        ? "ANÁLISIS DE ATLETA (Diagnóstico Crítico)." 
-        : "ANÁLISIS DE REFERENCIA/DIDÁCTICO (Estudio de Modelo Técnico).";
+        ? "DIAGNÓSTICO CLÍNICO-DEPORTIVO (ATLETA PROPIO)." 
+        : "ANÁLISIS DE MODELO TÉCNICO (DIDÁCTICO).";
 
-    promptText = `
-      ROL: BIOMECÁNICO SENIOR (RALPH MANN / ALTIS).
+    const promptText = `
+      ACTÚA COMO: BIOMECÁNICO DEL DEPORTE (PHD).
       MODO: ${contextPrefix}
-      TAREA: Analizar ${isSequence ? 'secuencia cinética' : 'kinograma estático'}.
-      DATOS: ${bioContext}
       
-      FRAMEWORK DE ANÁLISIS:
-      1. Centro de Masa (CoM): ¿Hay demasiada oscilación vertical (Bouncing)? El objetivo es proyección horizontal.
-      2. Postura (Posture): ¿Está la pelvis neutra o en anteversión?
-      3. Acción de Piernas (Leg Action): ¿Hay 'Scissoring' agresivo o flotación pasiva?
-      4. Contacto (Ground Contact): ¿Pie debajo de la cadera (Masa Central) o por delante (Braking Forces)?
+      ${ELITE_BIOMECHANICS_FRAMEWORK}
+      
+      DATOS DE ENTRADA: ${bioContext}
+      
+      TAREA:
+      Analiza las imágenes proporcionadas (Kinograma). Busca discrepancias con el "Modelo Oro" (Ralph Mann).
+      
+      CRITERIOS DE EVALUACIÓN:
+      1. ¿Aterriza el pie delante del CoM (Overstriding/Frenado)? Esto es CRÍTICO.
+      2. ¿Hay "Colapso" en la rodilla de apoyo durante la amortiguación? (Falta de Stiffness).
+      3. ¿La pierna libre hace un recorrido circular (Backside) o lineal (Pistón)?
       
       SALIDA:
-      - Identifica SOLO 1-2 "Big Rocks" (Errores principales que limitan el rendimiento).
-      - Si la "Oscilación Vertical" es alta, critica la falta de rigidez (stiffness) en el contacto.
-      - Asigna Drills que ataquen la CAUSA RAÍZ.
+      - Identifica 2 Errores Críticos que impacten la velocidad o riesgo de lesión.
+      - Asigna Drills Correctivos específicos (ej: "Wickets" para Overstriding, "Sleds" para aceleración).
+      - Genera "Coach Shouts" cortos y directos para usar en pista.
     `;
 
     const parts: any[] = [];
@@ -263,69 +274,27 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
 export const chatWithCoach = async (history: any[], message: string, context: any) => {
   if (!ai) return { text: "⚠️ API Key faltante.", functionCall: null };
   try {
-    // 1. OPTIMIZATION: Slice history to prevent context window overflow
-    const prunedHistory = history.slice(-8); // Keep only last 8 exchanges
+    const prunedHistory = history.slice(-6); 
+    const recentLogs = context.logs?.slice(-3).map((l:any) => `[${l.date}] ${l.event}: ${l.time}s`).join("; ") || "Sin data.";
     
-    // 2. OPTIMIZATION: Summarize Logs (Pass only the last 5 records, not 500)
-    const recentLogs = context.logs?.slice(-5).map((l:any) => 
-        `[${l.date}] ${l.event}: ${l.time}s (${l.type})`
-    ).join("; ") || "Sin registros recientes.";
-
-    const staffContext = context.profile.coaches?.length ? `STAFF REGISTRADO: ${context.profile.coaches.map((c:any)=>`${c.name} (${c.role})`).join(', ')}` : "Sin staff registrado.";
-    
-    // --- BUILD OMNI-CONSCIOUS DOSSIER ---
-    
-    // Injuries
+    // Clinical Dossier
     const injuryReport = context.profile.injuries?.length > 0 
-        ? context.profile.injuries.map((i:any) => `${i.location} (${i.severity}) - Estado: ${i.status}`).join(", ")
-        : "Sin lesiones activas.";
-    
-    // Competitions (Next 2 only)
-    const compReport = context.profile.competitions?.length > 0
-        ? context.profile.competitions.slice(0, 2).map((c:any) => `${c.name} (${c.date})`).join(", ")
-        : "Sin competiciones programadas.";
-        
-    // Technical Evolution (Last 2 Personal Videos)
-    const personalAnalyses = context.analysisHistory?.filter((a:any) => a.category === 'Personal') || [];
-    const techReport = personalAnalyses.slice(0, 2).map((a:any) => 
-        `[${new Date(a.savedAt).toLocaleDateString()}] Score ${a.score}: ${a.criticalErrors.join(', ')}`
-    ).join("\n") || "Sin historial de análisis técnico.";
-
-    // Plan Context
-    const currentPhase = context.plan ? context.plan.phase : "No Plan Active";
-    const weeklyGoal = context.plan ? context.plan.weeklyGoal : "N/A";
+        ? context.profile.injuries.map((i:any) => `LESIÓN ACTIVA: ${i.location} (${i.severity})`).join(", ")
+        : "Salud Óptima.";
 
     const systemPrompt = `
-      ESTÁS ACTUANDO COMO: EL "CONSEJO TÉCNICO" (NIVEL 5 WORLD ATHLETICS).
+      ERES: El Staff Técnico Completo (Entrenador, Biomecánico, Fisio) de Nivel Mundial.
       
-      TU ARQUITECTURA MENTAL (Omni-Consciente):
-      No respondes linealmente. Analizas TODO el expediente del atleta antes de hablar.
-
-      EXPEDIENTE DEL ATLETA (${context.profile.name}):
-      ------------------------------------------------------------
-      [SALUD & LESIONES]: ${injuryReport}
-      [CARGA DE TRABAJO]: ACWR ${context.acwr?.ratio || 'N/A'} (Status: ${context.acwr?.status || 'Unknown'}).
-      [COMPETICIONES FUTURAS]: ${compReport}
-      [RENDIMIENTO RECIENTE]: ${recentLogs}
-      [EVOLUCIÓN TÉCNICA]: 
-      ${techReport}
-      [PLAN ACTUAL]: Fase ${currentPhase}. Objetivo: ${weeklyGoal}.
-      [STAFF]: ${staffContext}
-      ------------------------------------------------------------
-
-      REGLAS DE DECISIÓN (PROTOCOLO ELITE):
-      1. SI HAY LESIÓN ACTIVA: Prioridad absoluta = Rehabilitación. Bloquea cualquier petición de intensidad máxima que afecte la zona dañada.
-      2. SI HAY COMPETICIÓN < 14 DÍAS: Entra en modo "Tapering". Niega peticiones de volumen alto. Sugiere calidad y descanso.
-      3. SI TÉCNICA ES DEFICIENTE (Scores < 60): No sugieras "correr más rápido". Sugiere "correr mejor" (Drills).
+      EXPEDIENTE ATLETA:
+      - Nombre: ${context.profile.name}
+      - Estado Salud: ${injuryReport} (SI HAY LESIÓN, PRIORIZA LA SEGURIDAD SOBRE EL RENDIMIENTO).
+      - Carga Actual: ACWR ${context.acwr?.ratio || 'N/A'}.
+      - Tiempos Recientes: ${recentLogs}
       
-      DEBATE INTERNO (Simulado):
-         - HEAD COACH: ¿Esto mejora el tiempo?
-         - FISIO: ¿Esto rompe al atleta (considerando historial)?
-         - BIOMECÁNICO: ¿Técnicamente viable (según historial de video)?
-      
-      INSTRUCCIONES DE RESPUESTA:
-      - Si el usuario pregunta algo simple, responde simple pero fundamentado en SU contexto.
-      - Sé conciso.
+      DIRECTRICES DE RESPUESTA:
+      1. Sé breve, técnico y basado en evidencia. No uses lenguaje de "animo", usa lenguaje de "alto rendimiento".
+      2. Si el atleta propone algo estúpido (ej: entrenar MaxV con dolor de isquios), PROHÍBELO tajantemente citando riesgos mecánicos.
+      3. Usa terminología correcta (SNC, Stiffness, RFD, Vector de Fuerza).
     `;
 
     const chat = ai.chats.create({
@@ -336,35 +305,22 @@ export const chatWithCoach = async (history: any[], message: string, context: an
 
     const result = await chat.sendMessage({ message });
     return { text: result.text || "...", functionCall: result.functionCalls?.[0] || null };
-  } catch (error) { console.error("Chat Error", error); return { text: "Error de conexión con el Staff. Intenta de nuevo.", functionCall: null }; }
+  } catch (error) { console.error("Chat Error", error); return { text: "Error de conexión con el Staff.", functionCall: null }; }
 };
 
-export const generateNexusInsight = async (
-    logs: any[], 
-    readiness: any, 
-    lastAnalysis: BiomechanicalAnalysis | null,
-    acwr: any
-): Promise<NexusInsight | null> => {
+export const generateNexusInsight = async (logs: any[], readiness: any, lastAnalysis: any, acwr: any): Promise<NexusInsight | null> => {
     if(!ai) return null;
     try {
-        const recentLogs = logs.slice(-3); // Limit to last 3
         const prompt = `
-            ROL: DIRECTOR DE ALTO RENDIMIENTO (OMNI-CONSCIENTE).
-            TAREA: Síntesis de datos cruzados (Nexus).
-
-            DATOS:
-            - Rendimiento: ${JSON.stringify(recentLogs)}
-            - Fisiología: ${JSON.stringify(readiness)}
-            - Mecánica: ${lastAnalysis ? `Score ${lastAnalysis.score}, Errores: ${lastAnalysis.criticalErrors.join(', ')}` : "N/A"}
-            - Carga (ACWR): ${acwr?.ratio || 0} (${acwr?.status || 'N/A'})
-
-            MODELO MENTAL:
-            Busca patrones no obvios.
-            - ¿Baja velocidad + Alta Fatiga? -> Sobrecarga Neural.
-            - ¿Baja velocidad + Baja Fatiga? -> Mecánica ineficiente o falta de intención.
-            - ¿Mejor marca + ACWR Alto? -> Riesgo de pico de estrés (Warning).
+            ACTÚA COMO: ALGORITMO DE DETECCIÓN DE TALENTO Y RENDIMIENTO.
+            Analiza correlaciones no lineales entre:
+            1. Fisiología (Fatiga: ${JSON.stringify(readiness)})
+            2. Mecánica (Score Téc: ${lastAnalysis ? lastAnalysis.score : "N/A"})
+            3. Carga (ACWR: ${acwr?.ratio || 0})
             
-            Salida: Insight corto, estilo "War Room".
+            Busca anomalías: ¿Rendimiento bajando a pesar de carga baja? (Posible problema técnico o de salud). ¿Rendimiento subiendo con fatiga alta? (Supercompensación o riesgo inminente).
+            
+            Salida JSON estricta.
         `;
 
         const response = await ai.models.generateContent({

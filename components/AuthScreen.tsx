@@ -1,14 +1,15 @@
 
 import * as React from 'react';
 import { useState } from 'react';
-import { auth, googleProvider } from '../services/firebase';
+import { auth, googleProvider, saveUserProfile } from '../services/firebase';
 import * as firebaseAuth from 'firebase/auth';
-import { Zap, Mail, Lock, LogIn, ArrowRight } from 'lucide-react';
+import { Zap, Mail, Lock, LogIn, ArrowRight, UserCircle2, Briefcase } from 'lucide-react';
 
 const { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword } = firebaseAuth as any;
 
 export const AuthScreen: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
+  const [role, setRole] = useState<'athlete' | 'staff'>('athlete');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -17,7 +18,8 @@ export const AuthScreen: React.FC = () => {
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
-      await signInWithPopup(auth, googleProvider);
+      const res = await signInWithPopup(auth, googleProvider);
+      // We don't override role here on login, user might already exist
     } catch (err: any) {
       console.error("Google Login Error:", err);
       let msg = "Error con Google: " + err.message;
@@ -44,7 +46,22 @@ export const AuthScreen: React.FC = () => {
       if (isLogin) {
         await signInWithEmailAndPassword(auth, email, password);
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const res = await createUserWithEmailAndPassword(auth, email, password);
+        // Initialize profile with role and email
+        if (res.user) {
+            await saveUserProfile(res.user.uid, {
+                email: email,
+                role: role,
+                name: role === 'staff' ? 'Coach' : 'Atleta',
+                // Add defaults to prevent crashes
+                events: ['100m'],
+                pbs: { '100m': {}, '200m': {}, '400m': {} },
+                injuries: [],
+                coaches: [],
+                trainingDays: ['Mon', 'Tue', 'Thu', 'Fri'],
+                roster: [] // For staff
+            });
+        }
       }
     } catch (err: any) {
       let msg = err.message;
@@ -81,6 +98,29 @@ export const AuthScreen: React.FC = () => {
 
         <div className="bg-slate-900/50 border border-slate-800 backdrop-blur-md rounded-2xl p-8 shadow-2xl">
           <form onSubmit={handleEmailAuth} className="space-y-4">
+            
+            {/* ROLE SELECTOR (Only on Sign Up) */}
+            {!isLogin && (
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                    <button 
+                        type="button" 
+                        onClick={() => setRole('athlete')} 
+                        className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${role === 'athlete' ? 'bg-cyan-900/30 border-cyan-500 text-cyan-400' : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-600'}`}
+                    >
+                        <UserCircle2 size={24}/>
+                        <span className="text-xs font-bold uppercase">Atleta</span>
+                    </button>
+                    <button 
+                        type="button" 
+                        onClick={() => setRole('staff')} 
+                        className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${role === 'staff' ? 'bg-blue-900/30 border-blue-500 text-blue-400' : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-600'}`}
+                    >
+                        <Briefcase size={24}/>
+                        <span className="text-xs font-bold uppercase">Staff / Coach</span>
+                    </button>
+                </div>
+            )}
+
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label>
               <div className="relative">
@@ -91,7 +131,7 @@ export const AuthScreen: React.FC = () => {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-10 pr-4 text-sm text-white focus:border-cyan-500 outline-none transition-colors"
-                  placeholder="atleta@elite.com"
+                  placeholder="usuario@elite.com"
                 />
               </div>
             </div>
@@ -160,4 +200,3 @@ export const AuthScreen: React.FC = () => {
     </div>
   );
 };
-    
