@@ -1,3 +1,4 @@
+
 import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
@@ -92,7 +93,7 @@ const VideoAnalyzer: React.FC = () => {
           if(ctx) {
               ctx.clearRect(0, 0, canvas.width, canvas.height);
               
-              // --- PROFESSIONAL SKELETON RENDER ---
+              // --- PROFESSIONAL SKELETON RENDER (Improved Visibility) ---
               const drawLine = (i: number, j: number, color: string, width: number) => {
                   if(landmarks[i] && landmarks[j]) {
                       ctx.beginPath();
@@ -104,24 +105,25 @@ const VideoAnalyzer: React.FC = () => {
                   }
               }
               
-              const R_COLOR = "#00ffff"; 
-              const L_COLOR = "#ff00ff";
-              const TRUNK_COLOR = "#ffffff";
+              // High Contrast Colors for Dark/Red Track Backgrounds
+              const RIGHT_SIDE = "#00e5ff"; // Bright Cyan
+              const LEFT_SIDE = "#ff007f";  // Bright Magenta
+              const TRUNK = "#ffffff";      // White
 
-              drawLine(12, 14, R_COLOR, 3); // Shoulder-Elbow
-              drawLine(14, 16, R_COLOR, 3); // Elbow-Wrist
-              drawLine(24, 26, R_COLOR, 3); // Hip-Knee
-              drawLine(26, 28, R_COLOR, 3); // Knee-Ankle
+              drawLine(12, 14, RIGHT_SIDE, 3); // R Arm
+              drawLine(14, 16, RIGHT_SIDE, 3);
+              drawLine(24, 26, RIGHT_SIDE, 4); // R Leg
+              drawLine(26, 28, RIGHT_SIDE, 4);
               
-              drawLine(11, 13, L_COLOR, 3);
-              drawLine(13, 15, L_COLOR, 3);
-              drawLine(23, 25, L_COLOR, 3);
-              drawLine(25, 27, L_COLOR, 3);
+              drawLine(11, 13, LEFT_SIDE, 3); // L Arm
+              drawLine(13, 15, LEFT_SIDE, 3);
+              drawLine(23, 25, LEFT_SIDE, 4); // L Leg
+              drawLine(25, 27, LEFT_SIDE, 4);
 
-              drawLine(11, 12, TRUNK_COLOR, 2); // Shoulders
-              drawLine(23, 24, TRUNK_COLOR, 2); // Hips
-              drawLine(11, 23, TRUNK_COLOR, 2); // L-Side
-              drawLine(12, 24, TRUNK_COLOR, 2); // R-Side
+              drawLine(11, 12, TRUNK, 3); // Shoulders
+              drawLine(23, 24, TRUNK, 3); // Hips
+              drawLine(11, 23, TRUNK, 3); // Spine L
+              drawLine(12, 24, TRUNK, 3); // Spine R
 
               if (com) {
                   const cx = com.x * canvas.width;
@@ -129,13 +131,17 @@ const VideoAnalyzer: React.FC = () => {
                   
                   ctx.beginPath();
                   ctx.fillStyle = "#ffff00"; // Yellow
-                  ctx.arc(cx, cy, 6, 0, 2*Math.PI);
+                  ctx.arc(cx, cy, 8, 0, 2*Math.PI); // Bigger dot
                   ctx.fill();
+                  ctx.strokeStyle = "black";
+                  ctx.lineWidth = 1;
+                  ctx.stroke();
                   
+                  // Gravity Line
                   ctx.beginPath();
                   ctx.strokeStyle = "#ffff00";
                   ctx.setLineDash([5, 5]);
-                  ctx.lineWidth = 1;
+                  ctx.lineWidth = 2;
                   ctx.moveTo(cx, cy);
                   ctx.lineTo(cx, canvas.height); 
                   ctx.stroke();
@@ -151,7 +157,6 @@ const VideoAnalyzer: React.FC = () => {
       }
   };
 
-  // Helper to ensure video is ready at a specific time
   const seekTo = (video: HTMLVideoElement, time: number) => {
       return new Promise((resolve) => {
           const onSeeked = () => {
@@ -170,26 +175,31 @@ const VideoAnalyzer: React.FC = () => {
     
     try {
         const duration = videoRef.current.duration;
-        // Grab frames at key phases (Accel, Trans, MaxV approx)
         const frames = [duration * 0.2, duration * 0.5, duration * 0.8]; 
         const capturedImages: string[] = [];
         
         for (const time of frames) {
-            // WAIT for seek to complete before drawing
             await seekTo(videoRef.current, time);
-            // Give it a tiny buffer for renderer
-            await new Promise(r => setTimeout(r, 100)); 
+            await new Promise(r => setTimeout(r, 200)); // Increased buffer for render
             
             await detectPose(); 
             
+            // --- IMAGE RESIZING LOGIC (Critical for API Limits) ---
             const canvas = document.createElement('canvas');
-            canvas.width = videoRef.current.videoWidth;
-            canvas.height = videoRef.current.videoHeight;
+            const video = videoRef.current;
+            
+            // Limit max dimension to 800px to reduce payload size
+            const MAX_DIMENSION = 800;
+            const scale = Math.min(1, MAX_DIMENSION / Math.max(video.videoWidth, video.videoHeight));
+            
+            canvas.width = video.videoWidth * scale;
+            canvas.height = video.videoHeight * scale;
+            
             const ctx = canvas.getContext('2d');
             if (ctx) {
-                ctx.drawImage(videoRef.current, 0, 0);
-                // Reduce quality slightly to ensure payload isn't too big for Gemini
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                // Draw scaled image
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.8); // 80% Quality
                 capturedImages.push(dataUrl.split(',')[1]);
             }
         }
@@ -210,13 +220,13 @@ const VideoAnalyzer: React.FC = () => {
                  ...result, 
                  id: Date.now().toString(), 
                  type: 'Sequence' as const, 
-                 thumbnail: `data:image/jpeg;base64,${capturedImages[1]}`, // Use middle frame
+                 thumbnail: `data:image/jpeg;base64,${capturedImages[1]}`, 
                  kinetics: kinetics
              };
              setSessionAnalyses(prev => [analysis, ...prev]);
              if (analysisMode === 'Personal') saveAnalysis(analysis);
         } else {
-            alert("No se pudo generar el análisis. Intenta con un video más claro o corto.");
+            alert("No se pudo generar el análisis. Intenta con un video más corto.");
         }
 
     } catch(e) { 
@@ -340,9 +350,9 @@ Generated by Elite Sprint Coach AI
                         
                         {/* Legend */}
                         <div className="absolute top-2 left-2 bg-black/60 p-2 rounded border border-white/10 pointer-events-none backdrop-blur-md">
-                            <div className="flex items-center gap-2 mb-1"><span className="w-2 h-2 rounded-full bg-yellow-400 shadow-lg"></span> <span className="text-[10px] text-white font-mono">CoM (Centro de Masa)</span></div>
-                            <div className="flex items-center gap-2 mb-1"><span className="w-4 h-0.5 bg-green-500"></span> <span className="text-[10px] text-white font-mono">Vector Fuerza</span></div>
-                            <div className="flex items-center gap-2"><span className="w-0.5 h-3 bg-yellow-400 border-l border-dashed border-yellow-400"></span> <span className="text-[10px] text-white font-mono">Proyección Vertical</span></div>
+                            <div className="flex items-center gap-2 mb-1"><span className="w-2 h-2 rounded-full bg-yellow-400 shadow-lg border border-black"></span> <span className="text-[10px] text-white font-mono">CoM</span></div>
+                            <div className="flex items-center gap-2 mb-1"><span className="w-4 h-0.5 bg-green-500"></span> <span className="text-[10px] text-white font-mono">Fuerza</span></div>
+                            <div className="flex items-center gap-2"><span className="w-0.5 h-3 bg-yellow-400 border-l border-dashed border-yellow-400"></span> <span className="text-[10px] text-white font-mono">Gravedad</span></div>
                         </div>
 
                         {/* DESKTOP HUD */}

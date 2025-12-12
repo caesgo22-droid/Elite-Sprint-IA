@@ -1,6 +1,7 @@
 
 import * as React from 'react';
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
 import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle } from 'lucide-react';
@@ -98,8 +99,10 @@ const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessi
 
 export const PlanManager: React.FC = () => {
   const { user, userProfile, updateProfile, currentPlan, setPlan, updateSession, lastAnalysis } = useApp();
+  const [searchParams] = useSearchParams(); // Hook to read URL params
+  
   const [loading, setLoading] = useState(false);
-  const [showProfileConfig, setShowProfileConfig] = useState(!userProfile.name || userProfile.name === 'Atleta');
+  const [showProfileConfig, setShowProfileConfig] = useState(false);
   const [showMacroModal, setShowMacroModal] = useState(false);
   const [focusEvent, setFocusEvent] = useState(userProfile.events?.[0] || '100m'); 
   const [fatigue, setFatigue] = useState(5);
@@ -115,6 +118,16 @@ export const PlanManager: React.FC = () => {
   const [activeTooltip, setActiveTooltip] = useState<{title: string, text: string} | null>(null);
   const [viewingRecovery, setViewingRecovery] = useState<any>(null);
 
+  // Initialize: Check for ?edit=true param or missing name
+  useEffect(() => {
+      const isEditing = searchParams.get('edit') === 'true';
+      const isNewUser = !userProfile.name || userProfile.name === 'Atleta';
+      
+      if (isEditing || isNewUser) {
+          setShowProfileConfig(true);
+      }
+  }, [searchParams, userProfile.name]);
+
   useEffect(() => {
     const fetchHistory = async () => {
        if(user) {
@@ -128,10 +141,19 @@ export const PlanManager: React.FC = () => {
     fetchHistory();
   }, [user, currentPlan]);
 
-  const handleSaveProfile = () => { updateProfile(tempProfile); setShowProfileConfig(false); if (!tempProfile.events.includes(focusEvent)) setFocusEvent(tempProfile.events[0]); };
+  const handleSaveProfile = () => { 
+      updateProfile(tempProfile); 
+      setShowProfileConfig(false); 
+      if (!tempProfile.events.includes(focusEvent)) setFocusEvent(tempProfile.events[0]);
+      // Clear URL param if present (optional UX polish)
+      if (window.history.pushState) {
+          const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '#/plan';
+          window.history.pushState({path:newUrl},'',newUrl);
+      }
+  };
+  
   const handleGenerate = async () => { 
       setLoading(true); 
-      // Safe fallback if API fails is handled inside generateTrainingPlan
       const plan = await generateTrainingPlan(userProfile, { fatigue, sleep, soreness, stress, hydration }, new Date().toLocaleDateString('es-ES'), focusEvent, acwr || undefined); 
       if (plan) {
           setPlan(plan); 
@@ -246,7 +268,7 @@ export const PlanManager: React.FC = () => {
       <div className="space-y-6 animate-in fade-in duration-500 pb-10">
         <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold">Perfil Holístico</h2>
-            <button onClick={() => setShowProfileConfig(false)} className="p-2 bg-slate-800 rounded-full"><X/></button>
+            <button onClick={() => { setShowProfileConfig(false); if (searchParams.get('edit')) { window.history.back(); } }} className="p-2 bg-slate-800 rounded-full"><X/></button>
         </div>
         
         <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 space-y-6 max-h-[75vh] overflow-y-auto">

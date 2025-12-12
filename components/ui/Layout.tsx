@@ -102,7 +102,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                                 <button onClick={toggleRole} className="w-full text-left px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-lg flex items-center gap-2 transition-colors">
                                     <RefreshCw size={14}/> Cambiar Rol a {userProfile.role === 'staff' ? 'Atleta' : 'Staff'}
                                 </button>
-                                <button onClick={() => { setShowUserMenu(false); navigate('/plan'); }} className="w-full text-left px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-lg flex items-center gap-2 transition-colors">
+                                <button onClick={() => { setShowUserMenu(false); navigate('/plan?edit=true'); }} className="w-full text-left px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-lg flex items-center gap-2 transition-colors">
                                     <User size={14}/> Editar Perfil
                                 </button>
                                 <div className="h-px bg-slate-800 my-1"></div>
