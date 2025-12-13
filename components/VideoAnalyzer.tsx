@@ -5,11 +5,11 @@ import { useApp } from '../contexts/AppContext';
 import { analyzeTechnique, hasApiKey } from '../services/geminiService';
 import { ElitePhysicsEngine, AdvancedMetrics, calculateAngle } from '../utils/biomechanicsUtils';
 import { BiomechanicalAnalysis, KineticMetrics } from '../types';
-import { Loader2, AlertTriangle, CheckCircle, History, ScanLine, UploadCloud, Play, Video, Share, Info, UserCircle2, GraduationCap, FileText, MessageCircle, Activity, LocateFixed, Eye, X, Table2, MousePointerClick, Maximize2 } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle, History, ScanLine, UploadCloud, Play, Video, Share, Info, UserCircle2, GraduationCap, FileText, MessageCircle, Activity, LocateFixed, Eye, X, Table2, MousePointerClick, Maximize2, UserCog, Wrench } from 'lucide-react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 
 const VideoAnalyzer: React.FC = () => {
-  const { saveAnalysis, analysisHistory, userProfile } = useApp();
+  const { saveAnalysis, analysisHistory, userProfile, updateAnalysis } = useApp();
   const [sessionAnalyses, setSessionAnalyses] = useState<BiomechanicalAnalysis[]>([]);
   const [loading, setLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -29,6 +29,10 @@ const VideoAnalyzer: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(0);
   const [frameCache, setFrameCache] = useState<any[]>([]); // Stores landmarks for every scanned frame
   
+  // Staff Notes State
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState("");
+  
   const [analysisMode, setAnalysisMode] = useState<'Personal' | 'External'>('Personal');
   const [activeTooltip, setActiveTooltip] = useState<{title: string, text: string} | null>(null);
   const [showReportModal, setShowReportModal] = useState<BiomechanicalAnalysis | null>(null);
@@ -43,6 +47,8 @@ const VideoAnalyzer: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const isStaff = userProfile.role === 'staff';
 
   useEffect(() => {
     isMounted.current = true;
@@ -325,7 +331,6 @@ const VideoAnalyzer: React.FC = () => {
 
         setStatusMessage("Consultando Motor de Física...");
         
-        // Populate Kinetics accurately from the Physics Engine data
         const kinetics: KineticMetrics = {
             verticalOscillation: bestFrame.advanced?.verticalOscillation || "N/A",
             forceApplicationIndex: bestFrame.advanced?.forceFactor || 0,
@@ -378,8 +383,20 @@ const VideoAnalyzer: React.FC = () => {
     window.open(url, '_blank');
   };
 
+  const saveCoachNote = (analysisId: string) => {
+      updateAnalysis(analysisId, { coachNotes: noteText });
+      setSessionAnalyses(prev => prev.map(a => a.id === analysisId ? { ...a, coachNotes: noteText } : a));
+      setEditingNoteId(null);
+  };
+
   const InfoButton = ({ title, text }: { title: string, text: string }) => (
-      <button onClick={(e) => { e.stopPropagation(); setActiveTooltip({ title, text }); }} className="text-slate-400 hover:text-white ml-1 inline-flex pointer-events-auto"><Info size={10} /></button>
+      <button 
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveTooltip({ title, text }); }} 
+        className="text-cyan-400 hover:text-cyan-300 ml-1 inline-flex items-center justify-center bg-slate-800/80 rounded-full w-4 h-4 shadow-sm"
+      >
+          <Info size={10} />
+      </button>
   );
 
   return (
@@ -404,9 +421,10 @@ const VideoAnalyzer: React.FC = () => {
                {analysisHistory.filter(h => h.category === 'Personal' || !h.category).map((item, i) => (
                    <div key={i} className="bg-slate-900 p-3 rounded-xl flex gap-4 cursor-pointer hover:bg-slate-800 border border-slate-800 transition-colors" onClick={() => { setSessionAnalyses([item]); setPreviewUrl(item.thumbnail || null); setIsVideo(false); setViewHistory(false); setAnalysisMode(item.category || 'Personal'); }}>
                        {item.thumbnail && <img src={item.thumbnail} className="w-20 h-14 object-cover rounded-lg bg-black" />}
-                       <div>
+                       <div className="flex-1">
                            <div className="font-bold text-white text-sm">{item.phaseDetected}</div>
                            <div className="flex gap-2 mt-1"><span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400">{new Date(item.savedAt || "").toLocaleDateString()}</span><span className={`text-[10px] px-2 py-0.5 rounded font-bold ${item.score > 80 ? 'text-emerald-400 bg-emerald-900/20' : 'text-yellow-400 bg-yellow-900/20'}`}>Score: {item.score}</span></div>
+                           {item.coachNotes && <div className="mt-1 text-[10px] text-blue-300 bg-blue-900/20 px-2 py-0.5 rounded border border-blue-500/20 w-fit flex items-center gap-1"><MessageCircle size={10}/> Con Nota Staff</div>}
                        </div>
                    </div>
                ))}
@@ -552,18 +570,36 @@ const VideoAnalyzer: React.FC = () => {
                                 </button>
                             </div>
                             
-                            {/* KINETICS CARD with Tooltips and Null Handling */}
+                            {/* COACH NOTE SECTION */}
+                            {(isStaff || analysis.coachNotes) && (
+                                <div className="bg-blue-900/10 border-l-2 border-blue-500 pl-3 py-2 rounded-r relative group mt-2" onClick={e => e.stopPropagation()}>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1"><UserCog size={12}/> Instrucción del Staff</span>
+                                        {isStaff && editingNoteId !== analysis.id && <button onClick={() => { setEditingNoteId(analysis.id); setNoteText(analysis.coachNotes || ""); }} className="text-slate-500 hover:text-white"><Wrench size={12}/></button>}
+                                    </div>
+                                    {isStaff && editingNoteId === analysis.id ? (
+                                        <div className="flex gap-2">
+                                            <input type="text" value={noteText} onChange={e => setNoteText(e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white" placeholder="Ej: Mejorar dorsiflexión..." autoFocus/>
+                                            <button onClick={() => saveCoachNote(analysis.id)} className="bg-blue-600 px-2 rounded text-xs font-bold text-white">OK</button>
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-slate-300 italic">{analysis.coachNotes || (isStaff ? "Añadir nota técnica..." : "")}</p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* KINETICS CARD with Tooltips */}
                             {analysis.kinetics && (
-                                <div className="grid grid-cols-3 gap-2 bg-slate-950/50 p-2 rounded-lg border border-slate-800 relative">
+                                <div className="grid grid-cols-3 gap-2 bg-slate-950/50 p-2 rounded-lg border border-slate-800 relative mt-2">
                                     <div className="text-center">
                                         <div className="text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
-                                            Oscilación <InfoButton title="Oscilación Vertical" text="Desplazamiento del Centro de Masa. Menos es más eficiente."/>
+                                            Oscilación <InfoButton title="Oscilación Vertical" text="Desplazamiento del Centro de Masa. Menos es más eficiente (Ideal < 5cm)."/>
                                         </div>
                                         <div className="text-sm font-mono text-white">{analysis.kinetics.verticalOscillation !== '-' ? analysis.kinetics.verticalOscillation : <span className="text-slate-600">--</span>}</div>
                                     </div>
                                     <div className="text-center border-l border-slate-800">
                                         <div className="text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
-                                            GCT <InfoButton title="Ground Contact Time" text="Tiempo de contacto. Elite < 0.10s. Si está vacío, video muy corto."/>
+                                            GCT <InfoButton title="Ground Contact Time" text="Tiempo de contacto. Elite < 0.10s. Si está vacío, video muy corto para cálculo fiable."/>
                                         </div>
                                         <div className={`text-sm font-mono font-bold ${analysis.kinetics.groundContactTime && parseFloat(analysis.kinetics.groundContactTime) < 0.12 ? 'text-emerald-400' : 'text-white'}`}>
                                             {analysis.kinetics.groundContactTime || <span className="text-slate-600 font-normal">Calc...</span>}
@@ -571,7 +607,7 @@ const VideoAnalyzer: React.FC = () => {
                                     </div>
                                     <div className="text-center border-l border-slate-800">
                                         <div className="text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
-                                            Force Eff. <InfoButton title="Force Efficiency" text="Índice de aplicación de fuerza horizontal (0-100)."/>
+                                            Force Eff. <InfoButton title="Force Efficiency" text="Índice de aplicación de fuerza horizontal (0-100). Basado en aceleración del CoM."/>
                                         </div>
                                         <div className="text-sm font-mono text-white">
                                             {analysis.kinetics.forceApplicationIndex > 0 ? `${analysis.kinetics.forceApplicationIndex}/100` : <span className="text-slate-600">--</span>}
@@ -623,7 +659,7 @@ const VideoAnalyzer: React.FC = () => {
                            </div>
                        </div>
 
-                       {/* Data Table */}
+                       {/* Data Table with Tooltips */}
                        <div className="border border-slate-700 rounded-lg overflow-hidden">
                            <table className="w-full text-xs text-left">
                                <thead className="bg-slate-950 text-slate-400 font-bold uppercase">
@@ -635,12 +671,12 @@ const VideoAnalyzer: React.FC = () => {
                                </thead>
                                <tbody className="divide-y divide-slate-800 bg-slate-900">
                                    <tr>
-                                       <td className="p-2 text-slate-300">GCT (Contacto)</td>
+                                       <td className="p-2 text-slate-300 flex items-center gap-1">GCT <InfoButton title="Ground Contact Time" text="Tiempo de contacto. Elite < 0.10s."/></td>
                                        <td className="p-2 font-mono text-cyan-400 font-bold">{showReportModal.kinetics?.groundContactTime || '-'}</td>
                                        <td className="p-2 text-right"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span></td>
                                    </tr>
                                    <tr>
-                                       <td className="p-2 text-slate-300">Vuelo</td>
+                                       <td className="p-2 text-slate-300 flex items-center gap-1">Vuelo <InfoButton title="Air Time" text="Tiempo en el aire entre pasos."/></td>
                                        <td className="p-2 font-mono text-white">{showReportModal.kinetics?.airTime || '-'}</td>
                                        <td className="p-2 text-right"><span className="w-2 h-2 rounded-full bg-slate-500 inline-block"></span></td>
                                    </tr>
@@ -650,7 +686,7 @@ const VideoAnalyzer: React.FC = () => {
                                        <td className="p-2 text-right"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span></td>
                                    </tr>
                                    <tr>
-                                       <td className="p-2 text-slate-300">Force Index</td>
+                                       <td className="p-2 text-slate-300 flex items-center gap-1">Force Index <InfoButton title="Force Efficiency" text="Índice 0-100 de aplicación de fuerza."/></td>
                                        <td className="p-2 font-mono text-white">{showReportModal.kinetics?.forceApplicationIndex || '-'}</td>
                                        <td className="p-2 text-right"><span className="w-2 h-2 rounded-full bg-cyan-500 inline-block"></span></td>
                                    </tr>
@@ -658,7 +694,15 @@ const VideoAnalyzer: React.FC = () => {
                            </table>
                        </div>
 
-                       {/* Coach Notes */}
+                       {/* Coach Notes in Modal */}
+                       {showReportModal.coachNotes && (
+                           <div className="bg-blue-900/20 border-l-2 border-blue-500 pl-3 py-2 rounded-r">
+                               <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1 flex items-center gap-1"><UserCog size={12}/> Nota Staff</div>
+                               <p className="text-sm text-slate-300 italic">{showReportModal.coachNotes}</p>
+                           </div>
+                       )}
+
+                       {/* Coach AI Notes */}
                        <div>
                            <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Correcciones Prioritarias</h4>
                            <ul className="space-y-1">

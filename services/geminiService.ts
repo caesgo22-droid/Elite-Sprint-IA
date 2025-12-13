@@ -204,9 +204,9 @@ export const generateTrainingPlan = async (
       return {
           id: Date.now().toString(),
           createdAt: new Date().toISOString(),
-          weeklyGoal: "Desarrollo Mecánico (Offline Mode)",
+          weeklyGoal: "Desarrollo Mecánico (Modo Offline)",
           phase: phaseName as any,
-          rationale: "Estrategia basada en periodización ondulante clásica (Bondarchuk) para mantenimiento estructural.",
+          rationale: "Plan generado localmente debido a falta de conexión API.",
           sessions: sessions as any,
           focusEvent: focusEvent || profile.events[0],
           acwrStatus: acwr as any,
@@ -219,31 +219,23 @@ export const generateTrainingPlan = async (
     // BLINDAJE DE SEGURIDAD (ACWR Safety Lock)
     let safetyLockProtocol = "";
     if (acwr && acwr.ratio > 1.3) {
-        safetyLockProtocol = `¡ALERTA ROJA! ACWR ES ${acwr.ratio} (ALTO RIESGO). PROHIBIDO ASIGNAR INTENSIDAD 'MAX' O 'PLYOMETRICS'. SE REQUIERE DESCARGA TÉCNICA O TEMPO EXTENSIVO.`;
+        safetyLockProtocol = `ACWR ALTO (${acwr.ratio}). NO INTENSIDAD 'MAX'.`;
     } else if (readiness.soreness > 7 || readiness.fatigue > 8) {
-        safetyLockProtocol = `ALERTA DE FATIGA: El atleta reporta dolor/fatiga severa. Asigna SOLO sesiones de recuperación o movilidad.`;
+        safetyLockProtocol = `FATIGA SEVERA. SOLO RECUPERACIÓN.`;
     }
 
     const prompt = `
-      ACTÚA COMO: DIRECTOR DE ALTO RENDIMIENTO (WORLD ATHLETICS LEVEL V).
+      ACTÚA: DIRECTOR ALTO RENDIMIENTO.
+      ATLETA: Nivel ${profile.experienceLevel}, Evento ${focusEvent}, Fase ${phaseName}.
+      READINESS: ${cnsScore.toFixed(1)}/10. ACWR: ${acwr ? acwr.ratio : 'N/A'}.
+      ${safetyLockProtocol ? `PROTOCOLO SEGURIDAD: ${safetyLockProtocol}` : ''}
       
-      PACIENTE (ATLETA):
-      - Nivel: ${profile.experienceLevel || 'Intermedio'}
-      - Evento: ${focusEvent || "100m"}
-      - Fase: ${phaseName}.
-      - Readiness: ${cnsScore.toFixed(1)}/10.
-      - ACWR: ${acwr ? acwr.ratio : 'N/A'}.
+      TAREA: Microciclo para: ${targetDaysES.join(", ")}.
       
-      PROTOCOLO DE SEGURIDAD ACTIVO: ${safetyLockProtocol}
-      
-      TAREA CRÍTICA:
-      Generar un microciclo de entrenamiento DETALLADO para: ${targetDaysES.join(", ")}.
-      
-      REGLAS DE ORO (VERACIDAD TÉCNICA):
-      1. Genera sesiones SOLO para los días listados.
-      2. EL "trackRoutine" DEBE SER RICO: Calentamiento específico + Drills (Wickets/Sleds) + Trabajo Principal + Cooldown.
-      3. Usa terminología de élite (Fly 10m, Freelap, Triple Extension, Dorsiflexion).
-      4. Si el protocolo de seguridad prohíbe intensidad MAX, obedece estrictamente.
+      REGLAS:
+      1. Solo días listados.
+      2. Rutinas trackRoutine detalladas (Drills + Main + Cooldown).
+      3. Terminología técnica.
       
       SALIDA: JSON estricto.
     `;
@@ -319,41 +311,23 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
   try {
     const hasMetrics = advancedMetrics && advancedMetrics.velocity !== '-';
     
-    // Injecting the new calculated GCT and Air Time into the prompt context
-    const physicsContext = hasMetrics ? `
-      DATOS CINÉTICOS (Calculados por Physics Engine 2.0):
-      - Velocidad Horizontal CoM: ${advancedMetrics.velocity}
-      - Tiempo de Contacto (GCT): ${advancedMetrics.groundContactTime || "N/A"} (CRÍTICO: Élite < 0.100s)
-      - Tiempo de Vuelo: ${advancedMetrics.airTime || "N/A"}
-      - Frecuencia: ${advancedMetrics.frequency || "N/A"}
-      - Oscilación Vertical: ${advancedMetrics.verticalOscillation || 'N/A'}.
-      - Force Index: ${advancedMetrics.forceFactor || 'N/A'}/100.
-    ` : "Datos cinéticos no disponibles (Video estático o error de tracking).";
+    // COMPRESSED CONTEXT (Token Saving)
+    const metricsTxt = hasMetrics ? 
+      `GCT:${advancedMetrics.groundContactTime||"N/A"}, Vuelo:${advancedMetrics.airTime||"N/A"}, Vel:${advancedMetrics.velocity}` : 
+      "Sin métricas cinéticas.";
 
-    const bioContext = bioData ? `
-      ÁNGULOS (MediaPipe):
-      - Rodilla (Recobro): ${bioData.knee.value}
-      - Cadera (Extensión): ${bioData.hip.value}
-      - Torso (Inclinación): ${bioData.torso.value}
-      ${physicsContext}
-    ` : "Estimación visual (Sin datos de sensor).";
+    const anglesTxt = bioData ? 
+      `Rodilla:${bioData.knee.value}, Cadera:${bioData.hip.value}, Torso:${bioData.torso.value}` : 
+      "Sin ángulos.";
 
     const promptText = `
-      ACTÚA COMO: BIOMECÁNICO DEL DEPORTE (PHD).
-      
-      TAREA:
-      Analiza las imágenes del sprint (Kinograma).
-      
-      DATOS SENSOR (HARD DATA): ${bioContext}
-      
-      CRITERIOS (Modelo Ralph Mann):
-      1. Contacto: Si el GCT es > 0.120s en Max V, critícalo duramente (Demasiado tiempo en el suelo).
-      2. Recobro: ¿Talón cerrado al glúteo?
-      3. Despegue: ¿Extensión completa de cadera?
-      
-      IMPORTANTE:
-      Usa los datos "HARD DATA" para validar tu análisis visual. Si el GCT es bajo (<0.100s), elogia la reactividad.
-      
+      ACTÚA: BIOMECÁNICO.
+      ANALIZA IMAGENES SPRINT.
+      DATOS: ${metricsTxt}. ${anglesTxt}.
+      CRITERIOS:
+      1. GCT > 0.12s es lento.
+      2. Talón cerca glúteo en recobro.
+      3. Extensión cadera completa.
       SALIDA: JSON estricto.
     `;
 
@@ -397,34 +371,34 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
 export const chatWithCoach = async (history: any[], message: string, context: any) => {
   if (!ai) return { text: "⚠️ API Key faltante.", functionCall: null };
   try {
-    const prunedHistory = history.slice(-6); 
-    const recentLogs = context.logs?.slice(-3).map((l:any) => `[${l.date}] ${l.event}: ${l.time}s`).join("; ") || "Sin data.";
+    // 1. COMPRESS HISTORY (Token Optimization)
+    // Reduce history to last 4 interactions to save tokens
+    const prunedHistory = history.slice(-4); 
     
-    const recentFeedback = context.plan?.sessions
+    // 2. COMPRESS CONTEXT (Token Optimization)
+    // Instead of sending full JSON objects, send concise text summaries.
+    const planSummary = context.plan ? 
+        `PLAN ACTUAL: Fase ${context.plan.phase}, Objetivo: ${context.plan.weeklyGoal}. Hoy: ${context.plan.sessions?.find((s:any) => s.day === 'Hoy')?.focus || 'Descanso'}.` : 
+        "Sin plan activo.";
+    
+    const logsSummary = context.logs?.slice(-3).map((l:any) => `${l.event}:${l.time}s`).join(", ") || "Sin tiempos recientes.";
+    
+    const feedbackSummary = context.plan?.sessions
         ?.filter((s:any) => s.feedback && s.feedback.completed)
-        ?.slice(-2)
-        ?.map((s:any) => `[${s.day}]: RPE ${s.feedback.rpe}/10, Dolor ${s.feedback.painLevel}/10`)
-        ?.join("; ") || "Sin feedback reciente.";
+        ?.slice(-1) // Only last session feedback
+        ?.map((s:any) => `Feedback reciente: RPE ${s.feedback.rpe}/10`)
+        ?.join("") || "";
 
     const injuryReport = context.profile.injuries?.length > 0 
-        ? context.profile.injuries.map((i:any) => `LESIÓN ACTIVA: ${i.location} (${i.severity})`).join(", ")
-        : "Salud Óptima.";
+        ? `LESIÓN: ${context.profile.injuries[0].location}`
+        : "Salud OK";
 
-    // Hardened System Prompt
+    // Hardened & Compressed System Prompt
     const systemPrompt = `
-      ERES: El Staff Técnico Completo (Entrenador, Biomecánico, Fisio) de Nivel Mundial.
-      
-      EXPEDIENTE ATLETA:
-      - Nombre: ${context.profile.name}
-      - Estado Salud: ${injuryReport}.
-      - ACWR: ${context.acwr?.ratio || 'N/A'} (Si > 1.3, eres MUY conservador).
-      - Feedback: ${recentFeedback}
-      
-      INSTRUCCIONES DE BLINDAJE:
-      1. Si el usuario pide entrenar más duro pero tiene dolor o ACWR alto, NIÉGATE educadamente y explica la fisiología.
-      2. Sé breve, técnico y basado en evidencia (Altis, Charlie Francis).
-      
-      Responde con autoridad.
+      ERES: Staff Técnico Elite.
+      ATLETA: ${context.profile.name}. ${injuryReport}. ACWR: ${context.acwr?.ratio || 'N/A'}.
+      DATOS: ${planSummary} ${logsSummary} ${feedbackSummary}
+      INSTRUCCIÓN: Respuestas cortas y técnicas (<50 palabras). Si ACWR > 1.3 o dolor, sugiere descanso.
     `;
 
     const chat = ai.chats.create({
@@ -442,10 +416,10 @@ export const generateNexusInsight = async (logs: any[], readiness: any, lastAnal
     if(!ai) return null;
     try {
         const prompt = `
-            ACTÚA COMO: ALGORITMO DE DETECCIÓN DE TALENTO Y RENDIMIENTO.
-            Analiza correlaciones entre Fatiga (${JSON.stringify(readiness)}), Técnica (${lastAnalysis ? lastAnalysis.score : "N/A"}) y Carga ACWR (${acwr?.ratio || 0}).
-            Si el GCT en el último análisis fue > 0.12s, menciona la necesidad de pliometría reactiva.
-            Salida JSON estricta.
+            ACTÚA: ALGORITMO DETECCIÓN TALENTO.
+            DATOS: Fatiga ${JSON.stringify(readiness)}, Score Tec ${lastAnalysis ? lastAnalysis.score : "N/A"}, ACWR ${acwr?.ratio || 0}.
+            TAREA: Insight corto sobre rendimiento.
+            SALIDA: JSON.
         `;
 
         const response = await ai.models.generateContent({

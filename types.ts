@@ -95,6 +95,7 @@ export interface BiomechanicalAnalysis {
   thumbnail?: string;
   savedAt?: string;
   timestamp?: number; // Exact video timestamp for verification
+  coachNotes?: string; // NEW: Staff feedback on video
 }
 
 export interface PerformanceLog {
