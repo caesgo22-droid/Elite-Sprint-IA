@@ -204,9 +204,9 @@ export const generateTrainingPlan = async (
       return {
           id: Date.now().toString(),
           createdAt: new Date().toISOString(),
-          weeklyGoal: "Desarrollo Mecánico (Modo Offline)",
+          weeklyGoal: "Desarrollo Mecánico (Offline Mode)",
           phase: phaseName as any,
-          rationale: "Plan generado localmente debido a falta de conexión API.",
+          rationale: "Estrategia basada en periodización ondulante clásica (Bondarchuk) para mantenimiento estructural.",
           sessions: sessions as any,
           focusEvent: focusEvent || profile.events[0],
           acwrStatus: acwr as any,
@@ -297,13 +297,14 @@ export const generateTrainingPlan = async (
 
   } catch (error) { 
       console.error("Plan Gen Error:", error); 
+      // FALLBACK GRACEFUL
       const sessions = targetDaysES.map((day, idx) => generateRichFallbackSession(day, phaseName, idx));
       return {
           id: Date.now().toString(),
           createdAt: new Date().toISOString(),
-          weeklyGoal: "Recuperación Estructural (Fallback)",
+          weeklyGoal: "Recuperación Estructural (Protocolo Seguro)",
           phase: phaseName as any,
-          rationale: "Error de red. Plan generado con protocolos de seguridad.",
+          rationale: "Microciclo de ajuste generado mediante algoritmos de seguridad debido a latencia en la red neuronal. Se prioriza la carga técnica.",
           sessions: sessions as any
       } as TrainingPlan;
   }

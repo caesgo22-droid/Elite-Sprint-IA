@@ -325,6 +325,7 @@ const VideoAnalyzer: React.FC = () => {
 
         setStatusMessage("Consultando Motor de Física...");
         
+        // Populate Kinetics accurately from the Physics Engine data
         const kinetics: KineticMetrics = {
             verticalOscillation: bestFrame.advanced?.verticalOscillation || "N/A",
             forceApplicationIndex: bestFrame.advanced?.forceFactor || 0,
@@ -551,19 +552,30 @@ const VideoAnalyzer: React.FC = () => {
                                 </button>
                             </div>
                             
+                            {/* KINETICS CARD with Tooltips and Null Handling */}
                             {analysis.kinetics && (
-                                <div className="grid grid-cols-3 gap-2 bg-slate-950/50 p-2 rounded-lg border border-slate-800">
+                                <div className="grid grid-cols-3 gap-2 bg-slate-950/50 p-2 rounded-lg border border-slate-800 relative">
                                     <div className="text-center">
-                                        <div className="text-[10px] text-slate-500 uppercase font-bold">Oscilación</div>
-                                        <div className="text-sm font-mono text-white">{analysis.kinetics.verticalOscillation}</div>
+                                        <div className="text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
+                                            Oscilación <InfoButton title="Oscilación Vertical" text="Desplazamiento del Centro de Masa. Menos es más eficiente."/>
+                                        </div>
+                                        <div className="text-sm font-mono text-white">{analysis.kinetics.verticalOscillation !== '-' ? analysis.kinetics.verticalOscillation : <span className="text-slate-600">--</span>}</div>
                                     </div>
                                     <div className="text-center border-l border-slate-800">
-                                        <div className="text-[10px] text-slate-500 uppercase font-bold">GCT</div>
-                                        <div className={`text-sm font-mono font-bold ${analysis.kinetics.groundContactTime && parseFloat(analysis.kinetics.groundContactTime) < 0.12 ? 'text-emerald-400' : 'text-white'}`}>{analysis.kinetics.groundContactTime || '-'}</div>
+                                        <div className="text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
+                                            GCT <InfoButton title="Ground Contact Time" text="Tiempo de contacto. Elite < 0.10s. Si está vacío, video muy corto."/>
+                                        </div>
+                                        <div className={`text-sm font-mono font-bold ${analysis.kinetics.groundContactTime && parseFloat(analysis.kinetics.groundContactTime) < 0.12 ? 'text-emerald-400' : 'text-white'}`}>
+                                            {analysis.kinetics.groundContactTime || <span className="text-slate-600 font-normal">Calc...</span>}
+                                        </div>
                                     </div>
                                     <div className="text-center border-l border-slate-800">
-                                        <div className="text-[10px] text-slate-500 uppercase font-bold">Force Eff.</div>
-                                        <div className="text-sm font-mono text-white">{analysis.kinetics.forceApplicationIndex}/100</div>
+                                        <div className="text-[10px] text-slate-500 uppercase font-bold flex items-center justify-center gap-1">
+                                            Force Eff. <InfoButton title="Force Efficiency" text="Índice de aplicación de fuerza horizontal (0-100)."/>
+                                        </div>
+                                        <div className="text-sm font-mono text-white">
+                                            {analysis.kinetics.forceApplicationIndex > 0 ? `${analysis.kinetics.forceApplicationIndex}/100` : <span className="text-slate-600">--</span>}
+                                        </div>
                                     </div>
                                 </div>
                             )}

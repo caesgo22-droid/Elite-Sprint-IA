@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { Zap, TrendingUp, CalendarCheck, CheckSquare, X, BatteryCharging, ArrowRight, BrainCircuit, Sparkles, Activity, Clock, MapPin, Info, MessageCircle, HeartPulse, Stethoscope, AlertTriangle, UserCog } from 'lucide-react';
+import { Zap, TrendingUp, CalendarCheck, CheckSquare, X, BatteryCharging, ArrowRight, BrainCircuit, Sparkles, Activity, Clock, MapPin, Info, MessageCircle, HeartPulse, Stethoscope, AlertTriangle, UserCog, Calendar, Save, ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { calculateRecovery } from '../utils/recoveryEngine';
@@ -17,7 +17,13 @@ export const HomeDashboard: React.FC = () => {
   const [showSundayPrompt, setShowSundayPrompt] = useState(false);
   const [activeTooltip, setActiveTooltip] = useState<{title: string, text: string} | null>(null);
   const [recoveryPlan, setRecoveryPlan] = useState<any>(null);
+  
+  // Therapy Modal State
   const [showTherapyModal, setShowTherapyModal] = useState(false);
+  const [therapyStep, setTherapyStep] = useState<'select' | 'details'>('select');
+  const [selectedTherapy, setSelectedTherapy] = useState('');
+  const [therapyDate, setTherapyDate] = useState(new Date().toISOString().split('T')[0]);
+  const [therapyNote, setTherapyNote] = useState('');
   
   // Nexus Local Loading State
   const [loadingNexus, setLoadingNexus] = useState(false);
@@ -102,16 +108,22 @@ export const HomeDashboard: React.FC = () => {
       window.open(url, '_blank');
   };
 
-  const handleTherapyLog = (type: string) => {
+  // --- THERAPY FLOW ---
+  const handleSelectTherapy = (type: string) => {
+      setSelectedTherapy(type);
+      setTherapyStep('details');
+  };
+
+  const handleSaveTherapy = () => {
       // 1. Log the event
       addLog({
           id: Date.now().toString(),
-          date: new Date().toISOString().split('T')[0],
+          date: therapyDate,
           event: 'Therapy',
           type: 'Recovery',
           location: 'Clínica / Casa',
           time: 0,
-          notes: `Sesión de ${type}`
+          notes: `${selectedTherapy}: ${therapyNote}`
       });
 
       // 2. Reduce Readiness Stress/Soreness (Simulated impact)
@@ -121,8 +133,12 @@ export const HomeDashboard: React.FC = () => {
           fatigue: Math.max(1, prev.fatigue - 1)
       }));
 
+      // Reset & Close
       setShowTherapyModal(false);
-      alert("✅ Sesión registrada. La IA detectará la carga 0 para reducir el ACWR.");
+      setTherapyStep('select');
+      setTherapyNote('');
+      setTherapyDate(new Date().toISOString().split('T')[0]);
+      alert("✅ Sesión registrada en el historial. ACWR ajustado.");
   };
 
   const InfoButton = ({ title, text }: { title: string, text: string }) => (
@@ -200,7 +216,7 @@ export const HomeDashboard: React.FC = () => {
 
       {/* QUICK ACTIONS ROW */}
       <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-          <button onClick={() => setShowTherapyModal(true)} className="flex items-center gap-2 px-4 py-3 bg-slate-900/80 border border-slate-800 rounded-xl hover:bg-slate-800 transition-all shrink-0">
+          <button onClick={() => { setShowTherapyModal(true); setTherapyStep('select'); }} className="flex items-center gap-2 px-4 py-3 bg-slate-900/80 border border-slate-800 rounded-xl hover:bg-slate-800 transition-all shrink-0">
               <Stethoscope size={16} className="text-emerald-400" />
               <div className="text-left">
                   <div className="text-xs font-bold text-white">Bitácora Terapia</div>
@@ -280,28 +296,62 @@ export const HomeDashboard: React.FC = () => {
           <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm animate-in zoom-in-95">
                   <div className="flex justify-between items-center mb-4">
-                      <h3 className="font-bold text-white flex items-center gap-2"><Stethoscope size={18} className="text-emerald-400"/> Registrar Recuperación</h3>
+                      <h3 className="font-bold text-white flex items-center gap-2">
+                          {therapyStep === 'details' && <button onClick={() => setTherapyStep('select')} className="text-slate-400 hover:text-white mr-1"><ChevronLeft size={18}/></button>}
+                          <Stethoscope size={18} className="text-emerald-400"/> 
+                          {therapyStep === 'select' ? 'Nueva Terapia' : 'Detalles Sesión'}
+                      </h3>
                       <button onClick={() => setShowTherapyModal(false)}><X className="text-slate-400"/></button>
                   </div>
-                  <p className="text-xs text-slate-400 mb-4">Esto registrará un evento de <strong className="text-emerald-400">Carga 0</strong>, reduciendo tu ACWR.</p>
-                  <div className="grid grid-cols-2 gap-3">
-                      <button onClick={() => handleTherapyLog('Fisioterapia')} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 p-4 rounded-xl flex flex-col items-center gap-2 transition-colors">
-                          <HeartPulse size={24} className="text-red-400"/>
-                          <span className="text-xs font-bold text-white">Fisioterapia</span>
-                      </button>
-                      <button onClick={() => handleTherapyLog('Masaje')} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 p-4 rounded-xl flex flex-col items-center gap-2 transition-colors">
-                          <Activity size={24} className="text-cyan-400"/>
-                          <span className="text-xs font-bold text-white">Masaje</span>
-                      </button>
-                      <button onClick={() => handleTherapyLog('Crioterapia')} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 p-4 rounded-xl flex flex-col items-center gap-2 transition-colors">
-                          <div className="text-2xl">❄️</div>
-                          <span className="text-xs font-bold text-white">Hielo / Crio</span>
-                      </button>
-                      <button onClick={() => handleTherapyLog('Descanso Activo')} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 p-4 rounded-xl flex flex-col items-center gap-2 transition-colors">
-                          <div className="text-2xl">🧘</div>
-                          <span className="text-xs font-bold text-white">Descanso Activo</span>
-                      </button>
-                  </div>
+                  
+                  {therapyStep === 'select' ? (
+                      <>
+                        <p className="text-xs text-slate-400 mb-4">Selecciona el tipo de recuperación para registrar en la bitácora.</p>
+                        <div className="grid grid-cols-2 gap-3">
+                            <button onClick={() => handleSelectTherapy('Fisioterapia')} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 p-4 rounded-xl flex flex-col items-center gap-2 transition-colors group">
+                                <HeartPulse size={24} className="text-red-400 group-hover:scale-110 transition-transform"/>
+                                <span className="text-xs font-bold text-white">Fisioterapia</span>
+                            </button>
+                            <button onClick={() => handleSelectTherapy('Masaje')} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 p-4 rounded-xl flex flex-col items-center gap-2 transition-colors group">
+                                <Activity size={24} className="text-cyan-400 group-hover:scale-110 transition-transform"/>
+                                <span className="text-xs font-bold text-white">Masaje</span>
+                            </button>
+                            <button onClick={() => handleSelectTherapy('Crioterapia')} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 p-4 rounded-xl flex flex-col items-center gap-2 transition-colors group">
+                                <div className="text-2xl group-hover:scale-110 transition-transform">❄️</div>
+                                <span className="text-xs font-bold text-white">Hielo / Crio</span>
+                            </button>
+                            <button onClick={() => handleSelectTherapy('Descanso Activo')} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 p-4 rounded-xl flex flex-col items-center gap-2 transition-colors group">
+                                <div className="text-2xl group-hover:scale-110 transition-transform">🧘</div>
+                                <span className="text-xs font-bold text-white">Descanso Activo</span>
+                            </button>
+                        </div>
+                      </>
+                  ) : (
+                      <div className="space-y-4 animate-in slide-in-from-right-4">
+                          <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700 text-center">
+                              <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest">{selectedTherapy}</span>
+                          </div>
+                          
+                          <div>
+                              <label className="text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1"><Calendar size={12}/> Fecha</label>
+                              <input type="date" value={therapyDate} onChange={e => setTherapyDate(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white text-sm outline-none focus:border-emerald-500"/>
+                          </div>
+
+                          <div>
+                              <label className="text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1"><UserCog size={12}/> Nota Clínica / Detalles</label>
+                              <textarea 
+                                  value={therapyNote} 
+                                  onChange={e => setTherapyNote(e.target.value)} 
+                                  placeholder="Ej: Punción seca en isquios, descarga de gemelos..."
+                                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white text-sm h-24 resize-none outline-none focus:border-emerald-500"
+                              />
+                          </div>
+
+                          <button onClick={handleSaveTherapy} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20">
+                              <Save size={16}/> Guardar Registro
+                          </button>
+                      </div>
+                  )}
               </div>
           </div>
       )}
