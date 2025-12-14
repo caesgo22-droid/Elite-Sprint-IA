@@ -10,7 +10,7 @@ import { generateNexusInsight } from '../services/geminiService';
 import { NexusInsight } from '../types';
 
 export const HomeDashboard: React.FC = () => {
-  const { userProfile, currentPlan, logs, updateSession, lastAnalysis, acwrStats, nexusInsight, setNexusInsight, addLog } = useApp();
+  const { userProfile, currentPlan, logs, updateSession, lastAnalysis, acwrStats, nexusInsight, setNexusInsight, addLog, t, language } = useApp();
   const navigate = useNavigate();
   
   const [showFeedbackModal, setShowFeedbackModal] = useState<any>(null);
@@ -43,13 +43,13 @@ export const HomeDashboard: React.FC = () => {
 
           if (logs.length > 0 || lastAnalysis || acwrStats) {
               setLoadingNexus(true);
-              const insight = await generateNexusInsight(logs, readiness, lastAnalysis, acwrStats);
+              const insight = await generateNexusInsight(logs, readiness, lastAnalysis, acwrStats, language); // Pass language
               if (insight) setNexusInsight(insight);
               setLoadingNexus(false);
           }
       };
       fetchNexus();
-  }, [logs.length, lastAnalysis, acwrStats?.ratio, nexusInsight]);
+  }, [logs.length, lastAnalysis, acwrStats?.ratio, nexusInsight, language]); // Re-run if language changes
 
   const getTodaySession = () => {
       if (!currentPlan) return null;
@@ -171,7 +171,7 @@ export const HomeDashboard: React.FC = () => {
                   <h2 className="text-xl font-bold text-white flex items-center gap-2">
                       <BrainCircuit className="text-purple-400" /> Nexus Elite
                   </h2>
-                  <p className="text-xs text-slate-400">Inteligencia de Alto Rendimiento</p>
+                  <p className="text-xs text-slate-400">{t.dashboard.nexusTitle}</p>
               </div>
               {nexusInsight && (
                   <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
@@ -187,7 +187,7 @@ export const HomeDashboard: React.FC = () => {
           
           {loadingNexus ? (
               <div className="h-20 flex items-center justify-center text-slate-500 text-xs animate-pulse">
-                  Correlacionando Biomecánica, Fisiología y Tiempos...
+                  {t.dashboard.nexusLoading}
               </div>
           ) : nexusInsight ? (
               <div className="relative z-10 space-y-2">
@@ -209,8 +209,8 @@ export const HomeDashboard: React.FC = () => {
 
       {showSundayPrompt && (
           <div className="bg-gradient-to-r from-cyan-900 to-blue-900 p-4 rounded-xl border border-cyan-500/30 flex items-center justify-between shadow-lg">
-              <div><h3 className="text-white font-bold text-sm">¡Es Domingo!</h3><p className="text-cyan-200 text-xs">Hora de planificar la semana.</p></div>
-              <button onClick={() => navigate('/plan')} className="bg-white text-cyan-900 text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1">Planificar <ArrowRight size={12}/></button>
+              <div><h3 className="text-white font-bold text-sm">{t.dashboard.sundayPrompt}</h3></div>
+              <button onClick={() => navigate('/plan')} className="bg-white text-cyan-900 text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1">{t.dashboard.planBtn} <ArrowRight size={12}/></button>
           </div>
       )}
 
@@ -219,15 +219,15 @@ export const HomeDashboard: React.FC = () => {
           <button onClick={() => { setShowTherapyModal(true); setTherapyStep('select'); }} className="flex items-center gap-2 px-4 py-3 bg-slate-900/80 border border-slate-800 rounded-xl hover:bg-slate-800 transition-all shrink-0">
               <Stethoscope size={16} className="text-emerald-400" />
               <div className="text-left">
-                  <div className="text-xs font-bold text-white">Bitácora Terapia</div>
-                  <div className="text-[9px] text-emerald-400">Bajar ACWR</div>
+                  <div className="text-xs font-bold text-white">{t.dashboard.quickAction}</div>
+                  <div className="text-[9px] text-emerald-400">{t.dashboard.quickActionSub}</div>
               </div>
           </button>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div onClick={() => navigate('/tracker')} className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex flex-col justify-between relative overflow-hidden cursor-pointer hover:bg-slate-900/80 transition-colors">
-          <div className="flex items-center gap-2 text-emerald-400 mb-2 z-10"><TrendingUp size={18} /><span className="text-xs font-semibold uppercase">Progreso</span></div>
+          <div className="flex items-center gap-2 text-emerald-400 mb-2 z-10"><TrendingUp size={18} /><span className="text-xs font-semibold uppercase">{t.dashboard.progress}</span></div>
           <div className="absolute bottom-2 left-0 right-0 h-12 px-2">
              {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -241,7 +241,7 @@ export const HomeDashboard: React.FC = () => {
           </div>
         </div>
         <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex flex-col justify-between">
-          <div className="flex items-center gap-2 text-cyan-400 mb-2"><Zap size={18} /><span className="text-xs font-semibold uppercase">Fase</span></div>
+          <div className="flex items-center gap-2 text-cyan-400 mb-2"><Zap size={18} /><span className="text-xs font-semibold uppercase">{t.dashboard.phase}</span></div>
           <span className="text-lg font-bold leading-tight">{currentPlan?.phase || "Base"}</span>
         </div>
       </div>
@@ -250,7 +250,7 @@ export const HomeDashboard: React.FC = () => {
         <div className="bg-slate-800/50 p-4 flex items-center justify-between border-b border-slate-800 shrink-0 sticky top-0 z-10">
           <div className="flex items-center gap-2">
             <CalendarCheck size={18} className="text-cyan-400" />
-            <h3 className="font-semibold text-lg">Hoy ({dayNameES})</h3>
+            <h3 className="font-semibold text-lg">{t.dashboard.today}</h3>
           </div>
           <div className="flex gap-2">
              {todaysSession && (
@@ -273,33 +273,33 @@ export const HomeDashboard: React.FC = () => {
                   </div>
               )}
 
-              <div><span className="text-slate-400 text-xs uppercase tracking-wider block mb-1">Enfoque Principal</span><p className="text-xl font-medium text-white">{todaysSession.focus}</p></div>
+              <div><span className="text-slate-400 text-xs uppercase tracking-wider block mb-1">{t.dashboard.focus}</span><p className="text-xl font-medium text-white">{todaysSession.focus}</p></div>
               
               {/* KPI TÉCNICO DIARIO */}
               {todaysSession.biomechanicsKpi && (
                   <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-start gap-2">
                       <ScanLine size={16} className="text-cyan-400 mt-0.5 shrink-0"/>
                       <div>
-                          <span className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider block">Foco Biomecánico</span>
+                          <span className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider block">{t.dashboard.bioFocus}</span>
                           <p className="text-sm text-white font-medium">"{todaysSession.biomechanicsKpi}"</p>
                       </div>
                   </div>
               )}
 
-              <div><span className="text-slate-400 text-xs uppercase tracking-wider block mb-2 flex items-center gap-2"><Zap size={12} /> Rutina de Pista</span><ul className="space-y-2">{todaysSession.trackRoutine.map((drill, idx) => (<li key={idx} className="flex items-start gap-2 text-sm text-slate-300"><span className="w-1.5 h-1.5 mt-1.5 rounded-full bg-cyan-500 shrink-0"></span>{drill}</li>))}</ul></div>
+              <div><span className="text-slate-400 text-xs uppercase tracking-wider block mb-2 flex items-center gap-2"><Zap size={12} /> {t.dashboard.routine}</span><ul className="space-y-2">{todaysSession.trackRoutine.map((drill, idx) => (<li key={idx} className="flex items-start gap-2 text-sm text-slate-300"><span className="w-1.5 h-1.5 mt-1.5 rounded-full bg-cyan-500 shrink-0"></span>{drill}</li>))}</ul></div>
               <div className="pt-2 border-t border-slate-800 mt-2">
                  {todaysSession.feedback?.completed ? (
                      <div className="space-y-2">
-                         <div className="flex items-center gap-2 text-emerald-400 text-sm font-bold bg-emerald-900/20 p-2 rounded-lg justify-center"><CheckSquare size={16} /> Sesión Completada ({todaysSession.feedback.rpe}/10)</div>
-                         <button onClick={handleShowRecovery} className="w-full bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors"><BatteryCharging size={14}/> Ver Plan de Recuperación</button>
+                         <div className="flex items-center gap-2 text-emerald-400 text-sm font-bold bg-emerald-900/20 p-2 rounded-lg justify-center"><CheckSquare size={16} /> {t.dashboard.sessionDone} ({todaysSession.feedback.rpe}/10)</div>
+                         <button onClick={handleShowRecovery} className="w-full bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors"><BatteryCharging size={14}/> {t.dashboard.viewRecovery}</button>
                      </div>
                  ) : (
-                     <button onClick={() => setShowFeedbackModal(todaysSession)} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"><CheckSquare size={16} /> Marcar Completada</button>
+                     <button onClick={() => setShowFeedbackModal(todaysSession)} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"><CheckSquare size={16} /> {t.dashboard.markDone}</button>
                  )}
               </div>
             </div>
           ) : (
-            <div className="text-center py-8"><p className="text-slate-400 mb-4">No hay sesión asignada para hoy ({dayNameES}).</p><button onClick={() => navigate('/plan')} className="bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-2 rounded-full text-sm font-semibold">Generar Plan</button></div>
+            <div className="text-center py-8"><p className="text-slate-400 mb-4">{t.dashboard.noSession}</p><button onClick={() => navigate('/plan')} className="bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-2 rounded-full text-sm font-semibold">{t.dashboard.genPlan}</button></div>
           )}
         </div>
       </div>

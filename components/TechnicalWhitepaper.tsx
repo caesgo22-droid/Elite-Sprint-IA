@@ -2,18 +2,24 @@
 import * as React from 'react';
 import { ShieldCheck, X, Cpu, Scale, Eye, FileText, Database, GitBranch, Activity, Server } from 'lucide-react';
 import { DRILL_DATABASE, PHASE_TEMPLATES } from '../services/trainingDatabase';
-
-// Dynamic System Metrics
-const SYSTEM_METRICS = {
-    drillCount: DRILL_DATABASE.length,
-    phaseCount: Object.keys(PHASE_TEMPLATES).length,
-    aiModel: "Gemini 2.5 Flash",
-    physicsEngine: "ElitePhysicsEngine v1.0 (Stateful)",
-    visionModel: "Google MediaPipe Pose (33 Landmarks)",
-    updateFrequency: "Real-time (ACWR & Biomarkers)"
-};
+import { useApp } from '../contexts/AppContext';
 
 export const TechnicalWhitepaper: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const { logs, analysisHistory, userProfile } = useApp();
+
+  // Dynamic System Metrics (Live)
+  const SYSTEM_METRICS = {
+      drillCount: DRILL_DATABASE.length,
+      phaseCount: Object.keys(PHASE_TEMPLATES).length,
+      aiModel: "Gemini 2.5 Flash",
+      physicsEngine: "ElitePhysicsEngine v1.0 (Stateful)",
+      visionModel: "Google MediaPipe Pose (33 Landmarks)",
+      updateFrequency: "Real-time",
+      activeLogs: logs.length, // Real Data
+      videosAnalyzed: analysisHistory.length, // Real Data
+      userStatus: userProfile.injuries.length > 0 ? "Injury Protocol" : "Performance Protocol" // Real Data
+  };
+
   return (
     <div className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
       <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col">
@@ -23,10 +29,10 @@ export const TechnicalWhitepaper: React.FC<{ onClose: () => void }> = ({ onClose
           <div>
             <div className="flex items-center gap-2 mb-1">
                 <ShieldCheck className="text-cyan-400" size={24} />
-                <h2 className="text-xl font-bold text-white tracking-tight">System Architecture & Logic</h2>
+                <h2 className="text-xl font-bold text-white tracking-tight">System Architecture (Live Audit)</h2>
             </div>
             <p className="text-xs text-slate-400 uppercase tracking-widest font-mono">
-                Elite Sprint Coach AI | Version: {new Date().getFullYear()}.{new Date().getMonth() + 1}
+                Elite Sprint Coach AI | Status: ONLINE | Mode: {SYSTEM_METRICS.userStatus}
             </p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full transition-colors"><X className="text-slate-400" /></button>
@@ -40,7 +46,7 @@ export const TechnicalWhitepaper: React.FC<{ onClose: () => void }> = ({ onClose
             <h3 className="text-cyan-100 font-bold mb-2 text-base">Propósito del Sistema</h3>
             <p className="text-slate-300">
               Esta plataforma opera como un <strong>Sistema de Soporte a la Decisión (DSS)</strong> de Nivel V. 
-              No utiliza generación aleatoria; emplea una arquitectura <em>Omni-Consciente</em> que cruza datos biomecánicos, fisiológicos y de planificación en tiempo real para emular el razonamiento de un Staff Técnico de World Athletics.
+              No utiliza generación aleatoria; emplea una arquitectura <em>Omni-Consciente</em> que cruza sus {SYSTEM_METRICS.activeLogs} registros de carrera y {SYSTEM_METRICS.videosAnalyzed} análisis biomecánicos en tiempo real para emular el razonamiento de un Staff Técnico de World Athletics.
             </p>
           </div>
 
@@ -69,6 +75,10 @@ export const TechnicalWhitepaper: React.FC<{ onClose: () => void }> = ({ onClose
                 <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
                     <div className="text-[10px] text-slate-500 uppercase font-bold">Periodization</div>
                     <div className="text-white font-mono font-bold">{SYSTEM_METRICS.phaseCount} Modelos (Bondarchuk)</div>
+                </div>
+                <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                    <div className="text-[10px] text-slate-500 uppercase font-bold">Logs Ingested</div>
+                    <div className="text-purple-400 font-mono font-bold">{SYSTEM_METRICS.activeLogs}</div>
                 </div>
             </div>
           </section>

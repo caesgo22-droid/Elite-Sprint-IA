@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, Calendar, Activity, MessageSquare, Video, Users, ShieldCheck, Briefcase, Eye, User, LogOut, RefreshCw, ChevronDown } from 'lucide-react';
+import { Home, Calendar, Activity, MessageSquare, Video, Users, ShieldCheck, Briefcase, Eye, User, LogOut, RefreshCw, ChevronDown, Languages } from 'lucide-react';
 import { TechnicalWhitepaper } from '../TechnicalWhitepaper';
 import { useApp } from '../../contexts/AppContext';
 import { auth } from '../../services/firebase';
@@ -15,21 +15,21 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [showScience, setShowScience] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const { userProfile, updateProfile, viewingAthleteId, switchAthlete } = useApp();
+  const { userProfile, updateProfile, viewingAthleteId, switchAthlete, language, setLanguage, t } = useApp();
   const navigate = useNavigate();
 
-  // Navigation Logic based on Role
+  // Navigation Logic based on Role (Using Translations)
   const navItems = [
-    { to: '/', icon: Home, label: 'Inicio' },
-    { to: '/plan', icon: Calendar, label: 'Plan' },
-    { to: '/video', icon: Video, label: 'Análisis' },
-    { to: '/tracker', icon: Activity, label: 'Stats' },
+    { to: '/', icon: Home, label: t.nav.home },
+    { to: '/plan', icon: Calendar, label: t.nav.plan },
+    { to: '/video', icon: Video, label: t.nav.analysis },
+    { to: '/tracker', icon: Activity, label: t.nav.stats },
     { 
         to: userProfile.role === 'staff' || viewingAthleteId ? '/coach-dashboard' : '/staff', 
         icon: userProfile.role === 'staff' || viewingAthleteId ? Briefcase : Users, 
-        label: userProfile.role === 'staff' || viewingAthleteId ? 'Roster' : 'Staff' 
+        label: userProfile.role === 'staff' || viewingAthleteId ? t.nav.roster : t.nav.staff 
     },
-    { to: '/chat', icon: MessageSquare, label: 'Coach' },
+    { to: '/chat', icon: MessageSquare, label: t.nav.coach },
   ];
 
   const handleLogout = async () => {
@@ -44,6 +44,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     navigate('/');
   };
 
+  const toggleLanguage = () => {
+      setLanguage(language === 'es' ? 'en' : 'es');
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col font-sans selection:bg-cyan-450 selection:text-slate-950">
       
@@ -56,17 +60,26 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           {viewingAthleteId && (
               <div className="flex items-center gap-1 bg-indigo-900/50 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30 animate-pulse">
                   <Eye size={10}/>
-                  <span className="text-[9px] font-bold uppercase">Obs. Mode</span>
+                  <span className="text-[9px] font-bold uppercase">{t.layout.viewing}</span>
               </div>
           )}
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+            {/* Language Toggle */}
+            <button 
+                onClick={toggleLanguage}
+                className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white border border-slate-700 font-bold text-xs"
+                title="Cambiar Idioma / Switch Language"
+            >
+                {language.toUpperCase()}
+            </button>
+
             {/* Science Button */}
             <button 
             onClick={() => setShowScience(true)}
             className="text-slate-500 hover:text-cyan-400 transition-colors p-2 rounded-full hover:bg-slate-800/50"
-            title="Fundamentación Técnica"
+            title={t.layout.science}
             >
             <ShieldCheck size={20} strokeWidth={1.5} />
             </button>
@@ -93,21 +106,21 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                                 <p className="text-xs text-slate-500 truncate">{userProfile.email || 'Usuario'}</p>
                                 <div className="mt-2 flex items-center gap-2">
                                     <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${userProfile.role === 'staff' ? 'bg-purple-900/30 text-purple-400' : 'bg-cyan-900/30 text-cyan-400'}`}>
-                                        {userProfile.role}
+                                        {userProfile.role === 'staff' ? t.role.staff : t.role.athlete}
                                     </span>
                                 </div>
                             </div>
                             
                             <div className="p-1">
                                 <button onClick={toggleRole} className="w-full text-left px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-lg flex items-center gap-2 transition-colors">
-                                    <RefreshCw size={14}/> Cambiar Rol a {userProfile.role === 'staff' ? 'Atleta' : 'Staff'}
+                                    <RefreshCw size={14}/> {t.layout.changeRole} {userProfile.role === 'staff' ? t.role.athlete : t.role.staff}
                                 </button>
                                 <button onClick={() => { setShowUserMenu(false); navigate('/plan?edit=true'); }} className="w-full text-left px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-lg flex items-center gap-2 transition-colors">
-                                    <User size={14}/> Editar Perfil
+                                    <User size={14}/> {t.layout.editProfile}
                                 </button>
                                 <div className="h-px bg-slate-800 my-1"></div>
                                 <button onClick={handleLogout} className="w-full text-left px-3 py-2 text-xs font-bold text-red-400 hover:bg-red-900/20 rounded-lg flex items-center gap-2 transition-colors">
-                                    <LogOut size={14}/> Cerrar Sesión
+                                    <LogOut size={14}/> {t.layout.logout}
                                 </button>
                             </div>
                         </div>
@@ -120,8 +133,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Viewing Banner */}
       {viewingAthleteId && (
           <div className="bg-indigo-600 text-white text-xs font-bold text-center py-1 flex items-center justify-center gap-2">
-              <Eye size={12}/> VISTA PREVIA: {userProfile.name}
-              <button onClick={() => switchAthlete(null)} className="underline opacity-80 hover:opacity-100 ml-2">Salir</button>
+              <Eye size={12}/> {t.layout.viewing}: {userProfile.name}
+              <button onClick={() => switchAthlete(null)} className="underline opacity-80 hover:opacity-100 ml-2">{t.layout.exit}</button>
           </div>
       )}
 

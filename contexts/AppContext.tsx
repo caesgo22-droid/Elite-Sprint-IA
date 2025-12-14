@@ -4,6 +4,7 @@ import { UserProfile, TrainingPlan, PerformanceLog, ChatMessage, BiomechanicalAn
 import { auth, saveUserProfile, saveTrainingPlan, addPerformanceLog, updatePerformanceLog, deletePerformanceLog, fetchUserData, saveAnalysisToHistory, getAnalysisHistory, isInitialized, archivePlan, getPlanHistory } from '../services/firebase';
 import * as firebaseAuth from 'firebase/auth';
 import { calculateACWR, LoadStats } from '../utils/loadCalculator';
+import { Language, TRANSLATIONS } from '../utils/translations';
 
 const { onAuthStateChanged } = firebaseAuth as any;
 type User = any;
@@ -11,6 +12,9 @@ type User = any;
 interface AppContextType {
   user: User | null;
   loadingAuth: boolean;
+  language: Language; // NEW
+  setLanguage: (lang: Language) => void; // NEW
+  t: any; // Translation helper
   userProfile: UserProfile;
   updateProfile: (profile: UserProfile) => void;
   updateCompetitions: (competitions: { id: string; name: string; date: string }[]) => void;
@@ -27,13 +31,12 @@ interface AppContextType {
   setLastAnalysis: (analysis: BiomechanicalAnalysis) => void;
   analysisHistory: BiomechanicalAnalysis[];
   saveAnalysis: (analysis: BiomechanicalAnalysis) => void;
-  updateAnalysis: (id: string, updates: Partial<BiomechanicalAnalysis>) => void; // NEW FUNCTION
+  updateAnalysis: (id: string, updates: Partial<BiomechanicalAnalysis>) => void;
   acwrStats: LoadStats | null;
   planHistory: TrainingPlan[];
   nexusInsight: NexusInsight | null;
   setNexusInsight: (insight: NexusInsight | null) => void;
   
-  // STAFF FEATURES
   viewingAthleteId: string | null;
   switchAthlete: (uid: string | null) => void;
   refreshUserData: () => void;
@@ -67,6 +70,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [language, setLanguage] = useState<Language>('es'); // Default Spanish
 
   // STAFF STATE
   const [viewingAthleteId, setViewingAthleteId] = useState<string | null>(null);
@@ -82,15 +86,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [acwrStats, setAcwrStats] = useState<LoadStats | null>(null);
   const [nexusInsight, setNexusInsight] = useState<NexusInsight | null>(null);
 
+  const t = TRANSLATIONS[language];
+
   const loadDataForId = async (uid: string) => {
       try {
           const data = await fetchUserData(uid);
           if (data.profile) {
              const loadedProfile = data.profile as any;
-             // Migration helpers
              if (loadedProfile.event && !loadedProfile.events) loadedProfile.events = [loadedProfile.event];
              if (!loadedProfile.coaches) loadedProfile.coaches = [];
-             if (!loadedProfile.role) loadedProfile.role = 'athlete'; // Default
+             if (!loadedProfile.role) loadedProfile.role = 'athlete';
              
              setUserProfile({ ...defaultProfile, ...loadedProfile });
           }
@@ -103,7 +108,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const pHist = await getPlanHistory(uid);
           setPlanHistory(pHist as TrainingPlan[]);
           
-          // Clear insight when switching users
           setNexusInsight(null);
 
       } catch (error) {
@@ -111,7 +115,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
-  // Auth Listener & Data Fetching
   useEffect(() => {
     if (!isInitialized || !auth) {
       console.warn("Firebase not initialized or keys missing. App running in offline mode.");
@@ -122,7 +125,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser: User) => {
       setUser(currentUser);
       if (currentUser) {
-          // If viewingAthleteId is set (Staff Mode), load that. Otherwise load own.
           await loadDataForId(viewingAthleteId || currentUser.uid);
       } else {
         setUserProfile(defaultProfile);
@@ -133,9 +135,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
 
     return () => unsubscribe();
-  }, [viewingAthleteId]); // Re-run when viewingAthleteId changes
+  }, [viewingAthleteId]);
 
-  // Update ACWR whenever plans change
   useEffect(() => {
       if (currentPlan || planHistory.length > 0) {
           const allPlans = currentPlan ? [currentPlan, ...planHistory] : planHistory;
@@ -146,15 +147,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const switchAthlete = (uid: string | null) => {
       setViewingAthleteId(uid);
-      setLoadingAuth(true); // Trigger loading spinner briefly
-      setTimeout(() => setLoadingAuth(false), 500); // Artificial delay for smooth UX transition
+      setLoadingAuth(true);
+      setTimeout(() => setLoadingAuth(false), 500);
   };
   
   const refreshUserData = () => {
       if(user) loadDataForId(viewingAthleteId || user.uid);
   };
 
-  // --- ACTIONS (Write to the Target ID) ---
   const targetId = viewingAthleteId || user?.uid;
 
   const updateProfile = (profile: UserProfile) => {
@@ -216,24 +216,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (targetId && isInitialized) saveAnalysisToHistory(targetId, analysis);
   };
 
-  // NEW: Update existing analysis (e.g. for Coach Notes)
   const updateAnalysis = (id: string, updates: Partial<BiomechanicalAnalysis>) => {
       setAnalysisHistory(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
-      // Note: Full Firestore update logic for array items inside a collection would require finding the doc ID.
-      // This implementation updates local state. 
-      // For persistent update of history items, we'd need to fetch the specific doc from 'analysisHistory' collection if we stored IDs.
-      // Assuming 'analysis' id matches document id in 'analysisHistory' subcollection:
-      if (targetId && isInitialized) {
-          // This is a simplified placeholder. In a real app, you'd update the specific doc in firestore.
-          // Since we don't have a dedicated updateAnalysis function in firebase.ts yet that takes ID, we skip persistence for this demo step or need to add it.
-          // Ideally: updateDoc(doc(db, "users", targetId, "analysisHistory", id), updates);
-      }
   };
 
-  // Optimization: Memoize the context value
   const contextValue = useMemo(() => ({
     user,
     loadingAuth,
+    language,
+    setLanguage,
+    t,
     userProfile,
     updateProfile,
     updateCompetitions,
@@ -261,6 +253,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }), [
     user,
     loadingAuth,
+    language,
     userProfile,
     currentPlan,
     logs,

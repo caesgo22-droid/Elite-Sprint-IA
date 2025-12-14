@@ -2,6 +2,7 @@
 import { GoogleGenAI, Type, Schema, FunctionDeclaration, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { TrainingPlan, BiomechanicalAnalysis, UserProfile, NexusInsight } from "../types";
 import { getStructureForPhase, DRILL_DATABASE } from "./trainingDatabase";
+import { TRANSLATIONS, Language } from "../utils/translations";
 
 const getApiKey = () => {
   if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
@@ -32,7 +33,6 @@ const cleanAndParseJSON = (text: string) => {
   } catch (e) {
     try {
         let cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
-        // Sometimes gemini adds text before the JSON
         const firstBrace = cleaned.indexOf('{');
         const lastBrace = cleaned.lastIndexOf('}');
         if (firstBrace !== -1 && lastBrace !== -1) {
@@ -60,7 +60,6 @@ const DAY_ORDER: { [key: string]: number } = {
 };
 
 // --- RICH FALLBACK SESSION GENERATOR ---
-// Used only when AI fails for a specific day, preventing "empty" plans
 const generateRichFallbackSession = (day: string, phase: string, index: number) => {
     let focus = "Acceleration";
     let intensity = "High";
@@ -71,8 +70,7 @@ const generateRichFallbackSession = (day: string, phase: string, index: number) 
     let gym = [];
     let kpi = "Postura Neutra";
 
-    // Logic based on day index/phase to mimic AI variance
-    if (index % 3 === 0) { // Accel / Power
+    if (index % 3 === 0) { 
         focus = "Acceleration & Power";
         intensity = "High";
         routine.push("Main: Sled Pushes 4x20m (75% BW)");
@@ -80,13 +78,13 @@ const generateRichFallbackSession = (day: string, phase: string, index: number) 
         routine.push("Plyo: Broad Jumps 4x5");
         kpi = "Proyección horizontal y 'Triple Extensión'";
         gym = ["Clean Pulls 3x3", "Squats 3x5 @ 80%"];
-    } else if (index % 3 === 1) { // Tempo / Capacity
+    } else if (index % 3 === 1) { 
         focus = "Tempo & Recovery";
         intensity = "Low";
         routine.push("Main: Extensive Tempo 10x100m @ 70% (Rec 2')");
         routine.push("Core: Plank Circuit (3 rounds)");
         kpi = "Relajación mecánica a velocidad sub-máxima";
-    } else { // Max V / Speed
+    } else { 
         focus = "Max Velocity";
         intensity = "Max";
         routine.push("Drills: Wicket Runs (Vallas de ritmo) 6 reps");
@@ -220,7 +218,8 @@ export const generateTrainingPlan = async (
   readiness: { fatigue: number; sleep: number; soreness: number; stress: number; hydration: number }, 
   currentDate: string,
   focusEvent?: string,
-  acwr?: { ratio: number; status: string }
+  acwr?: { ratio: number; status: string },
+  language: Language = 'es' // NEW PARAMETER
 ): Promise<TrainingPlan | null> => {
   const currentMonth = new Date().getMonth(); 
   let phaseName = "General Prep";
@@ -228,17 +227,14 @@ export const generateTrainingPlan = async (
   else if (currentMonth >= 5 && currentMonth <= 8) phaseName = "Competition"; 
   else if (currentMonth >= 9) phaseName = "General Prep";
 
-  // 1. DETERMINE REQUESTED DAYS (Strict Source of Truth)
   const rawDays = (profile.trainingDays && Array.isArray(profile.trainingDays) && profile.trainingDays.length > 0) 
         ? profile.trainingDays 
         : ['Mon', 'Wed', 'Fri'];
   
-  // Normalize requested days to Spanish names for the Prompt and Sorting
   const targetDaysES = Array.from(new Set(rawDays.map(d => dayMapES[normalizeDay(d)] || 'Lunes')))
       .sort((a, b) => (DAY_ORDER[normalizeDay(a)] || 99) - (DAY_ORDER[normalizeDay(b)] || 99));
 
   if (!ai) {
-      // Offline fallback
       const sessions = targetDaysES.map((day, idx) => generateRichFallbackSession(day, phaseName, idx));
       return {
           id: Date.now().toString(),
@@ -255,7 +251,6 @@ export const generateTrainingPlan = async (
   try {
     const cnsScore = ((readiness.sleep) + (10 - readiness.fatigue) + (10 - readiness.soreness) + (10 - readiness.stress) + (readiness.hydration)) / 5; 
     
-    // BLINDAJE DE SEGURIDAD (ACWR Safety Lock)
     let safetyLockProtocol = "";
     if (acwr && acwr.ratio > 1.35) {
         safetyLockProtocol = `ALERTA ROJA: ACWR (${acwr.ratio}) es PELIGROSO. PROHIBIDO intensidad 'Max'. Reemplazar con Tempo Extensivo o Técnica Sub-máxima.`;
@@ -263,8 +258,11 @@ export const generateTrainingPlan = async (
         safetyLockProtocol = `ALERTA FISIOLÓGICA: Atleta reporta fatiga/dolor severo. Microciclo de descarga obligatoria (-40% volumen).`;
     }
 
+    const langInstruction = TRANSLATIONS[language].ai.promptLang;
+
     const prompt = `
       ${MASTER_TRAINING_INSTRUCTIONS}
+      ${langInstruction}
 
       CONTEXTO DEL ATLETA:
       - Nivel: ${profile.experienceLevel} (${profile.yearsExperience} años exp)
@@ -277,12 +275,6 @@ export const generateTrainingPlan = async (
 
       TAREA:
       Genera un microciclo JSON para los días: ${targetDaysES.join(", ")}.
-      
-      ESTRATEGIA REQUERIDA (Thinking Process):
-      1. Evalúa el Readiness y ACWR.
-      2. Decide el "Tema Semanal" (ej. Bloque de Aceleración vs Resistencia Especial).
-      3. Distribuye las cargas respetando la regla de 48h SNC.
-      4. Prescribe sesiones detalladas.
     `;
 
     const response = await ai.models.generateContent({
@@ -304,13 +296,12 @@ export const generateTrainingPlan = async (
       }
     }
 
-    // STRICT MAPPING & VALIDATION
+    // STRICT MAPPING
     const finalSessions = targetDaysES.map((targetDay, index) => {
         const normTarget = normalizeDay(targetDay);
         const match = aiSessions.find(s => normalizeDay(s.day) === normTarget);
         
         if (match) {
-            // Validate richness
             if (!match.trackRoutine || match.trackRoutine.length < 2) {
                 const fb = generateRichFallbackSession(targetDay, phaseName, index);
                 return { ...match, trackRoutine: fb.trackRoutine };
@@ -334,20 +325,19 @@ export const generateTrainingPlan = async (
 
   } catch (error) { 
       console.error("Plan Gen Error:", error); 
-      // FALLBACK GRACEFUL
       const sessions = targetDaysES.map((day, idx) => generateRichFallbackSession(day, phaseName, idx));
       return {
           id: Date.now().toString(),
           createdAt: new Date().toISOString(),
           weeklyGoal: "Recuperación Estructural (Protocolo Seguro)",
           phase: phaseName as any,
-          rationale: "Microciclo de ajuste generado mediante algoritmos de seguridad debido a latencia en la red neuronal. Se prioriza la carga técnica.",
+          rationale: "Microciclo de ajuste generado mediante algoritmos de seguridad debido a latencia en la red neuronal.",
           sessions: sessions as any
       } as TrainingPlan;
   }
 };
 
-export const analyzeTechnique = async (images: string[], bioData: any = null, advancedMetrics: any = null, analysisMode: 'Personal' | 'External' = 'Personal'): Promise<BiomechanicalAnalysis | null> => {
+export const analyzeTechnique = async (images: string[], bioData: any = null, advancedMetrics: any = null, analysisMode: 'Personal' | 'External' = 'Personal', language: Language = 'es'): Promise<BiomechanicalAnalysis | null> => {
   if (!ai) {
     console.error("Gemini AI instance not initialized. Missing API Key.");
     throw new Error("API_KEY_MISSING");
@@ -356,7 +346,6 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
   try {
     const hasMetrics = advancedMetrics && advancedMetrics.velocity !== '-';
     
-    // COMPRESSED CONTEXT (Token Saving)
     const metricsTxt = hasMetrics ? 
       `GCT:${advancedMetrics.groundContactTime||"N/A"}, Vuelo:${advancedMetrics.airTime||"N/A"}, Vel:${advancedMetrics.velocity}, Freq:${advancedMetrics.frequency}` : 
       "Sin métricas cinéticas avanzadas.";
@@ -365,8 +354,11 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
       `Rodilla:${bioData.knee.value} (Ref: ${bioData.knee.status}), Cadera:${bioData.hip.value}, Torso:${bioData.torso.value}` : 
       "Sin ángulos.";
 
+    const langInstruction = TRANSLATIONS[language].ai.promptLang;
+
     const promptText = `
       ${MASTER_BIOMECHANICS_INSTRUCTIONS}
+      ${langInstruction}
       
       MODO DE ANÁLISIS: ${analysisMode === 'External' ? 'EDUCATIVO (Analiza este video de referencia)' : 'DIAGNÓSTICO PERSONAL (Corrige al atleta)'}
       
@@ -393,7 +385,6 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
       config: { 
           responseMimeType: 'application/json', 
           responseSchema: ANALYSIS_SCHEMA,
-          // Safety Settings to avoid blocking sports analysis
           safetySettings: [
             { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
             { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
@@ -412,7 +403,6 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
     return null;
   } catch (error: any) { 
       console.error("Analysis Error:", error);
-      // Propagate quota errors specifically
       if (error.message?.includes("429") || error.status === 429) {
           throw new Error("QUOTA_EXCEEDED");
       }
@@ -420,34 +410,32 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
   }
 };
 
-export const chatWithCoach = async (history: any[], message: string, context: any) => {
+export const chatWithCoach = async (history: any[], message: string, context: any, language: Language = 'es') => {
   if (!ai) return { text: "⚠️ API Key faltante.", functionCall: null };
   try {
-    // 1. COMPRESS HISTORY (Token Optimization)
     const prunedHistory = history.slice(-6); 
     
-    // 2. OMNI-CONSCIOUS CONTEXT ASSEMBLY
-    // Cruce de datos: Plan + Logs + Salud + Biomecánica
     const planSummary = context.plan ? 
-        `[PLAN VIGENTE] Fase: ${context.plan.phase}, Objetivo: ${context.plan.weeklyGoal}. Hoy: ${context.plan.sessions?.find((s:any) => s.day === 'Hoy')?.focus || 'Descanso'}.` : 
-        "Sin plan activo.";
+        `[PLAN] Fase: ${context.plan.phase}, Goal: ${context.plan.weeklyGoal}. Today: ${context.plan.sessions?.find((s:any) => s.day === 'Hoy')?.focus || 'Rest'}.` : 
+        "No active plan.";
     
-    const logsSummary = context.logs?.slice(-5).map((l:any) => `[LOG ${l.date}] ${l.event}: ${l.time}s (${l.type})`).join("; ") || "Sin marcas recientes.";
+    const logsSummary = context.logs?.slice(-5).map((l:any) => `[LOG ${l.date}] ${l.event}: ${l.time}s (${l.type})`).join("; ") || "No recent logs.";
     
     const lastBio = context.lastAnalysis ? 
-        `[ÚLTIMO VIDEO] Score: ${context.lastAnalysis.score}, Error: ${context.lastAnalysis.criticalErrors[0] || 'Ninguno'}.` :
-        "Sin análisis de video reciente.";
+        `[LAST VIDEO] Score: ${context.lastAnalysis.score}, Error: ${context.lastAnalysis.criticalErrors[0] || 'None'}.` :
+        "No video analysis.";
 
     const injuryReport = context.profile.injuries?.length > 0 
-        ? `[LESIÓN ACTIVA] ${context.profile.injuries[0].location} (${context.profile.injuries[0].status})`
-        : "Salud reportada OK";
+        ? `[INJURY] ${context.profile.injuries[0].location} (${context.profile.injuries[0].status})`
+        : "Health OK";
     
-    const acwrData = context.acwr ? `[CARGA ACWR] ${context.acwr.ratio} (${context.acwr.status})` : "ACWR N/A";
+    const acwrData = context.acwr ? `[ACWR] ${context.acwr.ratio} (${context.acwr.status})` : "ACWR N/A";
 
-    // Hardened & Omni-conscious System Prompt
+    const langInstruction = TRANSLATIONS[language].ai.promptLang;
+
     const systemPrompt = `
       ERES: Staff Técnico 'Elite Sprint AI' (Omni-consciente).
-      No eres un chatbot genérico. Eres un entrenador Nivel V que tiene el expediente completo del atleta en la mano.
+      ${langInstruction}
       
       EXPEDIENTE DEL ATLETA (${context.profile.name}):
       1. ${planSummary}
@@ -456,11 +444,10 @@ export const chatWithCoach = async (history: any[], message: string, context: an
       4. ${injuryReport}
       5. ${acwrData}
       
-      INSTRUCCIONES DE INTERACCIÓN:
+      INSTRUCCIONES:
       - Responde de forma breve, técnica y motivadora.
       - CRUZA DATOS: Si pregunta "¿Por qué corro lento?", revisa sus logs recientes y su último análisis biomecánico.
-      - SEGURIDAD: Si el ACWR es alto (>1.3) o hay lesión, sugiere descanso o terapia ante cualquier duda de entrenamiento.
-      - PERSONALIDAD: Profesional, exigente pero empático. Usa "nosotros" (equipo).
+      - SEGURIDAD: Si el ACWR es alto (>1.3) o hay lesión, sugiere descanso o terapia.
     `;
 
     const chat = ai.chats.create({
@@ -471,24 +458,26 @@ export const chatWithCoach = async (history: any[], message: string, context: an
 
     const result = await chat.sendMessage({ message });
     return { text: result.text || "...", functionCall: result.functionCalls?.[0] || null };
-  } catch (error) { console.error("Chat Error", error); return { text: "Error de conexión con el Staff.", functionCall: null }; }
+  } catch (error) { console.error("Chat Error", error); return { text: "Error de conexión.", functionCall: null }; }
 };
 
-export const generateNexusInsight = async (logs: any[], readiness: any, lastAnalysis: any, acwr: any): Promise<NexusInsight | null> => {
+export const generateNexusInsight = async (logs: any[], readiness: any, lastAnalysis: any, acwr: any, language: Language = 'es'): Promise<NexusInsight | null> => {
     if(!ai) return null;
     try {
+        const langInstruction = TRANSLATIONS[language].ai.promptLang;
         const prompt = `
             ACTÚA: SISTEMA NEXUS (Algoritmo de Detección de Patrones).
+            ${langInstruction}
             
             INPUTS:
             - Fatiga Subjetiva: ${JSON.stringify(readiness)}
-            - Eficiencia Técnica (Último Video): ${lastAnalysis ? lastAnalysis.score : "N/A"}/100
-            - Carga Aguda/Crónica (ACWR): ${acwr?.ratio || 0}
-            - Tendencia de Tiempos: ${logs.slice(-3).map((l:any) => l.time).join(", ")}
+            - Eficiencia Técnica: ${lastAnalysis ? lastAnalysis.score : "N/A"}/100
+            - Carga ACWR: ${acwr?.ratio || 0}
+            - Tendencia Tiempos: ${logs.slice(-3).map((l:any) => l.time).join(", ")}
             
             TAREA:
-            Genera un "Insight" corto (titular + análisis + recomendación) sobre el estado actual del atleta.
-            Detecta: Sobreentrenamiento, Pico de Forma, o Estancamiento Técnico.
+            Genera un "Insight" corto (titular + análisis + recomendación).
+            Detecta: Sobreentrenamiento, Pico de Forma, o Estancamiento.
             
             SALIDA: JSON (NexusSchema).
         `;
