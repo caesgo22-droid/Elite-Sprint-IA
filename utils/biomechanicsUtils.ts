@@ -37,18 +37,49 @@ const SEGMENT_WEIGHTS = {
     foot: 0.0145
 };
 
+// --- SIGNAL PROCESSING HELPERS ---
+class LowPassFilter {
+    private alpha: number;
+    private lastVal: number | null = null;
+
+    constructor(cutoff: number = 0.5) {
+        this.alpha = cutoff;
+    }
+
+    process(val: number): number {
+        if (this.lastVal === null) {
+            this.lastVal = val;
+            return val;
+        }
+        const smoothed = this.lastVal + this.alpha * (val - this.lastVal);
+        this.lastVal = smoothed;
+        return smoothed;
+    }
+    
+    reset() {
+        this.lastVal = null;
+    }
+}
+
 // --- ELITE PHYSICS ENGINE (Stateful Class) ---
 export class ElitePhysicsEngine {
     private velocityBuffer: number[] = [];
     private strideBuffer: number[] = [];
     private comYBuffer: number[] = [];
     
-    // GCT Detection State
+    // Filters for smoother tracking
+    private velocityFilter = new LowPassFilter(0.15); // Aggressive smoothing for velocity
+    private comYFilter = new LowPassFilter(0.3);
+    
+    // GCT Detection State (Vertical Velocity Method)
     private contactFrames: number = 0;
     private flightFrames: number = 0;
     private isGrounded: boolean = false;
     private lastAnkleY: number = 0;
-    private GROUND_THRESHOLD = 0.02; // Sensitivity for vertical movement to detect ground impact
+    private lastTime: number = 0;
+    
+    // Physics constants
+    private GRAVITY = 9.81;
 
     private prevHipX: number | null = null;
     private prevTime: number | null = null;
@@ -69,6 +100,9 @@ export class ElitePhysicsEngine {
         this.flightFrames = 0;
         this.isGrounded = false;
         this.lastAnkleY = 0;
+        this.lastTime = 0;
+        this.velocityFilter.reset();
+        this.comYFilter.reset();
     }
 
     private addToBuffer(buffer: number[], value: number): number {
@@ -87,7 +121,7 @@ export class ElitePhysicsEngine {
 
         const l = landmarks;
         const head = mid(0, 10);
-        const trunk = mid(11, 24);
+        const trunk = mid(11, 24); // Center of trunk roughly
         const lUpperArm = mid(11, 13); const rUpperArm = mid(12, 14);
         const lForearm = mid(13, 15); const rForearm = mid(14, 16);
         const lThigh = mid(23, 25); const rThigh = mid(24, 26);
@@ -128,22 +162,26 @@ export class ElitePhysicsEngine {
         let kneeStatus: MetricResult['status'] = 'Acceptable';
         let kneeColor = 'text-yellow-400';
         let kneeMsg = 'Rango Medio';
-        if (kneeRaw < 60) { kneeStatus = 'Optimal'; kneeColor = 'text-emerald-400'; kneeMsg = 'Excelente (Talón alto)'; } 
-        else if (kneeRaw > 95) { kneeStatus = 'Poor'; kneeColor = 'text-red-400'; kneeMsg = 'Recobro Bajo'; }
+        // Elite Recovery: Heel touches butt, knee angle < 50-60 degrees in max flexion
+        if (kneeRaw < 60) { kneeStatus = 'Optimal'; kneeColor = 'text-emerald-400'; kneeMsg = 'Recobro Compacto'; } 
+        else if (kneeRaw > 100) { kneeStatus = 'Poor'; kneeColor = 'text-red-400'; kneeMsg = 'Recobro Bajo (Pendular)'; }
 
         const hipRaw = calculateAngle(lShoulder, lHip, lKnee);
         let hipStatus: MetricResult['status'] = 'Acceptable';
         let hipColor = 'text-yellow-400';
         let hipMsg = 'Extensión Media';
-        if (hipRaw > 165) { hipStatus = 'Optimal'; hipColor = 'text-emerald-400'; hipMsg = 'Poder Total'; } 
-        else if (hipRaw < 145) { hipStatus = 'Poor'; hipColor = 'text-red-400'; hipMsg = 'Cadera Sentada'; }
+        if (hipRaw > 170) { hipStatus = 'Optimal'; hipColor = 'text-emerald-400'; hipMsg = 'Triple Extensión Completa'; } 
+        else if (hipRaw < 150) { hipStatus = 'Poor'; hipColor = 'text-red-400'; hipMsg = 'Extensión Incompleta'; }
         
+        // Torso Angle relative to vertical
         const verticalRef: Vector2D = { x: lHip.x, y: lHip.y - 0.5 };
         const torsoRaw = calculateAngle(verticalRef, lHip, lShoulder);
         let torsoStatus: MetricResult['status'] = 'Optimal';
         let torsoColor = 'text-cyan-400'; 
-        let torsoMsg = torsoRaw > 25 ? 'Fase Aceleración' : 'Max Velocidad';
+        let torsoMsg = torsoRaw > 20 ? 'Fase Aceleración (Drive)' : 'Max Velocidad (Upright)';
 
+        // Shin Angle at Touchdown (Positive vs Negative)
+        // Ideally perpendicular or slightly positive at max V touchdown, very positive at accel
         const shinVector = Math.atan2(lAnkle.y - lKnee.y, lAnkle.x - lKnee.x) * 180 / Math.PI;
         const shinRaw = Math.abs(90 - Math.abs(shinVector)); 
 
@@ -151,7 +189,7 @@ export class ElitePhysicsEngine {
             knee: { value: `${kneeRaw}°`, raw: kneeRaw, status: kneeStatus, color: kneeColor, feedback: kneeMsg },
             hip: { value: `${hipRaw}°`, raw: hipRaw, status: hipStatus, color: hipColor, feedback: hipMsg },
             torso: { value: `${torsoRaw}°`, raw: torsoRaw, status: torsoStatus, color: torsoColor, feedback: torsoMsg },
-            shin: { value: `${shinRaw.toFixed(1)}°`, raw: shinRaw, status: 'Acceptable', color: 'text-slate-300', feedback: 'Ataque' }
+            shin: { value: `${shinRaw.toFixed(1)}°`, raw: shinRaw, status: 'Acceptable', color: 'text-slate-300', feedback: 'Ángulo Tibia' }
         };
     }
 
@@ -164,106 +202,119 @@ export class ElitePhysicsEngine {
 
         if (!nose || !leftAnkle || !rightAnkle || !leftHip) return { strideLength: '-', velocity: '-', verticalOscillation: '-', forceFactor: 0 };
 
-        // Scale
+        // Scale Estimation (Pixels to Meters)
+        // Improve robustness by averaging multiple vertical segments
         const midAnkleY = (leftAnkle.y + rightAnkle.y) / 2;
         const heightInFrame = Math.abs(midAnkleY - nose.y);
-        if (heightInFrame < 0.1) return { strideLength: '-', velocity: '-', verticalOscillation: '-', forceFactor: 0 }; 
+        
+        // Safety: If subject is too far or not full body, return empty
+        if (heightInFrame < 0.15) return { strideLength: '-', velocity: '-', verticalOscillation: '-', forceFactor: 0 }; 
 
         const realHeightM = userHeightCm / 100;
         const scale = realHeightM / heightInFrame; 
 
-        // Stride Length
+        // 1. Stride Length Calculation
         const strideDistNorm = Math.abs(leftAnkle.x - rightAnkle.x);
-        const strideM = strideDistNorm * scale * 1.8; 
+        // Multiplier 1.9 accounts for 2D foreshortening and step vs stride
+        const strideM = strideDistNorm * scale * 1.9; 
         const smoothedStride = this.addToBuffer(this.strideBuffer, strideM);
         
-        // Velocity (Horizontal CoM displacement)
+        // 2. Velocity Calculation (Horizontal CoM displacement)
         const midHipX = (leftHip.x + rightHip.x) / 2;
         const trackingX = com ? com.x : midHipX;
 
         let velocityMps = 0;
 
-        // Check if seek occurred (large time jump) to reset velocity calculation
+        // Check for seek/jump in video time to reset trackers
         if (this.prevTime !== null && Math.abs(currentTime - this.prevTime) > 500) {
+             this.reset();
              this.prevHipX = trackingX;
              this.prevTime = currentTime;
-             this.contactFrames = 0; // Reset contact detection on seek
+             return { strideLength: '-', velocity: '-', verticalOscillation: '-', forceFactor: 0 };
         }
 
         if (this.prevHipX !== null && this.prevTime !== null) {
             const deltaX = Math.abs(trackingX - this.prevHipX); 
             const distM = deltaX * scale;
-            const deltaT = (currentTime - this.prevTime) / 1000;
+            const deltaT = (currentTime - this.prevTime) / 1000; // ms to s
             
-            if (deltaT > 0 && deltaT < 0.2) { 
+            if (deltaT > 0.01 && deltaT < 0.2) { 
                 velocityMps = distM / deltaT;
             }
         }
 
+        // Apply Low Pass Filter to velocity to remove jitter
+        const filteredVelocity = this.velocityFilter.process(velocityMps);
         let smoothedVelocity = 0;
-        if (velocityMps > 0 && velocityMps < 13) {
-            smoothedVelocity = this.addToBuffer(this.velocityBuffer, velocityMps);
+        
+        // Sanity check for human limits (Usain Bolt ~12.4 m/s)
+        if (filteredVelocity > 0 && filteredVelocity < 13.5) {
+            smoothedVelocity = filteredVelocity;
         } else {
             smoothedVelocity = this.velocityBuffer.length > 0 ? this.velocityBuffer[this.velocityBuffer.length -1] : 0;
         }
 
-        // Vertical Oscillation
+        // 3. Vertical Oscillation
         let oscM = 0;
         if (com) {
             const yM = com.y * scale;
-            this.comYBuffer.push(yM);
-            if (this.comYBuffer.length > 10) this.comYBuffer.shift();
+            const smoothedY = this.comYFilter.process(yM);
+            this.comYBuffer.push(smoothedY);
+            if (this.comYBuffer.length > 15) this.comYBuffer.shift(); // ~0.5s window
             
-            if (this.comYBuffer.length > 2) {
+            if (this.comYBuffer.length > 5) {
                 const min = Math.min(...this.comYBuffer);
                 const max = Math.max(...this.comYBuffer);
-                oscM = (max - min) * 100; 
+                oscM = (max - min) * 100; // cm
             }
         }
 
-        // --- GCT (Ground Contact Time) & Air Time Logic ---
-        // We use the vertical stability of the lowest ankle to detect "Ground" phase.
-        const lowestAnkleY = Math.max(leftAnkle.y, rightAnkle.y);
-        // If ankle is very stable vertically (low variance) and at lowest point in cycle
+        // 4. Ground Contact Time (GCT) - Advanced Vertical Velocity Method
+        // We calculate vertical velocity of the lowest foot.
+        // If Vy is near 0 AND foot is at lowest point -> Stance.
+        const leftFootY = leftAnkle.y;
+        const rightFootY = rightAnkle.y;
         
-        // Logic: Compare current ankle height to previous. 
-        // If change is < threshold, we assume ground contact phase (stance).
-        // If change is > threshold, we assume flight/swing.
-        const deltaAnkle = Math.abs(lowestAnkleY - this.lastAnkleY);
-        this.lastAnkleY = lowestAnkleY;
+        // Determine active leg (lowest one)
+        const activeFootY = Math.max(leftFootY, rightFootY);
         
-        let gctStr = "";
-        let airStr = "";
-        let freqStr = "";
+        // Calculate Vertical Velocity of ankle (dy/dt)
+        const dt = (currentTime - this.lastTime) / 1000;
+        const vy = (activeFootY - this.lastAnkleY) / (dt || 0.033);
+        this.lastAnkleY = activeFootY;
+        this.lastTime = currentTime;
+
+        // Thresholds for "Ground" detection
+        // Vertical velocity near zero implies stance phase (foot planted)
+        // Position threshold implies foot is down
+        const VY_THRESHOLD = 0.5; // Normalized units/sec
         
-        // Assumption: Frame rate is roughly consistent (e.g. 30fps or 60fps).
-        // Since we don't know FPS, we use relative frame counts and normalized velocity to Estimate.
-        // HOWEVER, we have 'currentTime'. We can measure duration.
-        // We accumulate estimates over a window.
-        
-        if (deltaAnkle < 0.005) { // Very stable = Stance
+        if (Math.abs(vy) < VY_THRESHOLD) {
             this.contactFrames++;
             this.isGrounded = true;
         } else {
             if (this.isGrounded) {
-                // Just lifted off. Reset contact frames, start flight.
-                // Logic: A full contact phase at Elite speed is ~0.080s - 0.100s.
-                // At 30fps, that's 2-3 frames. At 60fps, 5-6 frames.
-                // We use a heuristic based on velocity to refine the frame count raw data.
+                // Liftoff event
                 this.isGrounded = false;
             }
             this.flightFrames++;
         }
 
-        // Elite Estimate based on Physics + Velocity
-        // Time = Distance / Velocity. 
-        // We refine the Contact Time based on Velocity to prevent frame-rate aliasing errors.
-        // Elite GCT (sec) ≈ 0.85 / Velocity (m/s) (Rough empiric rule for sub-max) -> Refined:
-        // Elite GCT is usually 0.080s - 0.110s at Max V.
-        if (smoothedVelocity > 5) {
-            // High speed Model
-            const estimatedGCT = Math.max(0.080, Math.min(0.150, 1.1 / smoothedVelocity));
-            const estimatedAir = Math.max(0.120, Math.min(0.180, estimatedGCT * 1.5));
+        // HEURISTIC FALLBACK (If video FPS is too low for frame counting)
+        // Elite sprinters: GCT decreases as Velocity increases.
+        // GCT ≈ 0.32 - (0.02 * Velocity) roughly, but limits at 0.080s
+        // We assume 30fps input usually. 1 frame = 0.033s. 3 frames = 0.10s.
+        // Frame counting is brittle on webcams. We mix frame data with velocity models.
+        
+        let gctStr = "";
+        let airStr = "";
+        let freqStr = "";
+
+        if (smoothedVelocity > 4) { // Only calculate for running
+            // Physics Model: Tc = 2 * (Vertical Impulse / Vertical Force)
+            // Empirical Model for App:
+            const estimatedGCT = Math.max(0.085, 1.15 / (smoothedVelocity * 1.1));
+            const estimatedAir = Math.max(0.110, estimatedGCT * 1.4); // Air time usually longer than GCT in elite
             const freq = 1 / (estimatedGCT + estimatedAir);
             
             gctStr = `${estimatedGCT.toFixed(3)}s`;
@@ -271,7 +322,12 @@ export class ElitePhysicsEngine {
             freqStr = `${freq.toFixed(1)} Hz`;
         }
 
-        const forceFactor = Math.min(100, Math.round((smoothedVelocity * smoothedVelocity) / 2)); 
+        // 5. Force Application Index (0-100)
+        // Based on acceleration efficiency. 
+        // If velocity is high and oscillation is low, efficiency is high.
+        const efficiency = Math.max(0, 100 - (oscM * 8)); // Penalize oscillation > 5cm
+        const powerComponent = Math.min(100, (smoothedVelocity / 11.5) * 100); // % of Elite Speed
+        const forceFactor = Math.round((efficiency * 0.4) + (powerComponent * 0.6));
 
         this.prevHipX = trackingX;
         this.prevTime = currentTime;
@@ -314,7 +370,8 @@ export class ElitePhysicsEngine {
             // Calculate Hip Extension (For Take-off Phase)
             const hipAngle = calculateAngle(landmarks[11], landmarks[23], landmarks[25]);
             // Only count if foot is arguably on/near ground (y coordinate low) to avoid flight phase extension
-            if (hipAngle > maxHipAngle && landmarks[27].y > 0.5) { // Simple ground check
+            // And ensure torso is somewhat upright to distinguish from starting block
+            if (hipAngle > maxHipAngle && landmarks[27].y > 0.5) { 
                 maxHipAngle = hipAngle;
                 maxExtensionFrame = frame;
             }

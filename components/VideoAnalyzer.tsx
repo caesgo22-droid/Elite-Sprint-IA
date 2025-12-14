@@ -5,7 +5,7 @@ import { useApp } from '../contexts/AppContext';
 import { analyzeTechnique, hasApiKey } from '../services/geminiService';
 import { ElitePhysicsEngine, AdvancedMetrics, calculateAngle } from '../utils/biomechanicsUtils';
 import { BiomechanicalAnalysis, KineticMetrics } from '../types';
-import { Loader2, AlertTriangle, CheckCircle, History, ScanLine, UploadCloud, Play, Video, Share, Info, UserCircle2, GraduationCap, FileText, MessageCircle, Activity, LocateFixed, Eye, X, Table2, MousePointerClick, Maximize2, UserCog, Wrench } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle, History, ScanLine, UploadCloud, Play, Video, Share, Info, UserCircle2, GraduationCap, FileText, MessageCircle, Activity, LocateFixed, Eye, X, Table2, MousePointerClick, Maximize2, UserCog, Wrench, Megaphone } from 'lucide-react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 
 const VideoAnalyzer: React.FC = () => {
@@ -615,6 +615,18 @@ const VideoAnalyzer: React.FC = () => {
                                     </div>
                                 </div>
                             )}
+                            
+                            {/* COACH SHOUTS - NEW LEVEL V FEATURE */}
+                            {analysis.coachShouts && analysis.coachShouts.length > 0 && (
+                                <div className="bg-gradient-to-r from-orange-900/20 to-slate-900 border border-orange-500/20 rounded-lg p-3">
+                                    <h4 className="text-xs font-bold text-orange-400 uppercase mb-2 flex items-center gap-2"><Megaphone size={12}/> Feedback Verbal (Cues)</h4>
+                                    <div className="flex flex-wrap gap-2">
+                                        {analysis.coachShouts.map((shout, idx) => (
+                                            <span key={idx} className="bg-slate-800 text-slate-200 px-2 py-1 rounded text-xs italic font-medium border border-slate-700">"{shout}"</span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             {analysis.criticalErrors.length > 0 && (<div className="bg-red-900/10 border-l-4 border-red-500 p-3 rounded-r-lg"><h4 className="text-xs font-bold text-red-400 uppercase mb-2 flex items-center gap-2"><AlertTriangle size={12}/> Errores Críticos</h4><ul className="space-y-1">{analysis.criticalErrors.map((err, i) => <li key={i} className="text-sm text-slate-300">• {err}</li>)}</ul></div>)}
                             
@@ -711,6 +723,18 @@ const VideoAnalyzer: React.FC = () => {
                                ))}
                            </ul>
                        </div>
+
+                       {/* Cues in Modal */}
+                       {showReportModal.coachShouts && showReportModal.coachShouts.length > 0 && (
+                            <div className="mt-2">
+                                <h4 className="text-xs font-bold text-orange-400 uppercase mb-2">Cues Verbales</h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {showReportModal.coachShouts.map((shout, idx) => (
+                                        <span key={idx} className="bg-slate-800 text-slate-300 px-2 py-1 rounded text-[10px] italic border border-slate-700">"{shout}"</span>
+                                    ))}
+                                </div>
+                            </div>
+                       )}
                    </div>
                    
                    <div className="bg-slate-950 p-4 border-t border-slate-800 text-center">

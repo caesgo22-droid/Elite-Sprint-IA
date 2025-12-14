@@ -174,6 +174,45 @@ const NEXUS_SCHEMA: Schema = {
   required: ["status", "headline", "analysis", "recommendation"]
 };
 
+// --- MASTER INSTRUCTIONS (LEVEL V INTELLIGENCE) ---
+
+const MASTER_TRAINING_INSTRUCTIONS = `
+ERES: Director de Metodología de World Athletics (Nivel V).
+TU OBJETIVO: Diseñar un microciclo de sprint de élite basado estrictamente en el perfil del atleta y las leyes biológicas de adaptación.
+
+REGLAS DE ORO (HARD CONSTRAINTS):
+1. TABLA DE INTENSIDAD (No alucinar):
+   - 'Max': >98% esfuerzo (Aláctico). Solo si Readiness > 7/10 y ACWR < 1.3.
+   - 'High': 90-95% (Resistencia a la Velocidad/Especial). Altamente taxativo.
+   - 'Medium': 80-89% (Tempo Intensivo). Desarrollo técnico-glucolítico.
+   - 'Low': <75% (Tempo Extensivo/Recuperación). Vascularización y técnica.
+2. LEY DEL SNC (Sistema Nervioso Central): NUNCA programes días de intensidad 'Max' o 'High' consecutivos. Debe haber al menos 48h entre picos neurales o usar días 'Low' intercalados.
+3. ESPECIFICIDAD DEL EVENTO:
+   - 100m/200m: Prioriza Aceleración, Potencia y Max V. Volumen bajo, Intensidad máxima.
+   - 400m: Prioriza Tolerancia al Lactato, Ritmo de Carrera y Tempo Extensivo. Volumen medio-alto.
+4. RATIONALE (CoT): En el campo 'rationale', explica tu "Cadena de Pensamiento": Diagnóstico -> Estrategia de Carga -> Selección de Día Crítico.
+
+ESTRUCTURA DE RESPUESTA:
+- Rutinas en pista ('trackRoutine') deben ser detalladas: (Ej: "3x4x60m @ 95% rec 8'").
+- KPIs Biomecánicos ('biomechanicsKpi') deben ser términos de física (Ej: "Impulso horizontal", "Tiempo de contacto", "Stiffness").
+`;
+
+const MASTER_BIOMECHANICS_INSTRUCTIONS = `
+ERES: Biomecánico Senior de Centro de Alto Rendimiento.
+TU TAREA: Analizar datos cinemáticos y generar un diagnóstico técnico de élite.
+
+ENFOQUE ANALÍTICO:
+1. No solo mires ángulos, infiere DINÁMICA (Fuerzas).
+2. Usa terminología de Ralph Mann / Frans Bosch (Ej: "Frontside Mechanics", "Scissoring", "Ankle Stiffness").
+3. RELACIÓN CAUSA-EFECTO: Si la rodilla está baja (recobro), la causa suele ser una mala aplicación de fuerza en el paso anterior.
+4. DRILLS CORRECTIVOS: Prescribe ejercicios específicos del 'Drill Database' para corregir el error raíz.
+
+CRITERIOS DE ÉLITE (Velocidad Máxima):
+- GCT (Tiempo Contacto) > 0.11s es "Pobre" para élite.
+- Rodilla libre debe cruzar rodilla de apoyo antes del despegue.
+- Aterrizaje debe ser debajo del Centro de Masa (CoM), no delante (Frenado).
+`;
+
 // --- MAIN FUNCTIONS ---
 
 export const generateTrainingPlan = async (
@@ -218,26 +257,32 @@ export const generateTrainingPlan = async (
     
     // BLINDAJE DE SEGURIDAD (ACWR Safety Lock)
     let safetyLockProtocol = "";
-    if (acwr && acwr.ratio > 1.3) {
-        safetyLockProtocol = `ACWR ALTO (${acwr.ratio}). NO INTENSIDAD 'MAX'.`;
+    if (acwr && acwr.ratio > 1.35) {
+        safetyLockProtocol = `ALERTA ROJA: ACWR (${acwr.ratio}) es PELIGROSO. PROHIBIDO intensidad 'Max'. Reemplazar con Tempo Extensivo o Técnica Sub-máxima.`;
     } else if (readiness.soreness > 7 || readiness.fatigue > 8) {
-        safetyLockProtocol = `FATIGA SEVERA. SOLO RECUPERACIÓN.`;
+        safetyLockProtocol = `ALERTA FISIOLÓGICA: Atleta reporta fatiga/dolor severo. Microciclo de descarga obligatoria (-40% volumen).`;
     }
 
     const prompt = `
-      ACTÚA: DIRECTOR ALTO RENDIMIENTO.
-      ATLETA: Nivel ${profile.experienceLevel}, Evento ${focusEvent}, Fase ${phaseName}.
-      READINESS: ${cnsScore.toFixed(1)}/10. ACWR: ${acwr ? acwr.ratio : 'N/A'}.
-      ${safetyLockProtocol ? `PROTOCOLO SEGURIDAD: ${safetyLockProtocol}` : ''}
+      ${MASTER_TRAINING_INSTRUCTIONS}
+
+      CONTEXTO DEL ATLETA:
+      - Nivel: ${profile.experienceLevel} (${profile.yearsExperience} años exp)
+      - Evento Principal: ${focusEvent} (Ajusta fisiología para esto)
+      - Fase: ${phaseName}
+      - Readiness Score: ${cnsScore.toFixed(1)}/10 (Factor Clave)
+      - ACWR Actual: ${acwr ? acwr.ratio : 'N/A'}
+      - Lesiones Activas: ${profile.injuries.length > 0 ? JSON.stringify(profile.injuries) : "Ninguna"}
+      ${safetyLockProtocol}
+
+      TAREA:
+      Genera un microciclo JSON para los días: ${targetDaysES.join(", ")}.
       
-      TAREA: Microciclo para: ${targetDaysES.join(", ")}.
-      
-      REGLAS:
-      1. Solo días listados.
-      2. Rutinas trackRoutine detalladas (Drills + Main + Cooldown).
-      3. Terminología técnica.
-      
-      SALIDA: JSON estricto.
+      ESTRATEGIA REQUERIDA (Thinking Process):
+      1. Evalúa el Readiness y ACWR.
+      2. Decide el "Tema Semanal" (ej. Bloque de Aceleración vs Resistencia Especial).
+      3. Distribuye las cargas respetando la regla de 48h SNC.
+      4. Prescribe sesiones detalladas.
     `;
 
     const response = await ai.models.generateContent({
@@ -313,21 +358,28 @@ export const analyzeTechnique = async (images: string[], bioData: any = null, ad
     
     // COMPRESSED CONTEXT (Token Saving)
     const metricsTxt = hasMetrics ? 
-      `GCT:${advancedMetrics.groundContactTime||"N/A"}, Vuelo:${advancedMetrics.airTime||"N/A"}, Vel:${advancedMetrics.velocity}` : 
-      "Sin métricas cinéticas.";
+      `GCT:${advancedMetrics.groundContactTime||"N/A"}, Vuelo:${advancedMetrics.airTime||"N/A"}, Vel:${advancedMetrics.velocity}, Freq:${advancedMetrics.frequency}` : 
+      "Sin métricas cinéticas avanzadas.";
 
     const anglesTxt = bioData ? 
-      `Rodilla:${bioData.knee.value}, Cadera:${bioData.hip.value}, Torso:${bioData.torso.value}` : 
+      `Rodilla:${bioData.knee.value} (Ref: ${bioData.knee.status}), Cadera:${bioData.hip.value}, Torso:${bioData.torso.value}` : 
       "Sin ángulos.";
 
     const promptText = `
-      ACTÚA: BIOMECÁNICO.
-      ANALIZA IMAGENES SPRINT.
-      DATOS: ${metricsTxt}. ${anglesTxt}.
-      CRITERIOS:
-      1. GCT > 0.12s es lento.
-      2. Talón cerca glúteo en recobro.
-      3. Extensión cadera completa.
+      ${MASTER_BIOMECHANICS_INSTRUCTIONS}
+      
+      MODO DE ANÁLISIS: ${analysisMode === 'External' ? 'EDUCATIVO (Analiza este video de referencia)' : 'DIAGNÓSTICO PERSONAL (Corrige al atleta)'}
+      
+      DATOS DEL SENSOR:
+      - ${metricsTxt}
+      - ${anglesTxt}
+      
+      TAREA:
+      1. Identifica la Fase (Aceleración, Max V, Deceleración).
+      2. Detecta ERRORES CRÍTICOS (Limitantes de rendimiento).
+      3. Asigna un SCORE (0-100) basado en eficiencia mecánica.
+      4. Prescribe DRILLS CORRECTIVOS específicos.
+      
       SALIDA: JSON estricto.
     `;
 
@@ -372,33 +424,43 @@ export const chatWithCoach = async (history: any[], message: string, context: an
   if (!ai) return { text: "⚠️ API Key faltante.", functionCall: null };
   try {
     // 1. COMPRESS HISTORY (Token Optimization)
-    // Reduce history to last 4 interactions to save tokens
-    const prunedHistory = history.slice(-4); 
+    const prunedHistory = history.slice(-6); 
     
-    // 2. COMPRESS CONTEXT (Token Optimization)
-    // Instead of sending full JSON objects, send concise text summaries.
+    // 2. OMNI-CONSCIOUS CONTEXT ASSEMBLY
+    // Cruce de datos: Plan + Logs + Salud + Biomecánica
     const planSummary = context.plan ? 
-        `PLAN ACTUAL: Fase ${context.plan.phase}, Objetivo: ${context.plan.weeklyGoal}. Hoy: ${context.plan.sessions?.find((s:any) => s.day === 'Hoy')?.focus || 'Descanso'}.` : 
+        `[PLAN VIGENTE] Fase: ${context.plan.phase}, Objetivo: ${context.plan.weeklyGoal}. Hoy: ${context.plan.sessions?.find((s:any) => s.day === 'Hoy')?.focus || 'Descanso'}.` : 
         "Sin plan activo.";
     
-    const logsSummary = context.logs?.slice(-3).map((l:any) => `${l.event}:${l.time}s`).join(", ") || "Sin tiempos recientes.";
+    const logsSummary = context.logs?.slice(-5).map((l:any) => `[LOG ${l.date}] ${l.event}: ${l.time}s (${l.type})`).join("; ") || "Sin marcas recientes.";
     
-    const feedbackSummary = context.plan?.sessions
-        ?.filter((s:any) => s.feedback && s.feedback.completed)
-        ?.slice(-1) // Only last session feedback
-        ?.map((s:any) => `Feedback reciente: RPE ${s.feedback.rpe}/10`)
-        ?.join("") || "";
+    const lastBio = context.lastAnalysis ? 
+        `[ÚLTIMO VIDEO] Score: ${context.lastAnalysis.score}, Error: ${context.lastAnalysis.criticalErrors[0] || 'Ninguno'}.` :
+        "Sin análisis de video reciente.";
 
     const injuryReport = context.profile.injuries?.length > 0 
-        ? `LESIÓN: ${context.profile.injuries[0].location}`
-        : "Salud OK";
+        ? `[LESIÓN ACTIVA] ${context.profile.injuries[0].location} (${context.profile.injuries[0].status})`
+        : "Salud reportada OK";
+    
+    const acwrData = context.acwr ? `[CARGA ACWR] ${context.acwr.ratio} (${context.acwr.status})` : "ACWR N/A";
 
-    // Hardened & Compressed System Prompt
+    // Hardened & Omni-conscious System Prompt
     const systemPrompt = `
-      ERES: Staff Técnico Elite.
-      ATLETA: ${context.profile.name}. ${injuryReport}. ACWR: ${context.acwr?.ratio || 'N/A'}.
-      DATOS: ${planSummary} ${logsSummary} ${feedbackSummary}
-      INSTRUCCIÓN: Respuestas cortas y técnicas (<50 palabras). Si ACWR > 1.3 o dolor, sugiere descanso.
+      ERES: Staff Técnico 'Elite Sprint AI' (Omni-consciente).
+      No eres un chatbot genérico. Eres un entrenador Nivel V que tiene el expediente completo del atleta en la mano.
+      
+      EXPEDIENTE DEL ATLETA (${context.profile.name}):
+      1. ${planSummary}
+      2. ${logsSummary}
+      3. ${lastBio}
+      4. ${injuryReport}
+      5. ${acwrData}
+      
+      INSTRUCCIONES DE INTERACCIÓN:
+      - Responde de forma breve, técnica y motivadora.
+      - CRUZA DATOS: Si pregunta "¿Por qué corro lento?", revisa sus logs recientes y su último análisis biomecánico.
+      - SEGURIDAD: Si el ACWR es alto (>1.3) o hay lesión, sugiere descanso o terapia ante cualquier duda de entrenamiento.
+      - PERSONALIDAD: Profesional, exigente pero empático. Usa "nosotros" (equipo).
     `;
 
     const chat = ai.chats.create({
@@ -416,10 +478,19 @@ export const generateNexusInsight = async (logs: any[], readiness: any, lastAnal
     if(!ai) return null;
     try {
         const prompt = `
-            ACTÚA: ALGORITMO DETECCIÓN TALENTO.
-            DATOS: Fatiga ${JSON.stringify(readiness)}, Score Tec ${lastAnalysis ? lastAnalysis.score : "N/A"}, ACWR ${acwr?.ratio || 0}.
-            TAREA: Insight corto sobre rendimiento.
-            SALIDA: JSON.
+            ACTÚA: SISTEMA NEXUS (Algoritmo de Detección de Patrones).
+            
+            INPUTS:
+            - Fatiga Subjetiva: ${JSON.stringify(readiness)}
+            - Eficiencia Técnica (Último Video): ${lastAnalysis ? lastAnalysis.score : "N/A"}/100
+            - Carga Aguda/Crónica (ACWR): ${acwr?.ratio || 0}
+            - Tendencia de Tiempos: ${logs.slice(-3).map((l:any) => l.time).join(", ")}
+            
+            TAREA:
+            Genera un "Insight" corto (titular + análisis + recomendación) sobre el estado actual del atleta.
+            Detecta: Sobreentrenamiento, Pico de Forma, o Estancamiento Técnico.
+            
+            SALIDA: JSON (NexusSchema).
         `;
 
         const response = await ai.models.generateContent({

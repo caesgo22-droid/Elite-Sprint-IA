@@ -1,21 +1,21 @@
 
 import * as React from 'react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { PerformanceLog } from '../types';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
-import { Plus, Trash2, Edit2, Save, X, Calculator, Timer, Activity, TrendingUp, Filter, Download, MapPin, AlignLeft, Calendar, Info } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, AreaChart, Area } from 'recharts';
+import { Plus, Trash2, Edit2, Save, X, Calculator, Timer, Activity, TrendingUp, Filter, Download, MapPin, AlignLeft, Calendar, Info, BrainCircuit, Zap } from 'lucide-react';
 
 const PerformanceTracker: React.FC = () => {
-  const { logs, addLog, editLog, deleteLog, userProfile } = useApp();
-  const [activeTab, setActiveTab] = useState<'history' | 'strategy'>('history');
+  const { logs, addLog, editLog, deleteLog, userProfile, analysisHistory } = useApp();
+  const [activeTab, setActiveTab] = useState<'history' | 'biomechanics' | 'strategy'>('history');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newTime, setNewTime] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [location, setLocation] = useState('');
-  const [type, setType] = useState<'Training' | 'Competition'>('Training');
-  const [event, setEvent] = useState<'100m' | '200m' | '400m'>((userProfile.events?.[0] as any) || '100m');
+  const [type, setType] = useState<'Training' | 'Competition' | 'Recovery'>('Training');
+  const [event, setEvent] = useState<'100m' | '200m' | '400m' | 'Therapy'>((userProfile.events?.[0] as any) || '100m');
   const [note, setNote] = useState('');
   const [timeRange, setTimeRange] = useState<'1M' | '3M' | '6M' | '1Y' | 'All'>('All');
   const [eventFilter, setEventFilter] = useState<'All' | '100m' | '200m' | '400m'>('All');
@@ -67,6 +67,25 @@ const PerformanceTracker: React.FC = () => {
       event: l.event, type: l.type
   }));
 
+  // --- BIO-DATA PROCESSING ---
+  const bioChartData = useMemo(() => {
+      return analysisHistory
+        .filter(a => a.kinetics && a.kinetics.comVelocity !== '-' && a.kinetics.groundContactTime)
+        .map(a => {
+            const vel = parseFloat(a.kinetics!.comVelocity.replace(' m/s', ''));
+            const gct = parseFloat(a.kinetics!.groundContactTime!.replace('s', ''));
+            const force = a.kinetics!.forceApplicationIndex;
+            return {
+                date: new Date(a.savedAt || Date.now()).toLocaleDateString(),
+                velocity: isNaN(vel) ? null : vel,
+                gct: isNaN(gct) ? null : gct,
+                force: force,
+                score: a.score
+            };
+        })
+        .reverse(); // Show oldest first
+  }, [analysisHistory]);
+
   const getCurrentPB = () => {
       if (eventFilter !== 'All') return userProfile.pbs[eventFilter]?.time || '--';
       const mainEvent = userProfile.events[0] as '100m'|'200m'|'400m';
@@ -75,9 +94,26 @@ const PerformanceTracker: React.FC = () => {
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
-      return ( <div className="bg-slate-900 border border-slate-700 p-2 rounded shadow-xl"> <p className="text-slate-300 text-xs mb-1">{label}</p> {payload.map((p: any, i: number) => ( p.value && ( <div key={i} className="mb-1"> <p className="font-bold text-white" style={{color: p.color}}> {p.value}s <span className="text-[10px] text-slate-400">({p.name === 'time' ? p.payload.event : p.name.substring(1)})</span> </p> {p.payload.type === 'Competition' && <span className="text-[9px] text-yellow-500 font-bold uppercase block">Competición</span>} </div> ) ))} </div> );
+      return ( <div className="bg-slate-900 border border-slate-700 p-2 rounded shadow-xl"> <p className="text-slate-300 text-xs mb-1">{label}</p> {payload.map((p: any, i: number) => ( p.value && ( <div key={i} className="mb-1"> <p className="font-bold text-white" style={{color: p.color}}> {p.value}{p.unit || 's'} <span className="text-[10px] text-slate-400">({p.name === 'time' ? p.payload.event : p.name})</span> </p> {p.payload.type === 'Competition' && <span className="text-[9px] text-yellow-500 font-bold uppercase block">Competición</span>} </div> ) ))} </div> );
     }
     return null;
+  };
+
+  const BioTooltip = ({ active, payload, label }: any) => {
+      if (active && payload && payload.length) {
+          return (
+              <div className="bg-slate-900 border border-slate-700 p-2 rounded shadow-xl">
+                  <p className="text-slate-300 text-xs mb-1 font-mono">{label}</p>
+                  {payload.map((p: any, i: number) => (
+                      <div key={i} className="flex justify-between gap-3 text-xs font-bold mb-1">
+                          <span style={{color: p.color}}>{p.name}:</span>
+                          <span className="text-white">{p.value}</span>
+                      </div>
+                  ))}
+              </div>
+          );
+      }
+      return null;
   };
 
   const calculateModel = () => {
@@ -119,11 +155,12 @@ const PerformanceTracker: React.FC = () => {
       </div>
 
       <div className="flex p-1 bg-slate-900/50 rounded-xl border border-slate-800">
-          <button onClick={() => setActiveTab('history')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activeTab === 'history' ? 'bg-slate-800 text-white' : 'text-slate-500'}`}>Historial</button>
-          <button onClick={() => setActiveTab('strategy')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activeTab === 'strategy' ? 'bg-cyan-900/20 text-cyan-400' : 'text-slate-500'}`}>Estrategia</button>
+          <button onClick={() => setActiveTab('history')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${activeTab === 'history' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>Tiempos</button>
+          <button onClick={() => setActiveTab('biomechanics')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${activeTab === 'biomechanics' ? 'bg-purple-900/20 text-purple-400 shadow-sm border border-purple-500/20' : 'text-slate-500 hover:text-slate-300'}`}>Bio-Trend</button>
+          <button onClick={() => setActiveTab('strategy')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${activeTab === 'strategy' ? 'bg-cyan-900/20 text-cyan-400 shadow-sm border border-cyan-500/20' : 'text-slate-500 hover:text-slate-300'}`}>Estrategia</button>
       </div>
 
-      {activeTab === 'history' ? (
+      {activeTab === 'history' && (
         <>
             <div className="flex justify-between items-center">
                 <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
@@ -133,20 +170,20 @@ const PerformanceTracker: React.FC = () => {
             </div>
             
             <div className="h-64 w-full bg-slate-900/30 rounded-xl border border-slate-800 p-4 relative">
-                {displayLogs.length < 2 ? <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">Agrega más registros.</div> : (
+                {displayLogs.length < 2 ? <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">Agrega más registros para ver tendencias.</div> : (
                 <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                         <XAxis dataKey="date" tick={{fontSize: 10}} axisLine={false} tickLine={false} tickFormatter={(v) => v.substring(5)} />
                         <YAxis domain={['auto', 'auto']} tick={{fontSize: 10}} axisLine={false} tickLine={false} width={30} />
                         <Tooltip content={<CustomTooltip />} />
-                        {eventFilter === 'All' ? (<><Line connectNulls type="monotone" dataKey="t100" stroke="#22d3ee" strokeWidth={2} dot={{r:0}} /><Line connectNulls type="monotone" dataKey="t200" stroke="#10b981" strokeWidth={2} dot={{r:0}} /><Line connectNulls type="monotone" dataKey="t400" stroke="#f59e0b" strokeWidth={2} dot={{r:0}} /></>) : (<Line connectNulls type="monotone" dataKey="time" stroke="#22d3ee" strokeWidth={2} />)}
+                        {eventFilter === 'All' ? (<><Line connectNulls type="monotone" dataKey="t100" stroke="#22d3ee" strokeWidth={2} dot={{r:2}} /><Line connectNulls type="monotone" dataKey="t200" stroke="#10b981" strokeWidth={2} dot={{r:2}} /><Line connectNulls type="monotone" dataKey="t400" stroke="#f59e0b" strokeWidth={2} dot={{r:2}} /></>) : (<Line connectNulls type="monotone" dataKey="time" stroke="#22d3ee" strokeWidth={2} dot={{r:3}} activeDot={{r:5}} />)}
                     </LineChart>
                 </ResponsiveContainer>
                 )}
             </div>
 
-            {!showAddForm && <button onClick={() => setShowAddForm(true)} className="w-full py-3 border border-dashed border-slate-700 rounded-xl text-slate-400 hover:text-white flex items-center justify-center gap-2 text-sm"><Plus size={16}/> Agregar Nuevo Registro</button>}
+            {!showAddForm && <button onClick={() => setShowAddForm(true)} className="w-full py-3 border border-dashed border-slate-700 rounded-xl text-slate-400 hover:text-white flex items-center justify-center gap-2 text-sm transition-colors hover:bg-slate-900/30"><Plus size={16}/> Agregar Nuevo Registro</button>}
             
             {showAddForm && (
                 <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-5 space-y-4 animate-in fade-in slide-in-from-top-2">
@@ -163,6 +200,7 @@ const PerformanceTracker: React.FC = () => {
                                 <option value="100m">100m</option>
                                 <option value="200m">200m</option>
                                 <option value="400m">400m</option>
+                                <option value="Therapy">Terapia</option>
                             </select>
                         </div>
                         <div>
@@ -192,6 +230,7 @@ const PerformanceTracker: React.FC = () => {
                         <select value={type} onChange={(e) => setType(e.target.value as any)} className={`${inputClass} w-1/3`}>
                             <option value="Training">Entreno</option>
                             <option value="Competition">Competencia</option>
+                            <option value="Recovery">Recovery</option>
                         </select>
                         <button onClick={handleSave} className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg p-2.5 flex items-center justify-center gap-2 h-11"><Save size={16}/> Guardar</button>
                     </div>
@@ -207,8 +246,76 @@ const PerformanceTracker: React.FC = () => {
                 ))}
             </div>
         </>
-      ) : (
-        <div className="space-y-6">
+      )}
+
+      {activeTab === 'biomechanics' && (
+          <div className="space-y-6 animate-in slide-in-from-right-4">
+              {bioChartData.length < 2 ? (
+                  <div className="text-center py-12 bg-slate-900/30 rounded-2xl border border-dashed border-slate-800">
+                      <Activity className="mx-auto text-slate-600 mb-2"/>
+                      <p className="text-slate-500 text-sm">Se necesitan al menos 2 análisis de video para mostrar tendencias.</p>
+                      <p className="text-xs text-slate-600 mt-1">Sube videos en la sección "Análisis" para desbloquear este laboratorio.</p>
+                  </div>
+              ) : (
+                  <>
+                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                        <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><Zap size={16} className="text-cyan-400"/> Evolución de Velocidad (m/s)</h3>
+                        <div className="h-48 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={bioChartData}>
+                                    <defs>
+                                        <linearGradient id="colorVel" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.3}/>
+                                            <stop offset="95%" stopColor="#22d3ee" stopOpacity={0}/>
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
+                                    <XAxis dataKey="date" tick={{fontSize: 9}} axisLine={false} tickLine={false} />
+                                    <YAxis domain={['dataMin - 0.5', 'dataMax + 0.5']} tick={{fontSize: 9}} axisLine={false} tickLine={false} width={25} />
+                                    <Tooltip content={<BioTooltip />} />
+                                    <Area type="monotone" dataKey="velocity" stroke="#22d3ee" fillOpacity={1} fill="url(#colorVel)" name="Velocidad (m/s)" strokeWidth={2}/>
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                        <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><Activity size={16} className="text-purple-400"/> Eficiencia de Contacto (GCT)</h3>
+                        <div className="h-48 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={bioChartData}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
+                                    <XAxis dataKey="date" tick={{fontSize: 9}} axisLine={false} tickLine={false} />
+                                    <YAxis domain={['auto', 'auto']} tick={{fontSize: 9}} axisLine={false} tickLine={false} width={30} />
+                                    <Tooltip content={<BioTooltip />} />
+                                    <Line type="monotone" dataKey="gct" stroke="#c084fc" strokeWidth={2} dot={{r:3}} name="GCT (s)" />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-2 text-center bg-slate-950 py-1 rounded">Objetivo Elite: &lt; 0.100s</p>
+                    </div>
+
+                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                        <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><BrainCircuit size={16} className="text-emerald-400"/> Score Técnico General</h3>
+                        <div className="h-40 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={bioChartData}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
+                                    <XAxis dataKey="date" tick={{fontSize: 9}} axisLine={false} tickLine={false} />
+                                    <YAxis domain={[0, 100]} tick={{fontSize: 9}} axisLine={false} tickLine={false} width={25} />
+                                    <Tooltip content={<BioTooltip />} />
+                                    <Line type="step" dataKey="score" stroke="#10b981" strokeWidth={2} dot={false} name="Score" />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                  </>
+              )}
+          </div>
+      )}
+
+      {activeTab === 'strategy' && (
+        <div className="space-y-6 animate-in slide-in-from-right-4">
             <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6">
                 <h3 className="font-bold text-white mb-4">Modelado de Carrera</h3>
                 <div className="flex bg-slate-950 p-1 rounded mb-4">{['100m', '200m', '400m'].map(e => (<button key={e} onClick={() => { setStrategyEvent(e as any); setRaceModel(null); }} className={`flex-1 py-1 text-xs font-bold rounded ${strategyEvent === e ? 'bg-cyan-600' : 'text-slate-500'}`}>{e}</button>))}</div>

@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { Zap, TrendingUp, CalendarCheck, CheckSquare, X, BatteryCharging, ArrowRight, BrainCircuit, Sparkles, Activity, Clock, MapPin, Info, MessageCircle, HeartPulse, Stethoscope, AlertTriangle, UserCog, Calendar, Save, ChevronLeft } from 'lucide-react';
+import { Zap, TrendingUp, CalendarCheck, CheckSquare, X, BatteryCharging, ArrowRight, BrainCircuit, Sparkles, Activity, Clock, MapPin, Info, MessageCircle, HeartPulse, Stethoscope, AlertTriangle, UserCog, Calendar, Save, ChevronLeft, ScanLine } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { calculateRecovery } from '../utils/recoveryEngine';
@@ -274,6 +274,18 @@ export const HomeDashboard: React.FC = () => {
               )}
 
               <div><span className="text-slate-400 text-xs uppercase tracking-wider block mb-1">Enfoque Principal</span><p className="text-xl font-medium text-white">{todaysSession.focus}</p></div>
+              
+              {/* KPI TÉCNICO DIARIO */}
+              {todaysSession.biomechanicsKpi && (
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-start gap-2">
+                      <ScanLine size={16} className="text-cyan-400 mt-0.5 shrink-0"/>
+                      <div>
+                          <span className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider block">Foco Biomecánico</span>
+                          <p className="text-sm text-white font-medium">"{todaysSession.biomechanicsKpi}"</p>
+                      </div>
+                  </div>
+              )}
+
               <div><span className="text-slate-400 text-xs uppercase tracking-wider block mb-2 flex items-center gap-2"><Zap size={12} /> Rutina de Pista</span><ul className="space-y-2">{todaysSession.trackRoutine.map((drill, idx) => (<li key={idx} className="flex items-start gap-2 text-sm text-slate-300"><span className="w-1.5 h-1.5 mt-1.5 rounded-full bg-cyan-500 shrink-0"></span>{drill}</li>))}</ul></div>
               <div className="pt-2 border-t border-slate-800 mt-2">
                  {todaysSession.feedback?.completed ? (

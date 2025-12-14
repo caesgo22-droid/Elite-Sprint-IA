@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
-import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle, MessageSquare, Table2 } from 'lucide-react';
+import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle, MessageSquare, Table2, ScanLine, ChevronDown, ChevronUp } from 'lucide-react';
 import { TrainingSession, UserProfile, Injury } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { getPlanHistory } from '../services/firebase';
@@ -53,7 +53,7 @@ const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessi
     // WHATSAPP SHARE BUTTON FOR INDIVIDUAL SESSION
     const shareSession = (e: React.MouseEvent) => {
         e.stopPropagation();
-        const text = `*ELITE SPRINT AI - Sesión (${session.day})*\n\n*Enfoque:* ${session.focus}\n*Rutina:* ${session.trackRoutine.join(', ')}\n*Intensidad:* ${session.intensity}\n${session.coachNotes ? `*Nota Coach:* ${session.coachNotes}` : ''}`;
+        const text = `*ELITE SPRINT AI - Sesión (${session.day})*\n\n*Enfoque:* ${session.focus}\n*KPI Técnico:* ${session.biomechanicsKpi || 'N/A'}\n*Rutina:* ${session.trackRoutine.join(', ')}\n*Intensidad:* ${session.intensity}\n${session.coachNotes ? `*Nota Coach:* ${session.coachNotes}` : ''}`;
         const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
         window.open(url, '_blank');
     };
@@ -81,6 +81,17 @@ const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessi
         {isExpanded && (
           <div className="px-5 pb-5 space-y-5 border-t border-slate-700/50 pt-4 animate-in slide-in-from-top-2">
             
+            {/* KPI BIOMECÁNICO - LEVEL V FEATURE */}
+            {session.biomechanicsKpi && (
+                <div className="flex items-start gap-3 bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                    <ScanLine className="text-cyan-400 mt-0.5 flex-shrink-0" size={16} />
+                    <div>
+                        <span className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider block mb-1">KPI Técnico del Día</span>
+                        <p className="text-sm text-slate-200 leading-snug font-medium">"{session.biomechanicsKpi}"</p>
+                    </div>
+                </div>
+            )}
+
             {/* COACH NOTE SECTION (Communication Logic) */}
             {(isStaff || session.coachNotes) && (
                 <div className="bg-blue-900/10 border-l-2 border-blue-500 pl-3 py-2 rounded-r relative group" onClick={e => e.stopPropagation()}>
@@ -137,7 +148,6 @@ export const PlanManager: React.FC = () => {
   
   const [loading, setLoading] = useState(false);
   const [showProfileConfig, setShowProfileConfig] = useState(false);
-  const [showMacroModal, setShowMacroModal] = useState(false);
   const [focusEvent, setFocusEvent] = useState(userProfile.events?.[0] || '100m'); 
   const [fatigue, setFatigue] = useState(5);
   const [sleep, setSleep] = useState(7);
@@ -152,6 +162,7 @@ export const PlanManager: React.FC = () => {
   const [activeTooltip, setActiveTooltip] = useState<{title: string, text: string} | null>(null);
   const [viewingRecovery, setViewingRecovery] = useState<any>(null);
   const [showPlanTable, setShowPlanTable] = useState(false);
+  const [showRationale, setShowRationale] = useState(true);
 
   const isStaff = userProfile.role === 'staff';
 
@@ -486,15 +497,24 @@ export const PlanManager: React.FC = () => {
                 <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-2"><span className="inline-flex items-center gap-1 px-2 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded text-[10px] font-bold uppercase tracking-widest"><Layers size={10} /> {currentPlan.phase}</span></div>
                     <div className="flex gap-2">
-                        <button onClick={() => setShowMacroModal(true)} className="bg-slate-700/50 hover:bg-slate-600 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 border border-slate-600"><Brain size={12} className="text-purple-400"/> Lógica</button>
                         <button onClick={() => setShowPlanTable(true)} className="bg-slate-700/50 hover:bg-slate-600 text-xs px-3 py-1.5 rounded-full flex items-center gap-1 border border-slate-600" title="Ver Tabla Visual"><Table2 size={12} className="text-cyan-400"/> Tabla</button>
-                        {/* FORCE WHATSAPP BUTTON VISIBILITY */}
                         <button onClick={shareToWhatsapp} className="bg-emerald-600 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1 shadow-lg shadow-emerald-900/20 hover:bg-emerald-500 transition-colors" title="Enviar por WhatsApp"><MessageCircle size={14}/></button>
                     </div>
                 </div>
                <div className="flex items-center gap-2 mb-2"><Target size={18} className="text-emerald-400" /><h3 className="text-xl font-bold text-white">Objetivo Semanal</h3></div>
                <p className="text-sm text-slate-300 leading-relaxed max-w-lg mb-3 pl-7">{currentPlan.weeklyGoal}</p>
                
+               {/* STRATEGY BRIEFING - VISIBLE BY DEFAULT */}
+               {currentPlan.rationale && (
+                   <div className="bg-slate-950/50 rounded-xl p-3 border border-slate-700/50 mt-4">
+                       <button onClick={() => setShowRationale(!showRationale)} className="flex items-center justify-between w-full text-xs font-bold text-purple-400 uppercase tracking-wider mb-1">
+                           <span className="flex items-center gap-1"><Brain size={12}/> Estrategia & Lógica (CoT)</span>
+                           {showRationale ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                       </button>
+                       {showRationale && <p className="text-xs text-slate-400 leading-relaxed italic animate-in slide-in-from-top-1">"{currentPlan.rationale}"</p>}
+                   </div>
+               )}
+
                {lastAnalysis && lastAnalysis.criticalErrors.length > 0 && (
                    <button onClick={handleInjectDrills} className="mt-3 bg-red-900/30 border border-red-500/30 hover:bg-red-900/50 text-red-300 px-4 py-2 rounded-lg flex items-center gap-2 text-xs font-bold transition-all w-full justify-center">
                        <Wrench size={14}/> Inyectar Drills Correctivos ({lastAnalysis.criticalErrors.length} errores)
@@ -512,8 +532,6 @@ export const PlanManager: React.FC = () => {
            </div>
         </div>
       )}
-      
-      {showMacroModal && currentPlan?.rationale && ( <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowMacroModal(false)}> <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm"> <h3 className="text-xl font-bold text-white mb-4">Estrategia Técnica</h3> <p className="text-slate-300 text-sm leading-relaxed">{currentPlan.rationale}</p> </div> </div> )}
       
       {/* PLAN TABLE MODAL */}
       {showPlanTable && currentPlan && (
