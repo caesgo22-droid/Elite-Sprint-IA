@@ -8,6 +8,7 @@ import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { calculateRecovery } from '../utils/recoveryEngine';
 import { generateNexusInsight } from '../services/geminiService';
 import { NexusInsight } from '../types';
+import { AthletePassport } from './AthletePassport';
 
 export const HomeDashboard: React.FC = () => {
   const { userProfile, currentPlan, logs, updateSession, lastAnalysis, acwrStats, nexusInsight, setNexusInsight, addLog, t, language } = useApp();
@@ -164,6 +165,11 @@ export const HomeDashboard: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       
+      {/* PASSPORT (NEW) */}
+      <div className="mb-8">
+          <AthletePassport />
+      </div>
+
       {/* HEADER: ELITE NEXUS */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 relative overflow-hidden shadow-2xl">
           <div className="flex justify-between items-start mb-3 relative z-10">
