@@ -32,7 +32,7 @@ const DrillItem = ({ name, colorClass }: { name: string, colorClass: string }) =
 
 // Helper Tooltip Button
 const InfoButton = ({ title, text, onClick }: { title: string, text: string, onClick: (t: string, x: string) => void }) => ( 
-    <button type="button" onClick={(e) => { e.stopPropagation(); onClick(title, text); }} className="text-slate-500 hover:text-cyan-400 ml-1 inline-flex align-middle">
+    <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick(title, text); }} className="text-slate-500 hover:text-cyan-400 ml-1 inline-flex align-middle">
         <Info size={12} />
     </button> 
 );
@@ -384,11 +384,11 @@ export const PlanManager: React.FC = () => {
              <h3 className="text-sm font-bold text-pink-400 uppercase tracking-wider flex items-center gap-2"><HeartPulse size={14}/> Biometría Avanzada</h3>
              <div className="grid grid-cols-2 gap-3">
                  <div>
-                     <label className="text-xs text-slate-400 flex items-center mb-1">HR Reposo</label>
+                     <label className="text-xs text-slate-400 flex items-center mb-1 gap-1">HR Reposo <InfoButton title="HR Reposo" text="Frecuencia cardíaca mínima al despertar. Una tendencia a la baja indica mejor condición aeróbica." onClick={showTooltip}/></label>
                      <input type="number" placeholder="bpm" value={tempProfile.restingHR || ''} onChange={e => setTempProfile({...tempProfile, restingHR: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" />
                  </div>
                  <div>
-                     <label className="text-xs text-slate-400 flex items-center mb-1">HRV (ms)</label>
+                     <label className="text-xs text-slate-400 flex items-center mb-1 gap-1">HRV (ms) <InfoButton title="HRV (Variabilidad)" text="Heart Rate Variability. Un valor más alto indica mejor recuperación y estado del sistema nervioso." onClick={showTooltip}/></label>
                      <input type="number" placeholder="ms" value={tempProfile.hrv || ''} onChange={e => setTempProfile({...tempProfile, hrv: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white" />
                  </div>
              </div>

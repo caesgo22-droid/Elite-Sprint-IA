@@ -1,6 +1,6 @@
 
 import * as React from 'react';
-import { ShieldCheck, X, Cpu, Scale, Eye, FileText, Database, GitBranch, Activity, Server } from 'lucide-react';
+import { ShieldCheck, X, Cpu, Scale, Eye, FileText, Database, GitBranch, Activity, Server, BookOpen, Link } from 'lucide-react';
 import { DRILL_DATABASE, PHASE_TEMPLATES } from '../services/trainingDatabase';
 import { useApp } from '../contexts/AppContext';
 
@@ -83,21 +83,45 @@ export const TechnicalWhitepaper: React.FC<{ onClose: () => void }> = ({ onClose
             </div>
           </section>
 
-          {/* 2. Biomechanics Logic */}
-          <section>
-            <h3 className="text-white font-bold flex items-center gap-2 mb-3">
-              <Eye size={16} className="text-purple-400" /> Motor Biomecánico
-            </h3>
-            <div className="pl-4 border-l-2 border-purple-500/30 space-y-3">
-              <p>
-                El análisis de video no es estético, es físico. El sistema utiliza el <strong>Modelo Antropométrico de Dempster</strong> para calcular el Centro de Masa (CoM) en cada frame.
-              </p>
-              <ul className="list-disc pl-4 space-y-1 text-xs text-slate-400">
-                  <li><strong>Stateful Tracking:</strong> El motor mantiene "memoria" entre frames para calcular velocidad y aceleración sin ruido, reseteándose automáticamente entre videos.</li>
-                  <li><strong>KPIs Cinemáticos:</strong> Shin Angle (Ataque), Hip Extension (Poder), Knee Flexion (Recobro).</li>
-                  <li><strong>KPIs Cinéticos (Estimados):</strong> Force Application Index y Oscilación Vertical (Stiffness/Eficiencia).</li>
-              </ul>
-            </div>
+          {/* NEW SECTION: SCIENTIFIC BASIS */}
+          <section className="space-y-4">
+             <h3 className="text-white font-bold flex items-center gap-2 mb-3 border-b border-slate-800 pb-2">
+                <BookOpen size={16} className="text-yellow-400" /> Bases Técnicas & Bibliografía
+             </h3>
+             <p className="text-xs text-slate-400 italic mb-2">Los algoritmos de planificación y biomecánica se derivan estrictamente de la siguiente literatura científica:</p>
+             
+             <div className="grid gap-3">
+                 <ReferenceCard 
+                    title="The Mechanics of Sprinting and Hurdling" 
+                    author="Ralph Mann, Ph.D. (2018)" 
+                    tags={['Biomecánica', 'Modelo Cinemático']}
+                    desc="Base para el 'Motor de Física'. Utilizado para determinar los ángulos ideales de la tibia y caderas en velocidad máxima."
+                 />
+                 <ReferenceCard 
+                    title="Running: Biomechanics and Exercise Physiology" 
+                    author="Frans Bosch & Ronald Klomp" 
+                    tags={['Transferencia', 'Stiffness']}
+                    desc="Fundamento de los drills correctivos y el concepto de 'Whip from the hip' aplicado en el análisis de video."
+                 />
+                 <ReferenceCard 
+                    title="The Training Load - Injury Paradox" 
+                    author="Tim Gabbett (2016)" 
+                    tags={['Carga ACWR', 'Prevención']}
+                    desc="Modelo matemático (Acute:Chronic Workload Ratio) implementado en el sistema de semáforo de riesgo de lesiones."
+                 />
+                 <ReferenceCard 
+                    title="Sprint acceleration mechanics: The major role of hamstrings" 
+                    author="J.B. Morin et al. (2015)" 
+                    tags={['Fuerza Horizontal', 'Cinética']}
+                    desc="Utilizado para inferir la eficiencia de aplicación de fuerza horizontal (Force Application Index)."
+                 />
+                 <ReferenceCard 
+                    title="Transfer of Training in Sports" 
+                    author="Anatoliy Bondarchuk" 
+                    tags={['Periodización', 'Fases']}
+                    desc="Estructura de los microciclos generados por la IA (GPP, SPP, Competición)."
+                 />
+             </div>
           </section>
 
           {/* 3. Load Engineering */}
@@ -105,9 +129,6 @@ export const TechnicalWhitepaper: React.FC<{ onClose: () => void }> = ({ onClose
             <h3 className="text-white font-bold flex items-center gap-2 mb-3">
               <Scale size={16} className="text-orange-400" /> Ingeniería de Cargas & ACWR
             </h3>
-            <p className="mb-2">
-                El sistema implementa el modelo de <strong>Gabbett (Acute:Chronic Workload Ratio)</strong> para la prevención de lesiones.
-            </p>
             <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 text-xs font-mono grid gap-2">
                 <div className="flex justify-between">
                     <span>ACWR &lt; 0.8</span>
@@ -121,23 +142,6 @@ export const TechnicalWhitepaper: React.FC<{ onClose: () => void }> = ({ onClose
                     <span>ACWR &gt; 1.5</span>
                     <span className="text-red-400">Alto Riesgo de Lesión (Spike)</span>
                 </div>
-            </div>
-          </section>
-
-          {/* 4. Omni-Conscious Architecture */}
-          <section>
-            <h3 className="text-white font-bold flex items-center gap-2 mb-3">
-              <Cpu size={16} className="text-blue-400" /> Arquitectura Omni-Consciente
-            </h3>
-            <p className="mb-3">
-              El "Cerebro" de la app (Nexus) no trata los datos de forma aislada. Antes de emitir una recomendación, el sistema consulta un "Expediente Unificado" que contiene:
-            </p>
-            <div className="flex flex-wrap gap-2 text-xs">
-                <span className="bg-slate-800 px-2 py-1 rounded border border-slate-700">Historial de Lesiones</span>
-                <span className="bg-slate-800 px-2 py-1 rounded border border-slate-700">Biomarcadores (Sueño/Fatiga)</span>
-                <span className="bg-slate-800 px-2 py-1 rounded border border-slate-700">Calendario Competitivo</span>
-                <span className="bg-slate-800 px-2 py-1 rounded border border-slate-700">Evolución Técnica (Historial Video)</span>
-                <span className="bg-slate-800 px-2 py-1 rounded border border-slate-700">Staff Técnico Disponible</span>
             </div>
           </section>
 
@@ -163,3 +167,21 @@ export const TechnicalWhitepaper: React.FC<{ onClose: () => void }> = ({ onClose
     </div>
   );
 };
+
+const ReferenceCard = ({ title, author, tags, desc }: any) => (
+    <div className="bg-slate-950 border border-slate-800 p-3 rounded-lg flex flex-col gap-2 hover:border-slate-600 transition-colors">
+        <div className="flex justify-between items-start">
+            <div>
+                <h4 className="font-bold text-slate-200 text-sm">{title}</h4>
+                <span className="text-xs text-slate-500">{author}</span>
+            </div>
+            <Link size={14} className="text-slate-600"/>
+        </div>
+        <p className="text-xs text-slate-400 leading-snug">{desc}</p>
+        <div className="flex gap-2 mt-1">
+            {tags.map((t: string) => (
+                <span key={t} className="text-[9px] bg-slate-900 border border-slate-700 px-2 py-0.5 rounded text-slate-400 uppercase tracking-wide">{t}</span>
+            ))}
+        </div>
+    </div>
+);
