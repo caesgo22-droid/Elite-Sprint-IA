@@ -1,6 +1,6 @@
 
 import * as React from 'react';
-import { ShieldCheck, X, Cpu, Scale, Eye, FileText, Database, GitBranch, Activity, Server, BookOpen, Link } from 'lucide-react';
+import { ShieldCheck, X, Cpu, Scale, Eye, FileText, Database, GitBranch, Activity, Server, BookOpen, Link, Wifi, WifiOff } from 'lucide-react';
 import { DRILL_DATABASE, PHASE_TEMPLATES } from '../services/trainingDatabase';
 import { useApp } from '../contexts/AppContext';
 
@@ -81,6 +81,27 @@ export const TechnicalWhitepaper: React.FC<{ onClose: () => void }> = ({ onClose
                     <div className="text-purple-400 font-mono font-bold">{SYSTEM_METRICS.activeLogs}</div>
                 </div>
             </div>
+          </section>
+
+          {/* HYBRID ARCHITECTURE */}
+          <section className="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
+              <h3 className="text-white font-bold flex items-center gap-2 mb-3">
+                  <GitBranch size={16} className="text-blue-400" /> Protocolo Híbrido (Online vs Offline)
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="border border-emerald-900/30 bg-emerald-900/10 p-3 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2 font-bold text-emerald-400 text-xs uppercase"><Wifi size={14}/> Modo Online (Gemini AI)</div>
+                      <p className="text-[11px] text-slate-300 leading-snug">
+                          Utiliza <strong>LLMs (Large Language Models)</strong> para interpretar el contexto visual completo. Detecta matices sutiles (tensión facial, fluidez) y genera feedback natural y complejo.
+                      </p>
+                  </div>
+                  <div className="border border-slate-700 bg-slate-900 p-3 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2 font-bold text-slate-400 text-xs uppercase"><WifiOff size={14}/> Modo Offline (Local Expert)</div>
+                      <p className="text-[11px] text-slate-300 leading-snug">
+                          Ejecuta <strong>Heurística Determinista</strong> localmente. Utiliza los mismos datos de física (ángulos, GCT) pero aplica reglas estrictas "If/Then" basadas en biomecánica. Menos conversacional, igual de preciso numéricamente.
+                      </p>
+                  </div>
+              </div>
           </section>
 
           {/* NEW SECTION: SCIENTIFIC BASIS */}

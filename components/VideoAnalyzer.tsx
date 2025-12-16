@@ -3,9 +3,10 @@ import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { analyzeTechnique, hasApiKey } from '../services/geminiService';
+import { LocalExpert } from '../services/localExpert'; // NEW IMPORT
 import { ElitePhysicsEngine, AdvancedMetrics, calculateAngle } from '../utils/biomechanicsUtils';
 import { BiomechanicalAnalysis, KineticMetrics } from '../types';
-import { Loader2, AlertTriangle, CheckCircle, History, ScanLine, UploadCloud, Play, Video, Share, Info, UserCircle2, GraduationCap, FileText, MessageCircle, Activity, LocateFixed, Eye, X, Table2, MousePointerClick, Maximize2, UserCog, Wrench, Megaphone, SplitSquareHorizontal } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle, History, ScanLine, UploadCloud, Play, Video, Share, Info, UserCircle2, GraduationCap, FileText, MessageCircle, Activity, LocateFixed, Eye, X, Table2, MousePointerClick, Maximize2, UserCog, Wrench, Megaphone, SplitSquareHorizontal, WifiOff, Sparkles, RefreshCw } from 'lucide-react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 
 const VideoAnalyzer: React.FC = () => {
@@ -18,10 +19,11 @@ const VideoAnalyzer: React.FC = () => {
   const [viewHistory, setViewHistory] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [poseLandmarker, setPoseLandmarker] = useState<PoseLandmarker | null>(null);
+  const [mediaPipeError, setMediaPipeError] = useState(false); // Track model load error
   
   // COMPARE MODE STATE
   const [compareMode, setCompareMode] = useState(false);
-  const [compareSelection, setCompareSelection] = useState<string[]>([]); // Array of IDs
+  const [compareSelection, setCompareSelection] = useState<string[]>([]); 
   
   // DATA STATE
   const [displayData, setDisplayData] = useState<any>(null);
@@ -31,7 +33,7 @@ const VideoAnalyzer: React.FC = () => {
   // FRAME PERFECT STATE
   const [videoDuration, setVideoDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
-  const [frameCache, setFrameCache] = useState<any[]>([]); // Stores landmarks for every scanned frame
+  const [frameCache, setFrameCache] = useState<any[]>([]); 
   
   // Staff Notes State
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -40,6 +42,9 @@ const VideoAnalyzer: React.FC = () => {
   const [analysisMode, setAnalysisMode] = useState<'Personal' | 'External'>('Personal');
   const [activeTooltip, setActiveTooltip] = useState<{title: string, text: string} | null>(null);
   const [showReportModal, setShowReportModal] = useState<BiomechanicalAnalysis | null>(null);
+
+  // SMART SYNC STATE
+  const [syncingId, setSyncingId] = useState<string | null>(null);
 
   const physicsEngine = useRef<ElitePhysicsEngine>(new ElitePhysicsEngine());
   const isMounted = useRef(true);
@@ -61,7 +66,6 @@ const VideoAnalyzer: React.FC = () => {
         const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/wasm");
         if (!isMounted.current) return;
         
-        // UPGRADE: Using FULL model instead of LITE for better detection at distance
         const landmarker = await PoseLandmarker.createFromOptions(vision, {
           baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task`, delegate: "GPU" },
           runningMode: "VIDEO", numPoses: 1
@@ -69,10 +73,14 @@ const VideoAnalyzer: React.FC = () => {
         
         if (isMounted.current) {
             setPoseLandmarker(landmarker);
+            setMediaPipeError(false);
         } else {
             landmarker.close();
         }
-      } catch (error) { console.error("MediaPipe Error:", error); }
+      } catch (error) { 
+          console.error("MediaPipe Error (Offline?):", error); 
+          setMediaPipeError(true);
+      }
     };
     initMediaPipe();
     
@@ -98,43 +106,26 @@ const VideoAnalyzer: React.FC = () => {
   const handleDrop = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]); };
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
 
-  // --- CORE DETECTION LOGIC (Returns data, doesn't just set state) ---
+  // --- CORE DETECTION LOGIC ---
   const performDetection = (video: HTMLVideoElement, timestamp: number) => {
       if (!poseLandmarker) return null;
-      
       try {
-          // STRICT SAFETY CHECK: If timestamp goes backwards, ABORT immediately.
-          // This prevents "Packet timestamp mismatch" crash in MediaPipe.
-          if (timestamp <= lastVideoTimestamp.current) {
-             return null; 
-          }
+          if (timestamp <= lastVideoTimestamp.current) return null; 
           lastVideoTimestamp.current = timestamp;
 
           const result = poseLandmarker.detectForVideo(video, timestamp);
           
           if (result.landmarks && result.landmarks.length > 0) {
               const landmarks = result.landmarks[0];
-              
-              // 1. Calculate CoM
               const com = physicsEngine.current.calculateCenterOfMass(landmarks);
               setComLocation(com);
-              
-              // 2. Calculate Mechanics
               const mechanics = physicsEngine.current.calculateSprintMechanics(landmarks);
               setDisplayData(mechanics);
-
-              // 3. Calculate Advanced Metrics (now with GCT state)
               const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, timestamp, com);
               setDisplayAdvanced(advanced);
-
-              // RETURN DATA FOR API USE
               return { landmarks, mechanics, advanced, com, timestamp };
           }
-      } catch (e) {
-          console.warn("MediaPipe Detection Glitch (Ignored):", e);
-          // Force reset tracking on error to be safe
-          try { lastVideoTimestamp.current = -1; } catch(err) {}
-      }
+      } catch (e) { console.warn("Detection Glitch:", e); try { lastVideoTimestamp.current = -1; } catch(err) {} }
       return null;
   };
 
@@ -214,16 +205,12 @@ const VideoAnalyzer: React.FC = () => {
 
   const processFrame = (time: number) => {
       if(!videoRef.current || !canvasRef.current) return;
-      
-      // If we have cached data for this roughly this time, use it
-      const cached = frameCache.find(f => Math.abs(f.timestamp - time) < 0.05); // 50ms tolerance
-      
+      const cached = frameCache.find(f => Math.abs(f.timestamp - time) < 0.05);
       if (cached) {
           drawSkeleton(cached.landmarks, cached.com);
           setDisplayData(cached.mechanics);
           setDisplayAdvanced(cached.advanced);
       } else {
-          // New detection
           const data = performDetection(videoRef.current, time * 1000);
           if (data) {
               drawSkeleton(data.landmarks, data.com);
@@ -233,9 +220,7 @@ const VideoAnalyzer: React.FC = () => {
   };
 
   const handleTimeUpdate = () => {
-      // Prevent conflicts if Auto-Scan is running
       if (isScanning.current) return;
-
       if(videoRef.current) {
           setCurrentTime(videoRef.current.currentTime);
           if(!videoRef.current.paused) processFrame(videoRef.current.currentTime);
@@ -248,7 +233,6 @@ const VideoAnalyzer: React.FC = () => {
           videoRef.current.pause();
           videoRef.current.currentTime = time;
           setCurrentTime(time);
-          // Reset safe timestamp for manual jumps
           lastVideoTimestamp.current = -1; 
           setTimeout(() => processFrame(time), 50); 
       }
@@ -270,6 +254,51 @@ const VideoAnalyzer: React.FC = () => {
           setTimeout(() => processFrame(analysis.timestamp!), 200);
       } else {
           alert("Este análisis antiguo no tiene marca de tiempo guardada.");
+      }
+  };
+
+  // --- SMART SYNC FUNCTION ---
+  const handleSmartSync = async (analysis: BiomechanicalAnalysis) => {
+      if (!hasApiKey || !analysis.thumbnail) {
+          alert("Se requiere conexión a Internet y una imagen válida para mejorar el análisis.");
+          return;
+      }
+      
+      setSyncingId(analysis.id);
+      try {
+          // Clean base64 header if present
+          const base64Data = analysis.thumbnail.split(',')[1] || analysis.thumbnail;
+          
+          // Re-Analyze using ONLY the image and the EXISTING physics data
+          const result = await analyzeTechnique(
+              [base64Data], 
+              null, // We don't need to re-send raw mechanics if kinetics are present
+              analysis.kinetics, // Send the accurate offline physics
+              analysis.category || 'Personal'
+          );
+
+          if (result) {
+              // Merge: Keep ID, Timestamp, Thumbnail, Physics. Update Text & Score logic.
+              const upgradedAnalysis: BiomechanicalAnalysis = {
+                  ...analysis,
+                  ...result,
+                  coachNotes: "Análisis sincronizado y mejorado con Gemini AI.",
+                  // Ensure physics aren't overwritten by AI hallucinations if AI returned nulls
+                  kinetics: analysis.kinetics 
+              };
+
+              updateAnalysis(analysis.id, upgradedAnalysis);
+              
+              // Update local view if it's currently showing
+              setSessionAnalyses(prev => prev.map(a => a.id === analysis.id ? upgradedAnalysis : a));
+              
+              if(showReportModal?.id === analysis.id) setShowReportModal(upgradedAnalysis);
+          }
+      } catch (error) {
+          console.error("Smart Sync Failed:", error);
+          alert("Error al conectar con el servidor. Intenta más tarde.");
+      } finally {
+          setSyncingId(null);
       }
   };
 
@@ -344,10 +373,13 @@ const VideoAnalyzer: React.FC = () => {
             strideFreq: bestFrame.advanced?.frequency
         };
 
-        const result = await analyzeTechnique([capturedImageBase64], bestFrame.mechanics, bestFrame.advanced, analysisMode);
-        
-        if(result) {
-             const analysis: BiomechanicalAnalysis = { 
+        // --- HYBRID ONLINE/OFFLINE LOGIC ---
+        let analysis: BiomechanicalAnalysis;
+        try {
+            // Attempt Gemini
+            const result = await analyzeTechnique([capturedImageBase64], bestFrame.mechanics, bestFrame.advanced, analysisMode);
+            if (!result) throw new Error("Null result from Gemini");
+            analysis = { 
                  ...result, 
                  id: Date.now().toString(), 
                  type: 'Single', 
@@ -355,21 +387,28 @@ const VideoAnalyzer: React.FC = () => {
                  kinetics: kinetics,
                  timestamp: bestFrame.timestamp / 1000 
              };
-             setSessionAnalyses(prev => [analysis, ...prev]);
-             if (analysisMode === 'Personal') saveAnalysis(analysis);
-        } else {
-            alert("No se pudo obtener una respuesta de la IA. \n\nCausa probable: Falta la API Key de Gemini en el servidor (Vercel).");
+        } catch (e: any) {
+            // FALLBACK TO LOCAL EXPERT
+            console.warn("API Error, Switching to Local Expert:", e);
+            setStatusMessage("Modo Offline Activado...");
+            await new Promise(r => setTimeout(r, 500)); // UX delay
+            
+            const localResult = LocalExpert.analyze(bestFrame.mechanics, bestFrame.advanced, kinetics);
+            analysis = {
+                ...localResult,
+                thumbnail: `data:image/jpeg;base64,${capturedImageBase64}`,
+                timestamp: bestFrame.timestamp / 1000,
+                // Add a flag to indicate offline
+                coachNotes: "[OFFLINE] Análisis generado por Heurística Nivel V."
+            };
         }
+
+        setSessionAnalyses(prev => [analysis, ...prev]);
+        if (analysisMode === 'Personal') saveAnalysis(analysis);
 
     } catch(e: any) { 
         console.error("Auto-Capture error:", e);
-        if (e.message === "QUOTA_EXCEEDED" || e.message?.includes("429")) {
-            alert("⚠️ Límite de cuota de IA excedido (Error 429).\n\nHas alcanzado el límite gratuito de Gemini por minuto/día. Intenta de nuevo en unos momentos.");
-        } else if (e.message === "API_KEY_MISSING") {
-             alert("Error: Falta la API Key en el servidor.");
-        } else {
-             alert("Error técnico al procesar el video. Verifica tu conexión.");
-        }
+        alert("Error técnico al procesar el video. Verifica tu conexión o intenta de nuevo.");
     } finally { 
         setLoading(false); 
         isScanning.current = false; // Unblock
@@ -480,6 +519,23 @@ const VideoAnalyzer: React.FC = () => {
       </button>
   );
 
+  // Helper to render the upgrade button for offline analyses
+  const UpgradeButton = ({ analysis }: { analysis: BiomechanicalAnalysis }) => {
+      const isOffline = analysis.coachNotes?.includes("[OFFLINE]");
+      if (!isOffline || !hasApiKey) return null;
+
+      return (
+          <button 
+            onClick={(e) => { e.stopPropagation(); handleSmartSync(analysis); }} 
+            className="w-full mt-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-2 shadow-lg shadow-purple-900/20 transition-all animate-pulse-slow"
+            disabled={syncingId === analysis.id}
+          >
+              {syncingId === analysis.id ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>}
+              {syncingId === analysis.id ? "Mejorando..." : "Mejorar con IA (Online)"}
+          </button>
+      );
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-16">
        <div className="flex justify-between items-end border-b border-slate-800 pb-4">
@@ -497,6 +553,18 @@ const VideoAnalyzer: React.FC = () => {
           </div>
        </div>
 
+       {mediaPipeError && (
+           <div className="bg-red-900/20 border border-red-500/50 p-4 rounded-xl flex items-start gap-3">
+               <WifiOff className="text-red-400 shrink-0" size={24}/>
+               <div>
+                   <h4 className="font-bold text-red-400 text-sm">Modo Vision Offline No Disponible</h4>
+                   <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                       La IA de visión no pudo cargarse. Para usar la app en el campo sin señal, **debes abrirla una vez con Wi-Fi** antes de salir para que los modelos se guarden en caché.
+                   </p>
+               </div>
+           </div>
+       )}
+
        {compareMode && <CompareView />}
 
        {viewHistory ? (
@@ -511,23 +579,27 @@ const VideoAnalyzer: React.FC = () => {
                </div>
 
                {analysisHistory.filter(h => h.category === 'Personal' || !h.category).map((item, i) => (
-                   <div key={i} className={`bg-slate-900 p-3 rounded-xl flex gap-4 cursor-pointer hover:bg-slate-800 border transition-colors ${compareSelection.includes(item.id) ? 'border-cyan-500 bg-cyan-900/10' : 'border-slate-800'}`} onClick={() => { 
+                   <div key={i} className={`relative bg-slate-900 p-3 rounded-xl flex flex-col gap-2 cursor-pointer hover:bg-slate-800 border transition-colors ${compareSelection.includes(item.id) ? 'border-cyan-500 bg-cyan-900/10' : 'border-slate-800'}`} onClick={() => { 
                        if (compareSelection.length > 0 || compareSelection.length < 2 && compareSelection.includes(item.id)) {
                             toggleCompareSelect(item.id);
                        } else {
                             setSessionAnalyses([item]); setPreviewUrl(item.thumbnail || null); setIsVideo(false); setViewHistory(false); setAnalysisMode(item.category || 'Personal'); 
                        }
                    }}>
-                       <div className="relative">
-                           {item.thumbnail && <img src={item.thumbnail} className="w-20 h-14 object-cover rounded-lg bg-black" />}
-                           <div onClick={(e) => { e.stopPropagation(); toggleCompareSelect(item.id); }} className={`absolute top-0 left-0 w-full h-full bg-black/50 flex items-center justify-center opacity-0 hover:opacity-100 ${compareSelection.includes(item.id) ? 'opacity-100' : ''}`}>
-                               <div className={`w-4 h-4 rounded border ${compareSelection.includes(item.id) ? 'bg-cyan-500 border-cyan-500' : 'border-white'}`}></div>
+                       <div className="flex gap-4">
+                           <div className="relative">
+                               {item.thumbnail && <img src={item.thumbnail} className="w-20 h-14 object-cover rounded-lg bg-black" />}
+                               <div onClick={(e) => { e.stopPropagation(); toggleCompareSelect(item.id); }} className={`absolute top-0 left-0 w-full h-full bg-black/50 flex items-center justify-center opacity-0 hover:opacity-100 ${compareSelection.includes(item.id) ? 'opacity-100' : ''}`}>
+                                   <div className={`w-4 h-4 rounded border ${compareSelection.includes(item.id) ? 'bg-cyan-500 border-cyan-500' : 'border-white'}`}></div>
+                               </div>
+                           </div>
+                           <div className="flex-1">
+                               <div className="font-bold text-white text-sm">{item.phaseDetected}</div>
+                               <div className="flex gap-2 mt-1"><span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400">{new Date(item.savedAt || "").toLocaleDateString()}</span><span className={`text-[10px] px-2 py-0.5 rounded font-bold ${item.score > 80 ? 'text-emerald-400 bg-emerald-900/20' : 'text-yellow-400 bg-yellow-900/20'}`}>Score: {item.score}</span></div>
                            </div>
                        </div>
-                       <div className="flex-1">
-                           <div className="font-bold text-white text-sm">{item.phaseDetected}</div>
-                           <div className="flex gap-2 mt-1"><span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400">{new Date(item.savedAt || "").toLocaleDateString()}</span><span className={`text-[10px] px-2 py-0.5 rounded font-bold ${item.score > 80 ? 'text-emerald-400 bg-emerald-900/20' : 'text-yellow-400 bg-yellow-900/20'}`}>Score: {item.score}</span></div>
-                       </div>
+                       {/* Smart Sync Button in List View */}
+                       <UpgradeButton analysis={item} />
                    </div>
                ))}
                {analysisHistory.length === 0 && <div className="text-center text-slate-500 text-sm py-4">No hay análisis guardados.</div>}
@@ -659,6 +731,9 @@ const VideoAnalyzer: React.FC = () => {
                                 <div>
                                     <h3 className="font-bold text-xl text-white tracking-tight">{analysis.phaseDetected}</h3>
                                     <span className="text-xs text-slate-500 uppercase tracking-widest">{analysis.type === 'Sequence' ? 'Kinograma Completo' : 'Smart Capture'}</span>
+                                    {analysis.coachNotes?.includes("OFFLINE") && (
+                                        <span className="ml-2 bg-slate-700 text-slate-300 text-[10px] px-2 py-0.5 rounded border border-slate-600">OFFLINE MODE</span>
+                                    )}
                                 </div>
                                 <div className="flex gap-2">
                                     <span className={`px-3 py-1 rounded-lg text-sm font-bold ${analysis.score > 80 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{analysis.score}</span>
@@ -674,6 +749,9 @@ const VideoAnalyzer: React.FC = () => {
                                     <Table2 size={14} className="text-purple-400"/> 📑 Reporte Completo
                                 </button>
                             </div>
+
+                            {/* SMART SYNC BUTTON (Main View) */}
+                            <UpgradeButton analysis={analysis} />
 
                             {analysis.kinetics && (
                                 <div className="grid grid-cols-3 gap-2 bg-slate-950/50 p-2 rounded-lg border border-slate-800 relative mt-2">
@@ -718,6 +796,13 @@ const VideoAnalyzer: React.FC = () => {
                         <ul className="space-y-1 text-sm text-slate-300">
                              {showReportModal.criticalErrors.map((e,i)=><li key={i} className="text-red-300">• {e}</li>)}
                         </ul>
+                        {/* Offline Notice in Modal */}
+                        {showReportModal.coachNotes?.includes("OFFLINE") && (
+                            <div className="bg-slate-800 p-3 rounded-lg border border-slate-700">
+                                <div className="text-xs text-slate-400 italic text-center mb-2">Análisis generado sin conexión.</div>
+                                <UpgradeButton analysis={showReportModal}/>
+                            </div>
+                        )}
                     </div>
                </div>
            </div>
