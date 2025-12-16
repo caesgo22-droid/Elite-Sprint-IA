@@ -125,7 +125,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser: User) => {
       setUser(currentUser);
       if (currentUser) {
-          await loadDataForId(viewingAthleteId || currentUser.uid);
+          // AUTO-SYNC FIX: Check if email is in profile, if not, save it.
+          // This makes existing users discoverable.
+          const data = await fetchUserData(currentUser.uid);
+          
+          // CRITICAL: Ensure email is saved in the profile for searchability
+          if (data.profile && (!data.profile.email || data.profile.email.trim() === '')) {
+              console.log("Auto-Syncing missing email to profile...");
+              const updatedProfile = { ...data.profile, email: currentUser.email?.toLowerCase() || '' };
+              await saveUserProfile(currentUser.uid, updatedProfile);
+              // Update local state immediately
+              setUserProfile({ ...defaultProfile, ...updatedProfile });
+          } else {
+              if (data.profile) setUserProfile({ ...defaultProfile, ...data.profile });
+          }
+
+          // Load rest of data
+          if (currentUser) {
+              await loadDataForId(viewingAthleteId || currentUser.uid);
+          }
       } else {
         setUserProfile(defaultProfile);
         setCurrentPlan(null);

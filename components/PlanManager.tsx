@@ -10,7 +10,7 @@ import { calculateACWR } from '../utils/loadCalculator';
 import { getPlanHistory } from '../services/firebase';
 import { calculateRecovery } from '../utils/recoveryEngine';
 import { RaceDayManager } from './RaceDayManager';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Label } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Label, ComposedChart, Line } from 'recharts';
 
 // Helper for Video Links
 const DrillItem = ({ name, colorClass }: { name: string, colorClass: string }) => (
@@ -144,63 +144,93 @@ const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessi
     );
 });
 
-// MACROCYCLE CHART COMPONENT
+// MACROCYCLE CHART COMPONENT (IMPROVED)
 const MacrocycleChart = ({ history, currentPlan }: { history: any[], currentPlan: any }) => {
     const data = useMemo(() => {
-        // Combine history and current
+        // 1. Process History (Last 4 weeks)
         const allPlans = [...history].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-        if (currentPlan) allPlans.push(currentPlan); 
+        const recentHistory = allPlans.slice(-4); // Last 4 plans
 
-        // Take last 8 data points
-        const recentPlans = allPlans.slice(-8);
-
-        return recentPlans.map((plan) => {
-            let weeklyLoad = 0;
-            if (plan.sessions) {
+        // Helper to calc load
+        const calcLoad = (plan: any) => {
+            let load = 0;
+            if (plan && plan.sessions) {
                 plan.sessions.forEach((s: any) => {
                     const factor = s.intensity === 'Max' ? 5 : s.intensity === 'High' ? 4 : s.intensity === 'Medium' ? 3 : 1;
-                    weeklyLoad += factor * 10; 
+                    load += factor * 10; 
                 });
             }
-            
-            // Format Date for Label (e.g. "12 Oct")
-            const date = new Date(plan.createdAt);
-            const label = date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+            return load;
+        };
 
-            return {
-                name: label,
-                fullDate: date.toLocaleDateString(),
-                phase: plan.phase,
-                load: weeklyLoad,
-                isCurrent: plan.id === currentPlan?.id
-            };
+        const chartData = [];
+
+        // Add Past Weeks
+        recentHistory.forEach((plan, i) => {
+            chartData.push({
+                name: `Sem ${-1 * (recentHistory.length - i)}`,
+                realLoad: calcLoad(plan),
+                projectedLoad: null,
+                isCurrent: false,
+                fullDate: new Date(plan.createdAt).toLocaleDateString()
+            });
         });
+
+        // Add Current Week
+        const currentLoad = currentPlan ? calcLoad(currentPlan) : 0;
+        chartData.push({
+            name: 'ACTUAL',
+            realLoad: currentLoad,
+            projectedLoad: currentLoad, // Connect lines
+            isCurrent: true,
+            fullDate: 'Esta Semana'
+        });
+
+        // Add Future Projections (3 Weeks) based on Phase
+        // Logic: Build Phase (+10% per week), Taper (-20%), General (Flat)
+        let lastLoad = currentLoad || 150; // Fallback start
+        const phase = currentPlan?.phase || 'General Prep';
+        
+        for (let i = 1; i <= 3; i++) {
+            let nextLoad = lastLoad;
+            if (phase.includes('Specific') || phase.includes('Pre-Comp')) {
+                // Progressive Overload or Taper logic
+                if (i === 3) nextLoad = lastLoad * 0.7; // Deload week 4
+                else nextLoad = lastLoad * 1.05; // +5%
+            } else if (phase.includes('Competition') || phase.includes('Tapering')) {
+                nextLoad = lastLoad * 0.85; // Tapering down
+            } else {
+                nextLoad = lastLoad * 1.02; // General small build
+            }
+            
+            chartData.push({
+                name: `Sem +${i}`,
+                realLoad: null,
+                projectedLoad: Math.round(nextLoad),
+                isCurrent: false,
+                fullDate: 'Proyección'
+            });
+            lastLoad = nextLoad;
+        }
+
+        return chartData;
     }, [history, currentPlan]);
-
-    if (data.length < 2) return null;
-
-    // Find index of current plan for reference line
-    const currentIndex = data.findIndex(d => d.isCurrent);
-    const currentDataPoint = data[currentIndex];
-    
-    // Get Today's date for display context
-    const todayStr = new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
 
     return (
         <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl mb-6 relative overflow-hidden">
             <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2"><BarChart3 size={14}/> Tendencia Macrociclo (Volumen)</h3>
-                <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></div>
-                    <span className="text-[10px] text-cyan-400 font-bold uppercase">Plan Actual</span>
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2"><BarChart3 size={14}/> Estructura Macrociclo (8 Semanas)</h3>
+                <div className="flex items-center gap-3 text-[9px] font-bold uppercase">
+                    <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-cyan-500"></div> Real</div>
+                    <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-slate-500 border border-dashed border-slate-300"></div> Futuro</div>
                 </div>
             </div>
             
-            <div className="h-36 w-full">
+            <div className="h-40 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={data}>
+                    <ComposedChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <defs>
-                            <linearGradient id="colorLoad" x1="0" y1="0" x2="0" y2="1">
+                            <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.3}/>
                                 <stop offset="95%" stopColor="#22d3ee" stopOpacity={0}/>
                             </linearGradient>
@@ -210,46 +240,52 @@ const MacrocycleChart = ({ history, currentPlan }: { history: any[], currentPlan
                         
                         <XAxis 
                             dataKey="name" 
-                            tick={{fontSize: 9, fill: '#64748b'}} 
+                            tick={{fontSize: 9, fill: '#94a3b8'}} 
                             axisLine={false} 
                             tickLine={false} 
                             interval={0}
                         />
-                        <YAxis hide domain={['dataMin - 10', 'dataMax + 10']} />
+                        <YAxis hide domain={['dataMin - 20', 'dataMax + 20']} />
                         
                         <Tooltip 
-                            labelFormatter={(label) => `Semana del ${label}`}
                             contentStyle={{backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px'}}
-                            itemStyle={{color: '#fff', fontSize: '12px'}}
+                            itemStyle={{fontSize: '12px'}}
                             labelStyle={{color: '#94a3b8', fontSize: '10px', marginBottom: '4px'}}
+                            formatter={(value: any, name: string) => [value, name === 'realLoad' ? 'Carga Real' : 'Proyección']}
                         />
                         
-                        {/* Reference Line for Current Plan Start Date */}
-                        {currentDataPoint && (
-                            <ReferenceLine x={currentDataPoint.name} stroke="#22d3ee" strokeDasharray="3 3">
-                                <Label value="ACTUAL" position="insideTop" fill="#22d3ee" fontSize={9} fontWeight="bold" />
-                            </ReferenceLine>
-                        )}
+                        {/* Reference Line for Current Plan */}
+                        <ReferenceLine x="ACTUAL" stroke="#22d3ee" strokeDasharray="3 3" strokeOpacity={0.5} />
 
+                        {/* Projected Load (Dotted Line) */}
+                        <Line 
+                            type="monotone" 
+                            dataKey="projectedLoad" 
+                            stroke="#64748b" 
+                            strokeWidth={2} 
+                            strokeDasharray="5 5" 
+                            dot={false}
+                            activeDot={false}
+                        />
+
+                        {/* Real Load (Solid Area) */}
                         <Area 
                             type="monotone" 
-                            dataKey="load" 
+                            dataKey="realLoad" 
                             stroke="#22d3ee" 
                             fillOpacity={1} 
-                            fill="url(#colorLoad)" 
-                            strokeWidth={2} 
-                            activeDot={{r: 5, stroke: '#fff', strokeWidth: 2}}
+                            fill="url(#colorReal)" 
+                            strokeWidth={3} 
+                            activeDot={{r: 6, stroke: '#fff', strokeWidth: 2, fill: '#22d3ee'}}
                         />
-                    </AreaChart>
+                    </ComposedChart>
                 </ResponsiveContainer>
             </div>
             
-            {/* Visual Feedback for Context */}
-            <div className="flex justify-between items-center text-[9px] mt-2 border-t border-slate-800/50 pt-2">
-                <div className="text-slate-500 font-mono">* Eje X: Inicio del Microciclo</div>
-                <div className="text-slate-300 font-bold bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
-                    Hoy: <span className="text-emerald-400">{todayStr}</span>
-                </div>
+            <div className="flex justify-center mt-2">
+                <span className="text-[10px] text-cyan-400 font-bold bg-cyan-900/20 px-3 py-1 rounded-full border border-cyan-500/30 animate-pulse">
+                    SEMANA ACTUAL
+                </span>
             </div>
         </div>
     );

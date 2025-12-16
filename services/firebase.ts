@@ -144,16 +144,27 @@ export const fetchUserData = async (uid: string) => {
 export const findAthleteByEmail = async (email: string) => {
   if (!db || !isInitialized) return null;
   try {
+    // 1. Try exact lowercase match (Standard)
     const usersRef = collection(db, "users");
-    // Ensure email query is clean
-    const q = query(usersRef, where("profile.email", "==", email), limit(1));
+    const q = query(usersRef, where("profile.email", "==", email.toLowerCase()), limit(1));
     const querySnapshot = await getDocs(q);
     
-    if (querySnapshot.empty) return null;
+    if (!querySnapshot.empty) {
+        const doc = querySnapshot.docs[0];
+        return { uid: doc.id, ...doc.data() as any };
+    }
+
+    // 2. Fallback: Try with original casing if provided (Edge case for old accounts)
+    if (email !== email.toLowerCase()) {
+        const q2 = query(usersRef, where("profile.email", "==", email), limit(1));
+        const s2 = await getDocs(q2);
+        if (!s2.empty) {
+            const doc = s2.docs[0];
+            return { uid: doc.id, ...doc.data() as any };
+        }
+    }
     
-    // Return first match
-    const doc = querySnapshot.docs[0];
-    return { uid: doc.id, ...doc.data() as any };
+    return null;
   } catch(e) {
     console.error("Error searching athlete:", e);
     return null;
