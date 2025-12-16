@@ -17,7 +17,10 @@ export const CoachDashboard: React.FC = () => {
   // Fetch full profiles AND ANALYTICS for the roster list
   useEffect(() => {
       const loadRoster = async () => {
-          if (!userProfile.roster || userProfile.roster.length === 0) return;
+          if (!userProfile.roster || userProfile.roster.length === 0) {
+              setRosterData([]); // Clear if empty
+              return;
+          }
           setLoadingRoster(true);
           const profiles = [];
           
@@ -63,7 +66,9 @@ export const CoachDashboard: React.FC = () => {
   const handleAddAthlete = async () => {
       if (!emailQuery.trim()) return;
       setSearching(true);
-      const athlete = await findAthleteByEmail(emailQuery.trim());
+      
+      const cleanEmail = emailQuery.trim().toLowerCase();
+      const athlete = await findAthleteByEmail(cleanEmail);
       
       if (athlete) {
           if (userProfile.roster?.includes(athlete.uid)) {
@@ -72,10 +77,10 @@ export const CoachDashboard: React.FC = () => {
               const newRoster = [...(userProfile.roster || []), athlete.uid];
               updateProfile({ ...userProfile, roster: newRoster });
               setEmailQuery('');
-              alert(`Atleta agregado: ${athlete.profile?.name || 'Usuario'}`);
+              alert(`Atleta agregado exitosamente: ${athlete.profile?.name || 'Usuario'}`);
           }
       } else {
-          alert("No se encontró usuario con ese email. Asegúrate de que el atleta se haya registrado primero.");
+          alert("No se encontró usuario con ese email.\n\nCONSEJOS:\n1. Asegúrate que el atleta se haya registrado y entrado al menos una vez.\n2. Verifica mayúsculas/minúsculas (el sistema prefiere minúsculas).\n3. Si usó Google, debe haber completado el registro inicial.");
       }
       setSearching(false);
   };
@@ -130,6 +135,7 @@ export const CoachDashboard: React.FC = () => {
                     placeholder={t.staff.searchPlaceholder}
                     value={emailQuery}
                     onChange={(e) => setEmailQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddAthlete()}
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-10 pr-4 py-2.5 text-sm text-white focus:border-indigo-500 outline-none"
                   />
               </div>

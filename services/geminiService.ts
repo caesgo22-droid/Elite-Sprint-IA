@@ -227,6 +227,29 @@ export const generateTrainingPlan = async (
   else if (currentMonth >= 5 && currentMonth <= 8) phaseName = "Competition"; 
   else if (currentMonth >= 9) phaseName = "General Prep";
 
+  // Check for saved competitions to override phase
+  let competitionContext = "Sin competiciones cercanas reportadas.";
+  if (profile.competitions && profile.competitions.length > 0) {
+      const now = new Date();
+      const upcomingRaces = profile.competitions.filter(c => new Date(c.date) >= now).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      
+      if (upcomingRaces.length > 0) {
+          competitionContext = `PRÓXIMAS CARRERAS (CRÍTICO): ${upcomingRaces.map(c => `${c.name} el ${c.date}`).join(", ")}.`;
+          
+          // Check if race is within 10 days
+          const nextRace = upcomingRaces[0];
+          const diffTime = Math.abs(new Date(nextRace.date).getTime() - now.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+          
+          if (diffDays <= 10) {
+              phaseName = "Competition (Tapering)";
+              competitionContext += ` ¡ATENCIÓN! Carrera en ${diffDays} días. EL PLAN DEBE SER DE TAPERING (Descarga de volumen, mantenimiento de intensidad).`;
+          } else if (diffDays <= 28) {
+              phaseName = "Pre-Comp";
+          }
+      }
+  }
+
   const rawDays = (profile.trainingDays && Array.isArray(profile.trainingDays) && profile.trainingDays.length > 0) 
         ? profile.trainingDays 
         : ['Mon', 'Wed', 'Fri'];
@@ -267,14 +290,16 @@ export const generateTrainingPlan = async (
       CONTEXTO DEL ATLETA:
       - Nivel: ${profile.experienceLevel} (${profile.yearsExperience} años exp)
       - Evento Principal: ${focusEvent} (Ajusta fisiología para esto)
-      - Fase: ${phaseName}
+      - Fase Sugerida: ${phaseName}
       - Readiness Score: ${cnsScore.toFixed(1)}/10 (Factor Clave)
       - ACWR Actual: ${acwr ? acwr.ratio : 'N/A'}
       - Lesiones Activas: ${profile.injuries.length > 0 ? JSON.stringify(profile.injuries) : "Ninguna"}
+      ${competitionContext}
       ${safetyLockProtocol}
 
       TAREA:
       Genera un microciclo JSON para los días: ${targetDaysES.join(", ")}.
+      Si hay carrera esta semana, asegúrate de reducir el volumen drásticamente antes del evento.
     `;
 
     const response = await ai.models.generateContent({

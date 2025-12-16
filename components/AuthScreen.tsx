@@ -1,8 +1,9 @@
 
 import * as React from 'react';
 import { useState } from 'react';
-import { auth, googleProvider, saveUserProfile } from '../services/firebase';
+import { auth, googleProvider, saveUserProfile, db } from '../services/firebase';
 import * as firebaseAuth from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 import { Zap, Mail, Lock, LogIn, ArrowRight, UserCircle2, Briefcase } from 'lucide-react';
 
 const { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword } = firebaseAuth as any;
@@ -19,18 +20,40 @@ export const AuthScreen: React.FC = () => {
     try {
       setLoading(true);
       const res = await signInWithPopup(auth, googleProvider);
-      // We don't override role here on login, user might already exist
+      
+      // CRITICAL FIX: Ensure Firestore document exists after Google Login
+      if (res.user && db) {
+          const userRef = doc(db, "users", res.user.uid);
+          const userSnap = await getDoc(userRef);
+
+          if (!userSnap.exists()) {
+              // Create profile if it doesn't exist (First time Google Login)
+              await saveUserProfile(res.user.uid, {
+                  email: res.user.email?.toLowerCase() || '',
+                  role: 'athlete', // Default to athlete for Google Login, user can switch later
+                  name: res.user.displayName || 'Atleta Google',
+                  events: ['100m'],
+                  pbs: { '100m': {}, '200m': {}, '400m': {} },
+                  injuries: [],
+                  coaches: [],
+                  trainingDays: ['Mon', 'Tue', 'Thu', 'Fri'],
+                  roster: []
+              });
+          } else {
+              // Ensure email is synced and lowercase in existing profile
+              await saveUserProfile(res.user.uid, {
+                  email: res.user.email?.toLowerCase()
+              });
+          }
+      }
     } catch (err: any) {
       console.error("Google Login Error:", err);
       let msg = "Error con Google: " + err.message;
       
-      // User-friendly error mapping
       if (err.message.includes("auth/unauthorized-domain")) {
-        msg = "⚠️ Dominio no autorizado. Agrega esta URL (ej: .vercel.app) en: Firebase Console > Authentication > Settings > Authorized Domains";
+        msg = "⚠️ Dominio no autorizado. Agrega esta URL en Firebase Console.";
       } else if (err.message.includes("auth/popup-closed-by-user")) {
-        msg = "Inicio de sesión cancelado por el usuario.";
-      } else if (err.message.includes("auth/popup-blocked")) {
-        msg = "El navegador bloqueó la ventana emergente. Por favor permítela e intenta de nuevo.";
+        msg = "Inicio de sesión cancelado.";
       }
       
       setError(msg);
@@ -42,15 +65,17 @@ export const AuthScreen: React.FC = () => {
     e.preventDefault();
     setError('');
     setLoading(true);
+    const safeEmail = email.trim().toLowerCase(); // FORCE LOWERCASE
+
     try {
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
+        await signInWithEmailAndPassword(auth, safeEmail, password);
       } else {
-        const res = await createUserWithEmailAndPassword(auth, email, password);
+        const res = await createUserWithEmailAndPassword(auth, safeEmail, password);
         // Initialize profile with role and email
         if (res.user) {
             await saveUserProfile(res.user.uid, {
-                email: email,
+                email: safeEmail,
                 role: role,
                 name: role === 'staff' ? 'Coach' : 'Atleta',
                 // Add defaults to prevent crashes

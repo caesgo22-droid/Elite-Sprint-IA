@@ -1,7 +1,7 @@
 
 import * as firebaseApp from "firebase/app";
 import * as firebaseAuth from "firebase/auth";
-import { getFirestore, doc, setDoc, getDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc, Firestore, where } from "firebase/firestore";
+import { getFirestore, doc, setDoc, getDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc, Firestore, where, limit } from "firebase/firestore";
 
 // Helper to get env vars safely in Vite/Node
 const getEnv = (key: string) => {
@@ -145,14 +145,15 @@ export const findAthleteByEmail = async (email: string) => {
   if (!db || !isInitialized) return null;
   try {
     const usersRef = collection(db, "users");
-    const q = query(usersRef, where("profile.email", "==", email));
+    // Ensure email query is clean
+    const q = query(usersRef, where("profile.email", "==", email), limit(1));
     const querySnapshot = await getDocs(q);
     
     if (querySnapshot.empty) return null;
     
     // Return first match
     const doc = querySnapshot.docs[0];
-    return { uid: doc.id, ...doc.data() };
+    return { uid: doc.id, ...doc.data() as any };
   } catch(e) {
     console.error("Error searching athlete:", e);
     return null;

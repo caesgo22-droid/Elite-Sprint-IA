@@ -4,13 +4,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
-import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle, MessageSquare, Table2, ScanLine, ChevronDown, ChevronUp, Flag, BarChart3, MapPin } from 'lucide-react';
+import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle, MessageSquare, Table2, ScanLine, ChevronDown, ChevronUp, Flag, BarChart3, MapPin, Trophy, Trash2 } from 'lucide-react';
 import { TrainingSession, UserProfile, Injury } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { getPlanHistory } from '../services/firebase';
 import { calculateRecovery } from '../utils/recoveryEngine';
 import { RaceDayManager } from './RaceDayManager';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Label } from 'recharts';
 
 // Helper for Video Links
 const DrillItem = ({ name, colorClass }: { name: string, colorClass: string }) => (
@@ -182,14 +182,17 @@ const MacrocycleChart = ({ history, currentPlan }: { history: any[], currentPlan
     // Find index of current plan for reference line
     const currentIndex = data.findIndex(d => d.isCurrent);
     const currentDataPoint = data[currentIndex];
+    
+    // Get Today's date for display context
+    const todayStr = new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
 
     return (
         <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl mb-6 relative overflow-hidden">
             <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2"><BarChart3 size={14}/> Tendencia Macrociclo (Volumen/Intensidad)</h3>
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2"><BarChart3 size={14}/> Tendencia Macrociclo (Volumen)</h3>
                 <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></div>
-                    <span className="text-[10px] text-cyan-400 font-bold uppercase">Semana Actual</span>
+                    <span className="text-[10px] text-cyan-400 font-bold uppercase">Plan Actual</span>
                 </div>
             </div>
             
@@ -215,14 +218,17 @@ const MacrocycleChart = ({ history, currentPlan }: { history: any[], currentPlan
                         <YAxis hide domain={['dataMin - 10', 'dataMax + 10']} />
                         
                         <Tooltip 
+                            labelFormatter={(label) => `Semana del ${label}`}
                             contentStyle={{backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px'}}
                             itemStyle={{color: '#fff', fontSize: '12px'}}
                             labelStyle={{color: '#94a3b8', fontSize: '10px', marginBottom: '4px'}}
                         />
                         
-                        {/* Reference Line for Current Week */}
+                        {/* Reference Line for Current Plan Start Date */}
                         {currentDataPoint && (
-                            <ReferenceLine x={currentDataPoint.name} stroke="#22d3ee" strokeDasharray="3 3" />
+                            <ReferenceLine x={currentDataPoint.name} stroke="#22d3ee" strokeDasharray="3 3">
+                                <Label value="ACTUAL" position="insideTop" fill="#22d3ee" fontSize={9} fontWeight="bold" />
+                            </ReferenceLine>
                         )}
 
                         <Area 
@@ -238,9 +244,12 @@ const MacrocycleChart = ({ history, currentPlan }: { history: any[], currentPlan
                 </ResponsiveContainer>
             </div>
             
-            {/* Visual Feedback for Phase */}
-            <div className="absolute bottom-2 right-4 text-[9px] font-bold text-slate-600 bg-slate-950/50 px-2 py-1 rounded border border-slate-800">
-                Fase Actual: <span className="text-slate-300">{currentPlan?.phase}</span>
+            {/* Visual Feedback for Context */}
+            <div className="flex justify-between items-center text-[9px] mt-2 border-t border-slate-800/50 pt-2">
+                <div className="text-slate-500 font-mono">* Eje X: Inicio del Microciclo</div>
+                <div className="text-slate-300 font-bold bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                    Hoy: <span className="text-emerald-400">{todayStr}</span>
+                </div>
             </div>
         </div>
     );
@@ -267,8 +276,11 @@ export const PlanManager: React.FC = () => {
   const [viewingRecovery, setViewingRecovery] = useState<any>(null);
   const [showPlanTable, setShowPlanTable] = useState(false);
   const [showRationale, setShowRationale] = useState(true);
-  const [showRaceDay, setShowRaceDay] = useState(false); // RACE DAY STATE
-  const [showMacro, setShowMacro] = useState(false); // New Macro State
+  const [showRaceDay, setShowRaceDay] = useState(false); 
+  
+  // Competition Input State
+  const [newCompName, setNewCompName] = useState("");
+  const [newCompDate, setNewCompDate] = useState("");
 
   const isStaff = userProfile.role === 'staff';
 
@@ -336,6 +348,22 @@ export const PlanManager: React.FC = () => {
   const updatePB = (event: '100m'|'200m'|'400m', field: 'time'|'date', value: string) => {
       const newPBs = { ...tempProfile.pbs, [event]: { ...tempProfile.pbs[event], [field]: value } };
       setTempProfile({ ...tempProfile, pbs: newPBs });
+  };
+
+  // Competition Management
+  const addCompetition = () => {
+      if(!newCompName || !newCompDate) return;
+      const newComp = { id: Date.now().toString(), name: newCompName, date: newCompDate };
+      const currentComps = tempProfile.competitions || [];
+      // Sort by date immediately
+      const updated = [...currentComps, newComp].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      setTempProfile({ ...tempProfile, competitions: updated });
+      setNewCompName("");
+      setNewCompDate("");
+  };
+
+  const removeCompetition = (id: string) => {
+      setTempProfile({ ...tempProfile, competitions: tempProfile.competitions?.filter(c => c.id !== id) });
   };
 
   const handleExportHistory = () => {
@@ -413,7 +441,6 @@ export const PlanManager: React.FC = () => {
 
   // --- PROFILE CONFIG RENDER ---
   if (showProfileConfig) {
-      // Re-use the existing profile config rendering logic (omitted here to save space, assuming it's identical to the original file)
        return (
       <div className="space-y-6 animate-in fade-in duration-500 pb-10">
         <div className="flex justify-between items-center mb-4">
@@ -455,6 +482,30 @@ export const PlanManager: React.FC = () => {
                      <option value="Elite">Élite (Internacional)</option>
                  </select>
              </div>
+          </section>
+
+          {/* NEW SECTION: COMPETITIONS */}
+          <section className="space-y-4 pt-4 border-t border-slate-800">
+              <h3 className="text-sm font-bold text-yellow-400 uppercase tracking-wider flex items-center gap-2"><Trophy size={14}/> Calendario Competitivo</h3>
+              <p className="text-[10px] text-slate-500">Agrega tus próximas carreras para que la IA ajuste el "Tapering" y la carga.</p>
+              
+              <div className="space-y-2">
+                  {(tempProfile.competitions || []).map(comp => (
+                      <div key={comp.id} className="flex justify-between items-center bg-slate-950 p-3 rounded-lg border border-slate-700">
+                          <div>
+                              <div className="text-sm font-bold text-white">{comp.name}</div>
+                              <div className="text-xs text-slate-400 flex items-center gap-1"><Calendar size={10}/> {new Date(comp.date).toLocaleDateString()}</div>
+                          </div>
+                          <button onClick={() => removeCompetition(comp.id)} className="text-slate-500 hover:text-red-400 p-2"><Trash2 size={16}/></button>
+                      </div>
+                  ))}
+              </div>
+
+              <div className="grid grid-cols-5 gap-2 bg-slate-900 p-2 rounded-lg border border-slate-700">
+                  <input type="text" placeholder="Nombre (Ej: Nacional)" value={newCompName} onChange={e => setNewCompName(e.target.value)} className="col-span-3 bg-slate-950 border border-slate-700 rounded px-2 py-2 text-xs text-white" />
+                  <input type="date" value={newCompDate} onChange={e => setNewCompDate(e.target.value)} className="col-span-2 bg-slate-950 border border-slate-700 rounded px-2 py-2 text-xs text-white" />
+                  <button onClick={addCompetition} className="col-span-5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded text-xs border border-slate-600">Agregar Evento</button>
+              </div>
           </section>
 
           <section className="space-y-4 pt-4 border-t border-slate-800">
@@ -535,7 +586,7 @@ export const PlanManager: React.FC = () => {
                       <div key={ev} className="grid grid-cols-2 gap-2 bg-slate-950 p-2 rounded border border-slate-800">
                           <div>
                               <label className="text-[10px] text-slate-500 block uppercase">PB {ev}</label>
-                              <input type="text" placeholder="10.50" value={tempProfile.pbs[ev]?.time || ''} onChange={e => updatePB(ev, 'time', e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-white font-mono"/>
+                              <input type="text" placeholder="10.50" value={tempProfile.pbs[ev]?.time || ''} onChange={e => updatePB(ev, 'time', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-sm text-white font-mono"/>
                           </div>
                           <div>
                               <label className="text-xs text-slate-500 block uppercase">Fecha</label>

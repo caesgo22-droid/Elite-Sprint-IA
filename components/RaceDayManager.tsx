@@ -1,7 +1,7 @@
 
 import * as React from 'react';
 import { useState, useEffect } from 'react';
-import { Clock, Coffee, Zap, Flag, MapPin, X, Calendar, Edit2, Check, MessageSquare } from 'lucide-react';
+import { Clock, Coffee, Zap, Flag, MapPin, X, Calendar, Edit2, Check, MessageSquare, Trophy, ChevronDown } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 
 interface TimelineEvent {
@@ -91,6 +91,14 @@ export const RaceDayManager: React.FC<{ onClose: () => void }> = ({ onClose }) =
         }
     };
 
+    const loadSavedCompetition = (compId: string) => {
+        const comp = userProfile.competitions?.find(c => c.id === compId);
+        if (comp) {
+            setRaceDate(comp.date);
+            // Optional: reset time or keep manual? Keeping manual is safer as profile only has date.
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md">
             <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
@@ -101,6 +109,24 @@ export const RaceDayManager: React.FC<{ onClose: () => void }> = ({ onClose }) =
                     </div>
                     <button onClick={onClose}><X className="text-slate-400 hover:text-white"/></button>
                 </div>
+
+                {userProfile.competitions && userProfile.competitions.length > 0 && (
+                    <div className="bg-slate-900 px-4 pt-4 pb-2 border-b border-slate-800/50">
+                        <div className="relative">
+                            <Trophy size={14} className="absolute left-3 top-2.5 text-yellow-500"/>
+                            <select 
+                                onChange={(e) => loadSavedCompetition(e.target.value)} 
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-8 py-2 text-xs font-bold text-white appearance-none focus:border-yellow-500 outline-none"
+                            >
+                                <option value="">Cargar carrera del perfil...</option>
+                                {userProfile.competitions.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name} ({new Date(c.date).toLocaleDateString()})</option>
+                                ))}
+                            </select>
+                            <ChevronDown size={14} className="absolute right-3 top-2.5 text-slate-500 pointer-events-none"/>
+                        </div>
+                    </div>
+                )}
 
                 <div className="p-4 bg-slate-900 border-b border-slate-800 grid grid-cols-2 gap-4">
                     <div>
