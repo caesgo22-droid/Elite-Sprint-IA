@@ -6,7 +6,7 @@ import { analyzeTechnique, hasApiKey } from '../services/geminiService';
 import { LocalExpert } from '../services/localExpert'; // NEW IMPORT
 import { ElitePhysicsEngine, AdvancedMetrics, calculateAngle } from '../utils/biomechanicsUtils';
 import { BiomechanicalAnalysis, KineticMetrics } from '../types';
-import { Loader2, AlertTriangle, CheckCircle, History, ScanLine, UploadCloud, Play, Video, Share, Info, UserCircle2, GraduationCap, FileText, MessageCircle, Activity, LocateFixed, Eye, X, Table2, MousePointerClick, Maximize2, UserCog, Wrench, Megaphone, SplitSquareHorizontal, WifiOff, Sparkles, RefreshCw } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle, History, ScanLine, UploadCloud, Play, Video, Share, Info, UserCircle2, GraduationCap, FileText, MessageCircle, Activity, LocateFixed, Eye, X, Table2, MousePointerClick, Maximize2, UserCog, Wrench, Megaphone, SplitSquareHorizontal, WifiOff, Sparkles, RefreshCw, Pause } from 'lucide-react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 
 const VideoAnalyzer: React.FC = () => {
@@ -21,6 +21,9 @@ const VideoAnalyzer: React.FC = () => {
   const [poseLandmarker, setPoseLandmarker] = useState<PoseLandmarker | null>(null);
   const [mediaPipeError, setMediaPipeError] = useState(false); // Track model load error
   
+  // PLAYBACK STATE
+  const [isPlaying, setIsPlaying] = useState(false);
+
   // COMPARE MODE STATE
   const [compareMode, setCompareMode] = useState(false);
   const [compareSelection, setCompareSelection] = useState<string[]>([]); 
@@ -52,6 +55,7 @@ const VideoAnalyzer: React.FC = () => {
   // CRITICAL FIX: Track timestamps to prevent MediaPipe crash on seek
   const lastVideoTimestamp = useRef<number>(-1);
   const isScanning = useRef<boolean>(false);
+  const requestRef = useRef<number>(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -84,7 +88,7 @@ const VideoAnalyzer: React.FC = () => {
     };
     initMediaPipe();
     
-    return () => { isMounted.current = false; };
+    return () => { isMounted.current = false; cancelAnimationFrame(requestRef.current); };
   }, []);
 
   const handleFile = (file: File) => {
@@ -99,12 +103,45 @@ const VideoAnalyzer: React.FC = () => {
         setFrameCache([]); // Reset cache
         lastVideoTimestamp.current = -1; // Reset timestamp tracker
         physicsEngine.current.reset();
+        setIsPlaying(false);
         setTimeout(() => { if(videoRef.current) { videoRef.current.load(); } }, 500);
     }
   };
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files?.[0]) handleFile(e.target.files[0]); };
   const handleDrop = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]); };
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
+
+  // --- REAL-TIME LOOP FOR AR OVERLAY ---
+  const animate = () => {
+      if (videoRef.current && !videoRef.current.paused && !videoRef.current.ended) {
+          const t = videoRef.current.currentTime;
+          setCurrentTime(t);
+          processFrame(t);
+          requestRef.current = requestAnimationFrame(animate);
+      } else {
+          setIsPlaying(false);
+      }
+  };
+
+  useEffect(() => {
+      if (isPlaying) {
+          requestRef.current = requestAnimationFrame(animate);
+      } else {
+          cancelAnimationFrame(requestRef.current);
+      }
+  }, [isPlaying]);
+
+  const togglePlay = () => {
+      if (videoRef.current) {
+          if (videoRef.current.paused) {
+              videoRef.current.play();
+              setIsPlaying(true);
+          } else {
+              videoRef.current.pause();
+              setIsPlaying(false);
+          }
+      }
+  };
 
   // --- CORE DETECTION LOGIC ---
   const performDetection = (video: HTMLVideoElement, timestamp: number) => {
@@ -135,6 +172,12 @@ const VideoAnalyzer: React.FC = () => {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
+      // Ensure canvas matches video size exactly
+      if (videoRef.current && (canvas.width !== videoRef.current.videoWidth || canvas.height !== videoRef.current.videoHeight)) {
+           canvas.width = videoRef.current.videoWidth;
+           canvas.height = videoRef.current.videoHeight;
+      }
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
       const drawLine = (i: number, j: number, color: string, width: number) => {
@@ -144,7 +187,11 @@ const VideoAnalyzer: React.FC = () => {
               ctx.lineTo(landmarks[j].x * canvas.width, landmarks[j].y * canvas.height);
               ctx.strokeStyle = color;
               ctx.lineWidth = width;
+              ctx.lineCap = "round";
+              ctx.shadowColor = color;
+              ctx.shadowBlur = 10; // Neon effect
               ctx.stroke();
+              ctx.shadowBlur = 0; // Reset
           }
       }
 
@@ -211,19 +258,16 @@ const VideoAnalyzer: React.FC = () => {
           setDisplayData(cached.mechanics);
           setDisplayAdvanced(cached.advanced);
       } else {
+          // Perform live detection
           const data = performDetection(videoRef.current, time * 1000);
           if (data) {
               drawSkeleton(data.landmarks, data.com);
-              setFrameCache(prev => [...prev, { ...data, timestamp: time }]);
+              setFrameCache(prev => {
+                  // Keep cache small to avoid memory bloat
+                  if (prev.length > 200) prev.shift();
+                  return [...prev, { ...data, timestamp: time }];
+              });
           }
-      }
-  };
-
-  const handleTimeUpdate = () => {
-      if (isScanning.current) return;
-      if(videoRef.current) {
-          setCurrentTime(videoRef.current.currentTime);
-          if(!videoRef.current.paused) processFrame(videoRef.current.currentTime);
       }
   };
 
@@ -231,6 +275,7 @@ const VideoAnalyzer: React.FC = () => {
       const time = parseFloat(e.target.value);
       if(videoRef.current) {
           videoRef.current.pause();
+          setIsPlaying(false);
           videoRef.current.currentTime = time;
           setCurrentTime(time);
           lastVideoTimestamp.current = -1; 
@@ -250,6 +295,7 @@ const VideoAnalyzer: React.FC = () => {
       if (videoRef.current && analysis.timestamp) {
           videoRef.current.currentTime = analysis.timestamp;
           videoRef.current.pause();
+          setIsPlaying(false);
           lastVideoTimestamp.current = -1; // Reset for jump
           setTimeout(() => processFrame(analysis.timestamp!), 200);
       } else {
@@ -314,6 +360,7 @@ const VideoAnalyzer: React.FC = () => {
     try {
         const video = videoRef.current;
         video.pause();
+        setIsPlaying(false);
         const duration = video.duration;
         
         // INCREASED PRECISION: 25 steps for better detection
@@ -644,7 +691,6 @@ const VideoAnalyzer: React.FC = () => {
                                 playsInline 
                                 muted 
                                 onLoadedMetadata={handleLoadedMetadata}
-                                onTimeUpdate={handleTimeUpdate}
                             />
                         ) : <img src={previewUrl} className="w-full h-full object-contain" />}
                         <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-90" />
@@ -712,12 +758,8 @@ const VideoAnalyzer: React.FC = () => {
                                 {loading ? <Loader2 className="animate-spin" /> : <ScanLine />} {loading ? statusMessage : '⚡ Detectar Biomecánica'}
                             </button>
                             
-                            <button onClick={() => { 
-                                if(videoRef.current) { 
-                                    if(videoRef.current.paused) videoRef.current.play(); else videoRef.current.pause(); 
-                                } 
-                            }} className="p-3 bg-slate-800 rounded-lg text-slate-300 hover:text-white border border-slate-700 flex-1 flex items-center justify-center gap-2 font-bold text-xs">
-                                <Play size={16}/> Play/Pause
+                            <button onClick={togglePlay} className="p-3 bg-slate-800 rounded-lg text-slate-300 hover:text-white border border-slate-700 flex-1 flex items-center justify-center gap-2 font-bold text-xs">
+                                {isPlaying ? <Pause size={16}/> : <Play size={16}/>} {isPlaying ? 'Pausa' : 'Play'}
                             </button>
 
                             <button onClick={() => {setSessionAnalyses([]); setPreviewUrl(null); setDisplayData(null); setDisplayAdvanced({ strideLength: '-', velocity: '-' }); setComLocation(null);}} className="p-3 bg-slate-800 rounded-lg text-slate-300 hover:text-white border border-slate-700" title="Nuevo Video"><UploadCloud size={20}/></button>

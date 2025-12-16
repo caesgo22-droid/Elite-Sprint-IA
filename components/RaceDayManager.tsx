@@ -13,7 +13,10 @@ interface TimelineEvent {
 }
 
 export const RaceDayManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-    const [raceTime, setRaceTime] = useState("16:00");
+    // PERSISTENCE FIX: Load from localStorage
+    const [raceTime, setRaceTime] = useState(() => {
+        return localStorage.getItem('elite_race_time') || "16:00";
+    });
     const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
 
     const generateTimeline = () => {
@@ -42,8 +45,9 @@ export const RaceDayManager: React.FC<{ onClose: () => void }> = ({ onClose }) =
         setTimeline(events.reverse());
     };
 
-    // Trigger generation on load
+    // Trigger generation on load and sync to localStorage
     React.useEffect(() => {
+        localStorage.setItem('elite_race_time', raceTime);
         generateTimeline();
     }, [raceTime]);
 

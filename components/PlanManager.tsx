@@ -1,15 +1,16 @@
 
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
-import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle, MessageSquare, Table2, ScanLine, ChevronDown, ChevronUp, Flag } from 'lucide-react';
+import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle, MessageSquare, Table2, ScanLine, ChevronDown, ChevronUp, Flag, BarChart3 } from 'lucide-react';
 import { TrainingSession, UserProfile, Injury } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { getPlanHistory } from '../services/firebase';
 import { calculateRecovery } from '../utils/recoveryEngine';
 import { RaceDayManager } from './RaceDayManager';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 // Helper for Video Links
 const DrillItem = ({ name, colorClass }: { name: string, colorClass: string }) => (
@@ -143,6 +144,68 @@ const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessi
     );
 });
 
+// MACROCYCLE CHART COMPONENT
+const MacrocycleChart = ({ history, currentPlan }: { history: any[], currentPlan: any }) => {
+    const data = useMemo(() => {
+        // Combine history and current
+        const allPlans = [...history].reverse(); // Oldest first
+        if (currentPlan) allPlans.push(currentPlan);
+
+        // Take last 8 weeks max
+        const recentPlans = allPlans.slice(-8);
+
+        return recentPlans.map((plan, index) => {
+            // Calculate a synthetic "Load Score" based on intensity
+            let weeklyLoad = 0;
+            if (plan.sessions) {
+                plan.sessions.forEach((s: any) => {
+                    const factor = s.intensity === 'Max' ? 5 : s.intensity === 'High' ? 4 : s.intensity === 'Medium' ? 3 : 1;
+                    weeklyLoad += factor * 10; // Base arbitrary unit
+                });
+            }
+            return {
+                name: `W${index + 1}`,
+                phase: plan.phase,
+                load: weeklyLoad,
+                isCurrent: plan.id === currentPlan?.id
+            };
+        });
+    }, [history, currentPlan]);
+
+    if (data.length < 2) return null;
+
+    return (
+        <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl mb-6">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2"><BarChart3 size={14}/> Tendencia Macrociclo (Volumen/Intensidad)</h3>
+            <div className="h-32 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={data}>
+                        <defs>
+                            <linearGradient id="colorLoad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="#22d3ee" stopOpacity={0}/>
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                        <XAxis dataKey="name" tick={{fontSize: 10}} axisLine={false} tickLine={false} />
+                        <YAxis hide domain={['dataMin - 10', 'dataMax + 10']} />
+                        <Tooltip 
+                            contentStyle={{backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px'}}
+                            itemStyle={{color: '#fff', fontSize: '12px'}}
+                            labelStyle={{display: 'none'}}
+                        />
+                        <Area type="monotone" dataKey="load" stroke="#22d3ee" fillOpacity={1} fill="url(#colorLoad)" strokeWidth={2} activeDot={{r: 4, strokeWidth: 0}} />
+                    </AreaChart>
+                </ResponsiveContainer>
+            </div>
+            <div className="flex justify-between text-[10px] text-slate-500 mt-1 px-1">
+                <span>Carga Baja</span>
+                <span>Carga Alta</span>
+            </div>
+        </div>
+    );
+};
+
 export const PlanManager: React.FC = () => {
   const { user, userProfile, updateProfile, currentPlan, setPlan, updateSession, lastAnalysis } = useApp();
   const [searchParams] = useSearchParams();
@@ -165,10 +228,10 @@ export const PlanManager: React.FC = () => {
   const [showPlanTable, setShowPlanTable] = useState(false);
   const [showRationale, setShowRationale] = useState(true);
   const [showRaceDay, setShowRaceDay] = useState(false); // RACE DAY STATE
+  const [showMacro, setShowMacro] = useState(false); // New Macro State
 
   const isStaff = userProfile.role === 'staff';
 
-  // ... (Keep existing UseEffects and Helper Functions same as before) ...
   // Initialize: Check for ?edit=true param or missing name
   useEffect(() => {
       const isEditing = searchParams.get('edit') === 'true';
@@ -213,13 +276,6 @@ export const PlanManager: React.FC = () => {
       setLoading(false); 
   };
   
-  const sharePlan = async () => { 
-      if(!currentPlan) return; 
-      const text = `PLAN ELITE - ${currentPlan.phase}\n${currentPlan.weeklyGoal}`; 
-      navigator.clipboard.writeText(text); 
-      alert("Copiado al portapapeles"); 
-  };
-
   const shareToWhatsapp = () => {
       if(!currentPlan) return;
       const text = `*ELITE SPRINT AI - MICRO-CICLO*\n\n*Fase:* ${currentPlan.phase}\n*Objetivo:* ${currentPlan.weeklyGoal}\n\nGenerado por Elite Sprint Coach AI.`;
@@ -317,8 +373,8 @@ export const PlanManager: React.FC = () => {
 
   // --- PROFILE CONFIG RENDER ---
   if (showProfileConfig) {
-    // ... same code as before ...
-    return (
+      // Re-use the existing profile config rendering logic (omitted here to save space, assuming it's identical to the original file)
+       return (
       <div className="space-y-6 animate-in fade-in duration-500 pb-10">
         <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold">Perfil Holístico</h2>
@@ -442,7 +498,7 @@ export const PlanManager: React.FC = () => {
                               <input type="text" placeholder="10.50" value={tempProfile.pbs[ev]?.time || ''} onChange={e => updatePB(ev, 'time', e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-white font-mono"/>
                           </div>
                           <div>
-                              <label className="text-[10px] text-slate-500 block uppercase">Fecha</label>
+                              <label className="text-xs text-slate-500 block uppercase">Fecha</label>
                               <input type="date" value={tempProfile.pbs[ev]?.date || ''} onChange={e => updatePB(ev, 'date', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white"/>
                           </div>
                       </div>
@@ -495,6 +551,9 @@ export const PlanManager: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-6">
+           {/* MACRO CYCLE VISUALIZATION */}
+           <MacrocycleChart history={planHistoryState} currentPlan={currentPlan} />
+
            <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-6 rounded-2xl border border-slate-700 relative overflow-hidden shadow-2xl">
              <div className="relative z-10">
                 <div className="flex justify-between items-start mb-4">
