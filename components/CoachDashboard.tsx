@@ -3,12 +3,14 @@ import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { findAthleteByEmail, fetchUserData, saveUserProfile, getPlanHistory } from '../services/firebase';
-import { Users, Plus, Search, ChevronRight, UserCircle2, Briefcase, Eye, LogOut, Activity, AlertTriangle, BatteryCharging } from 'lucide-react';
+import { Users, Plus, Search, ChevronRight, UserCircle2, Briefcase, Eye, LogOut, Activity, AlertTriangle, BatteryCharging, ArrowRight } from 'lucide-react';
 import { UserProfile } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 
 export const CoachDashboard: React.FC = () => {
-  const { user, userProfile, updateProfile, viewingAthleteId, switchAthlete, t } = useApp();
+  // Use adminProfile for IDENTITY (The Coach's Roster), not userProfile (The Viewed Data)
+  const { adminProfile, user, updateRoster, viewingAthleteId, switchAthlete, t } = useApp();
+  
   const [emailQuery, setEmailQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [rosterData, setRosterData] = useState<{uid: string, profile: UserProfile, risk: 'High' | 'Low' | 'Optimal', lastPain?: number}[]>([]);
@@ -17,14 +19,14 @@ export const CoachDashboard: React.FC = () => {
   // Fetch full profiles AND ANALYTICS for the roster list
   useEffect(() => {
       const loadRoster = async () => {
-          if (!userProfile.roster || userProfile.roster.length === 0) {
+          if (!adminProfile.roster || adminProfile.roster.length === 0) {
               setRosterData([]); // Clear if empty
               return;
           }
           setLoadingRoster(true);
           const profiles = [];
           
-          for (const uid of userProfile.roster) {
+          for (const uid of adminProfile.roster) {
               const data = await fetchUserData(uid);
               const planHistory = await getPlanHistory(uid);
               
@@ -58,10 +60,9 @@ export const CoachDashboard: React.FC = () => {
           setLoadingRoster(false);
       };
       
-      if (!viewingAthleteId) {
-        loadRoster();
-      }
-  }, [userProfile.roster, viewingAthleteId]);
+      // Always load roster from Admin Profile, regardless of viewing mode
+      loadRoster();
+  }, [adminProfile.roster]); // Depend on adminProfile.roster
 
   const handleAddAthlete = async () => {
       if (!emailQuery.trim()) return;
@@ -71,11 +72,12 @@ export const CoachDashboard: React.FC = () => {
       const athlete = await findAthleteByEmail(cleanEmail);
       
       if (athlete) {
-          if (userProfile.roster?.includes(athlete.uid)) {
+          if (adminProfile.roster?.includes(athlete.uid)) {
               alert("Este atleta ya está en tu roster.");
           } else {
-              const newRoster = [...(userProfile.roster || []), athlete.uid];
-              updateProfile({ ...userProfile, roster: newRoster });
+              const newRoster = [...(adminProfile.roster || []), athlete.uid];
+              // Use the dedicated updateRoster helper
+              updateRoster(newRoster);
               setEmailQuery('');
               alert(`Atleta agregado exitosamente: ${athlete.profile?.name || 'Usuario'}`);
           }
@@ -91,20 +93,26 @@ export const CoachDashboard: React.FC = () => {
 
   if (viewingAthleteId) {
       return (
-          <div className="p-6 text-center space-y-6">
-              <div className="bg-slate-900 border border-slate-700 rounded-2xl p-8">
-                  <Eye className="w-16 h-16 text-cyan-400 mx-auto mb-4"/>
-                  <h2 className="text-xl font-bold text-white mb-2">Modo Observador Activo</h2>
-                  <p className="text-slate-400 text-sm mb-6">
-                      Estás viendo los datos de <span className="text-cyan-400 font-bold">{userProfile.name}</span>. 
-                      Cualquier cambio que hagas afectará su plan real.
+          <div className="p-6 text-center space-y-6 animate-in zoom-in-95">
+              <div className="bg-indigo-900/30 border border-indigo-500/50 rounded-3xl p-8 relative overflow-hidden shadow-2xl">
+                  {/* Background Decoration */}
+                  <div className="absolute top-[-50px] right-[-50px] w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl"></div>
+                  
+                  <Eye className="w-16 h-16 text-indigo-400 mx-auto mb-4 relative z-10"/>
+                  <h2 className="text-2xl font-bold text-white mb-2 relative z-10">Monitor Remoto Activo</h2>
+                  
+                  <p className="text-indigo-200 text-sm mb-8 leading-relaxed max-w-xs mx-auto relative z-10">
+                      Estás gestionando el perfil de un atleta. Tienes permisos de edición sobre su Plan y Calendario.
                   </p>
-                  <button 
-                    onClick={() => switchAthlete(null)}
-                    className="bg-red-900/50 hover:bg-red-900 text-red-100 border border-red-500/50 px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 mx-auto w-full max-w-xs transition-colors"
-                  >
-                      <LogOut size={20}/> Salir al Panel de Coach
-                  </button>
+                  
+                  <div className="grid gap-3 max-w-xs mx-auto relative z-10">
+                      <button 
+                        onClick={() => switchAthlete(null)}
+                        className="bg-white text-indigo-900 hover:bg-indigo-50 border border-transparent px-6 py-4 rounded-xl font-bold flex items-center justify-center gap-2 w-full transition-all shadow-lg active:scale-95"
+                      >
+                          <LogOut size={20}/> Volver a mi Panel
+                      </button>
+                  </div>
               </div>
           </div>
       );
@@ -191,7 +199,7 @@ export const CoachDashboard: React.FC = () => {
                               </div>
                           </div>
                           
-                          <ChevronRight className="text-slate-600 group-hover:text-white transition-colors"/>
+                          <ArrowRight className="text-slate-600 group-hover:text-indigo-400 transition-colors" size={18}/>
                       </div>
                   ))}
               </div>

@@ -292,7 +292,8 @@ const MacrocycleChart = ({ history, currentPlan }: { history: any[], currentPlan
 };
 
 export const PlanManager: React.FC = () => {
-  const { user, userProfile, updateProfile, currentPlan, setPlan, updateSession, lastAnalysis } = useApp();
+  // CRITICAL CHANGE: userProfile is Data (Athlete), adminProfile is Identity (Coach)
+  const { user, userProfile, adminProfile, updateProfile, currentPlan, setPlan, updateSession, lastAnalysis } = useApp();
   const [searchParams] = useSearchParams();
   
   const [loading, setLoading] = useState(false);
@@ -318,30 +319,47 @@ export const PlanManager: React.FC = () => {
   const [newCompName, setNewCompName] = useState("");
   const [newCompDate, setNewCompDate] = useState("");
 
-  const isStaff = userProfile.role === 'staff';
+  // Use Admin Identity for permissions
+  const isStaff = adminProfile.role === 'staff';
 
   // Initialize: Check for ?edit=true param or missing name
   useEffect(() => {
       const isEditing = searchParams.get('edit') === 'true';
       const isNewUser = !userProfile.name || userProfile.name === 'Atleta';
       
+      // Update temp profile when user profile changes (e.g. switching athletes)
+      setTempProfile(userProfile);
+
       if (isEditing || isNewUser) {
           setShowProfileConfig(true);
       }
-  }, [searchParams, userProfile.name]);
+  }, [searchParams, userProfile]); // Trigger on profile change
 
   useEffect(() => {
     const fetchHistory = async () => {
-       if(user) {
-           const history = await getPlanHistory(user.uid);
-           setPlanHistoryState(history);
-           const allPlans = currentPlan ? [currentPlan, ...history] : history;
+       // Fetch history for the VIEWED athlete, not necessarily the logged in user
+       // Context handles this mapping via userProfile being correct
+       // But we need the ID of the viewed user. User.uid is the logged in user.
+       // We can rely on AppContext logs/history, but planHistoryState is local here.
+       // Let's assume AppContext.planHistory is correct for the active view.
+       // Re-implementing fetch here for explicit refresh control if needed, but using context is better.
+       // However, getPlanHistory(uid) requires UID.
+       // We don't easily have UID of viewing athlete here without prop drilling or context expansion.
+       // WORKAROUND: We will rely on AppContext's `planHistory` which is already loaded for the active view.
+    };
+    // Actually, AppContext already loads this into `planHistory`. Let's use that.
+  }, []);
+
+  // Sync Local History State with Context History
+  const { planHistory } = useApp();
+  useEffect(() => {
+      setPlanHistoryState(planHistory);
+      if (currentPlan || planHistory.length > 0) {
+           const allPlans = currentPlan ? [currentPlan, ...planHistory] : planHistory;
            const stats = calculateACWR(allPlans);
            setAcwr({ ratio: stats.ratio, status: stats.status });
-       }
-    };
-    fetchHistory();
-  }, [user, currentPlan]);
+      }
+  }, [planHistory, currentPlan]);
 
   const handleSaveProfile = () => { 
       updateProfile(tempProfile); 
