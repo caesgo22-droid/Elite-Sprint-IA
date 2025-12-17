@@ -45,14 +45,17 @@ export const GeminiLive: React.FC = () => {
 
           liveService.current = new EliteLiveService(key);
           setIsActive(true); 
-          setStatus("Estableciendo enlace seguro...");
+          setStatus("Iniciando...");
           
           await liveService.current.startSession(
               userProfile,
               currentPlan,
               acwrStats,
               (level) => setAudioLevel(level * 5), 
-              (newStatus) => setStatus(newStatus),
+              (newStatus) => {
+                  // Only update status if active
+                  setStatus(newStatus === "Conectado" ? "Micrófono Abierto" : newStatus);
+              },
               async (name, args) => {
                   if (name === 'modify_session') {
                       updateSession(args.day, { 
@@ -149,8 +152,8 @@ export const GeminiLive: React.FC = () => {
                 {isActive ? (
                     <div className="space-y-1">
                         <p className="text-xs text-emerald-400 font-bold uppercase animate-pulse">Enlace de Voz Activo</p>
-                        <p className="text-[10px] text-slate-400">Habla libremente. El staff te escucha.</p>
-                        <p className="text-[10px] text-slate-500 pt-2 border-t border-slate-800 mt-2">Toca el botón central para finalizar.</p>
+                        <p className="text-[10px] text-slate-400">Es como una llamada telefónica.</p>
+                        <p className="text-[10px] text-slate-400">Habla con normalidad, el Staff te responderá.</p>
                     </div>
                 ) : (
                     <div className="space-y-2">
