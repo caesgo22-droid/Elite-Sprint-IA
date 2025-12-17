@@ -1,12 +1,6 @@
 
-import { TrainingPlan } from "../types";
 
-export interface LoadStats {
-    acuteLoad: number;   // 7-day average
-    chronicLoad: number; // 28-day average
-    ratio: number;       // ACWR
-    status: 'Optimal' | 'High Risk' | 'Low Load';
-}
+import { TrainingPlan, LoadStats } from "../types";
 
 /**
  * Calculates the Acute:Chronic Workload Ratio (ACWR)
@@ -63,9 +57,9 @@ export const calculateACWR = (historyPlans: TrainingPlan[]): LoadStats => {
         ratio = acuteLoad / chronicLoad;
     }
 
-    let status: 'Optimal' | 'High Risk' | 'Low Load' = 'Optimal';
-    if (ratio > 1.5) status = 'High Risk';
-    else if (ratio < 0.8) status = 'Low Load';
+    let status: 'Óptimo' | 'Alto Riesgo' | 'Carga Baja' = 'Óptimo';
+    if (ratio > 1.5) status = 'Alto Riesgo';
+    else if (ratio < 0.8) status = 'Carga Baja';
 
     return {
         acuteLoad: Math.round(acuteLoad),

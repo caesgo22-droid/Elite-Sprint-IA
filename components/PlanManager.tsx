@@ -1,7 +1,8 @@
 
+
 import * as React from 'react';
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
 import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle, MessageSquare, Table2, ScanLine, ChevronDown, ChevronUp, Flag, BarChart3, MapPin, Trophy, Trash2 } from 'lucide-react';
@@ -294,7 +295,8 @@ const MacrocycleChart = ({ history, currentPlan }: { history: any[], currentPlan
 export const PlanManager: React.FC = () => {
   // CRITICAL CHANGE: userProfile is Data (Athlete), adminProfile is Identity (Coach)
   const { user, userProfile, adminProfile, updateProfile, currentPlan, setPlan, updateSession, lastAnalysis } = useApp();
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
   
   const [loading, setLoading] = useState(false);
   const [showProfileConfig, setShowProfileConfig] = useState(false);
@@ -333,7 +335,7 @@ export const PlanManager: React.FC = () => {
       if (isEditing || isNewUser) {
           setShowProfileConfig(true);
       }
-  }, [searchParams, userProfile]); // Trigger on profile change
+  }, [location.search, userProfile]); // Trigger on profile change
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -791,7 +793,7 @@ export const PlanManager: React.FC = () => {
       {showRaceDay && <RaceDayManager onClose={() => setShowRaceDay(false)} />}
       
       {sessionFeedbackModal && <FeedbackModal />}
-      {viewingRecovery && (<div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md animate-in zoom-in-95 duration-300"><div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-6 w-full max-w-sm shadow-2xl relative overflow-hidden"><div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-cyan-500"></div><div className="flex justify-between items-start mb-4"><div><h3 className="font-bold text-xl text-white flex items-center gap-2"><BatteryCharging className="text-emerald-400"/> Fuel & Recovery</h3></div><button onClick={() => setViewingRecovery(null)}><X className="text-slate-400 hover:text-white"/></button></div><div className="space-y-4"><div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800"><div className="text-xs text-slate-500 font-bold uppercase mb-2">Nutrición</div><div className="grid grid-cols-3 gap-2 text-center"><div className="bg-slate-900 p-2 rounded-lg border border-slate-800"><div className="text-lg font-bold text-white">{viewingRecovery.nutrition.carbs}</div><div className="text-[10px] text-slate-400">Carbs</div></div><div className="bg-slate-900 p-2 rounded-lg border border-slate-800"><div className="text-lg font-bold text-white">{viewingRecovery.nutrition.protein}</div><div className="text-[10px] text-slate-400">Proteína</div></div><div className="bg-slate-900 p-2 rounded-lg border border-slate-800"><div className="text-lg font-bold text-white">{viewingRecovery.nutrition.hydration}</div><div className="text-[10px] text-slate-400">Agua</div></div></div></div><div><div className="text-xs text-slate-500 font-bold uppercase mb-2">Protocolos</div><ul className="space-y-2">{viewingRecovery.protocols.map((p: string, i: number) => (<li key={i} className="flex items-center gap-2 text-sm text-slate-300 bg-slate-800/50 p-2 rounded-lg"><CheckSquare size={14} className="text-cyan-500"/> {p}</li>))}</ul></div></div><button onClick={() => setViewingRecovery(null)} className="w-full mt-6 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors">Entendido</button></div></div>)}
+      {viewingRecovery && (<div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md animate-in zoom-in-95 duration-300"><div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-6 w-full max-w-sm shadow-2xl relative overflow-hidden"><div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-cyan-500"><div className="flex justify-between items-start mb-4"><div><h3 className="font-bold text-xl text-white flex items-center gap-2"><BatteryCharging className="text-emerald-400"/> Fuel & Recovery</h3></div><button onClick={() => setViewingRecovery(null)}><X className="text-slate-400 hover:text-white"/></button></div><div className="space-y-4"><div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800"><div className="text-xs text-slate-500 font-bold uppercase mb-2">Nutrición</div><div className="grid grid-cols-3 gap-2 text-center"><div className="bg-slate-900 p-2 rounded-lg border border-slate-800"><div className="text-lg font-bold text-white">{viewingRecovery.nutrition.carbs}</div><div className="text-[10px] text-slate-400">Carbs</div></div><div className="bg-slate-900 p-2 rounded-lg border border-slate-800"><div className="text-lg font-bold text-white">{viewingRecovery.nutrition.protein}</div><div className="text-[10px] text-slate-400">Proteína</div></div><div className="bg-slate-900 p-2 rounded-lg border border-slate-800"><div className="text-lg font-bold text-white">{viewingRecovery.nutrition.hydration}</div><div className="text-[10px] text-slate-400">Agua</div></div></div></div><div><div className="text-xs text-slate-500 font-bold uppercase mb-2">Protocolos</div><ul className="space-y-2">{viewingRecovery.protocols.map((p: string, i: number) => (<li key={i} className="flex items-center gap-2 text-sm text-slate-300 bg-slate-800/50 p-2 rounded-lg"><CheckSquare size={14} className="text-cyan-500"/> {p}</li>))}</ul></div></div><button onClick={() => setViewingRecovery(null)} className="w-full mt-6 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors">Entendido</button></div></div></div>)}
       {activeTooltip && ( <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-6 backdrop-blur-sm" onClick={() => setActiveTooltip(null)}> <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}> <h4 className="font-bold text-white mb-2">{activeTooltip.title}</h4> <p className="text-sm text-slate-300 leading-relaxed">{activeTooltip.text}</p> <button onClick={() => setActiveTooltip(null)} className="mt-4 w-full bg-slate-800 text-slate-300 py-2 rounded-lg text-sm font-bold">Entendido</button> </div> </div> )}
     </div>
   );

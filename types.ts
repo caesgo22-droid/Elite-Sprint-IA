@@ -1,4 +1,5 @@
 
+
 // types.ts
 
 export interface PersonalBest { time: string; date: string; }
@@ -122,6 +123,13 @@ export interface NexusInsight {
   analysis: string;
   recommendation: string;
   timestamp?: number; // To check validity
+}
+
+export interface LoadStats {
+    acuteLoad: number;   // 7-day average
+    chronicLoad: number; // 28-day average
+    ratio: number;       // ACWR
+    status: 'Óptimo' | 'Alto Riesgo' | 'Carga Baja';
 }
 
 export interface Drill { name: string; category: 'Accel' | 'MaxV' | 'Plyo' | 'Strength' | 'Recovery'; intensity: number; videoKeyword: string; }

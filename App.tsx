@@ -1,6 +1,7 @@
 
+
 import * as React from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Switch, Route, Redirect } from 'react-router-dom';
 import { AppProvider, useApp } from './contexts/AppContext';
 import { Layout } from './components/ui/Layout';
 import { HomeDashboard } from './components/HomeDashboard';
@@ -11,6 +12,7 @@ import PerformanceTracker from './components/PerformanceTracker';
 import { StaffHub } from './components/StaffHub'; 
 import { CoachDashboard } from './components/CoachDashboard';
 import { AuthScreen } from './components/AuthScreen';
+import { VoiceCoach } from './components/VoiceCoach';
 import { Loader2 } from 'lucide-react';
 
 const AppContent: React.FC = () => {
@@ -32,16 +34,35 @@ const AppContent: React.FC = () => {
   return (
     <HashRouter>
       <Layout>
-        <Routes>
-          <Route path="/" element={<HomeDashboard />} />
-          <Route path="/plan" element={<PlanManager />} />
-          <Route path="/video" element={<VideoAnalyzer />} />
-          <Route path="/tracker" element={<PerformanceTracker />} />
-          <Route path="/staff" element={<StaffHub />} />
-          <Route path="/coach-dashboard" element={<CoachDashboard />} />
-          <Route path="/chat" element={<LiveCoach />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Switch>
+          <Route exact path="/">
+            <HomeDashboard />
+          </Route>
+          <Route path="/plan">
+            <PlanManager />
+          </Route>
+          <Route path="/video">
+            <VideoAnalyzer />
+          </Route>
+          <Route path="/tracker">
+            <PerformanceTracker />
+          </Route>
+          <Route path="/staff">
+            <StaffHub />
+          </Route>
+          <Route path="/coach-dashboard">
+            <CoachDashboard />
+          </Route>
+          <Route path="/chat">
+            <LiveCoach />
+          </Route>
+          <Route path="/live">
+            <VoiceCoach />
+          </Route>
+          <Route path="*">
+            <Redirect to="/" />
+          </Route>
+        </Switch>
       </Layout>
     </HashRouter>
   );

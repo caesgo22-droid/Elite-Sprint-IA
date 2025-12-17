@@ -1,8 +1,9 @@
 
+
 import * as React from 'react';
 import { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, Calendar, Activity, MessageSquare, Video, Users, ShieldCheck, Briefcase, Eye, User, LogOut, RefreshCw, ChevronDown, Languages, ArrowLeft } from 'lucide-react';
+import { Link, useHistory, useLocation } from 'react-router-dom';
+import { Home, Calendar, Activity, MessageSquare, Video, Users, ShieldCheck, Briefcase, Eye, User, LogOut, RefreshCw, ChevronDown, Languages, Mic2 } from 'lucide-react';
 import { TechnicalWhitepaper } from '../TechnicalWhitepaper';
 import { useApp } from '../../contexts/AppContext';
 import { auth } from '../../services/firebase';
@@ -18,7 +19,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [showScience, setShowScience] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { adminProfile, userProfile, updateProfile, viewingAthleteId, switchAthlete, language, setLanguage, t } = useApp();
-  const navigate = useNavigate();
+  const history = useHistory();
+  const location = useLocation();
 
   // Navigation Logic based on Role (Using Translations)
   // CRITICAL: We check adminProfile.role for navigation permissions, NOT userProfile (which might be the athlete)
@@ -28,7 +30,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/', icon: Home, label: t.nav.home },
     { to: '/plan', icon: Calendar, label: t.nav.plan },
     { to: '/video', icon: Video, label: t.nav.analysis },
-    { to: '/tracker', icon: Activity, label: t.nav.stats },
+    { to: '/live', icon: Mic2, label: 'Voice' }, // NEW: Voice Route
     { 
         to: isStaff ? '/coach-dashboard' : '/staff', 
         icon: isStaff ? Briefcase : Users, 
@@ -46,7 +48,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     const newRole = adminProfile.role === 'staff' ? 'athlete' : 'staff';
     updateProfile({ ...adminProfile, role: newRole });
     setShowUserMenu(false);
-    navigate('/');
+    history.push('/');
   };
 
   const toggleLanguage = () => {
@@ -114,7 +116,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                                 <button onClick={toggleRole} className="w-full text-left px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-lg flex items-center gap-2 transition-colors">
                                     <RefreshCw size={14}/> {t.layout.changeRole} {adminProfile.role === 'staff' ? t.role.athlete : t.role.staff}
                                 </button>
-                                <button onClick={() => { setShowUserMenu(false); navigate('/plan?edit=true'); }} className="w-full text-left px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-lg flex items-center gap-2 transition-colors">
+                                <button onClick={() => { setShowUserMenu(false); history.push('/plan?edit=true'); }} className="w-full text-left px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-lg flex items-center gap-2 transition-colors">
                                     <User size={14}/> {t.layout.editProfile}
                                 </button>
                                 <div className="h-px bg-slate-800 my-1"></div>
@@ -160,19 +162,22 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-30 bg-slate-900/90 backdrop-blur-lg border-t border-slate-800 pb-safe">
         <div className="flex justify-around items-center h-16 max-w-2xl mx-auto px-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.label}
-              to={item.to}
-              className={({ isActive }) => `
-                flex flex-col items-center justify-center w-full h-full transition-all duration-200
-                ${isActive ? 'text-cyan-400 scale-110' : 'text-slate-500 hover:text-slate-300'}
-              `}
-            >
-              <item.icon size={18} />
-              <span className="text-[9px] mt-1 font-medium">{item.label}</span>
-            </NavLink>
-          ))}
+          {navItems.map((item) => {
+            const isActive = item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to);
+            return (
+              <Link
+                key={item.label}
+                to={item.to}
+                className={`
+                  flex flex-col items-center justify-center w-full h-full transition-all duration-200
+                  ${isActive ? 'text-cyan-400 scale-110' : 'text-slate-500 hover:text-slate-300'}
+                `}
+              >
+                <item.icon size={18} />
+                <span className="text-[9px] mt-1 font-medium">{item.label}</span>
+              </Link>
+            );
+          })}
         </div>
       </nav>
 
