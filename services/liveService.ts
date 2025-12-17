@@ -43,7 +43,6 @@ const base64ToUint8Array = (base64: string) => {
   return bytes;
 };
 
-// Helper: Play a quick "Ping" sound to verify AudioContext is unlocked
 const playPing = (ctx: AudioContext, frequency: number = 440, type: 'sine' | 'triangle' = 'sine') => {
     try {
         const osc = ctx.createOscillator();
@@ -52,28 +51,22 @@ const playPing = (ctx: AudioContext, frequency: number = 440, type: 'sine' | 'tr
         osc.frequency.value = frequency;
         osc.connect(gain);
         gain.connect(ctx.destination);
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.05, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
         osc.start();
-        osc.stop(ctx.currentTime + 0.3);
+        osc.stop(ctx.currentTime + 0.2);
     } catch(e) { console.error("Audio Ping Failed", e); }
 };
 
-// --- MOCK SERVICE FOR DEMO MODE (ROBUST VERSION WITH TTS) ---
+// --- MOCK SERVICE ---
 export class MockLiveService {
     private audioContext: AudioContext | null = null;
     private inputSource: MediaStreamAudioSourceNode | null = null;
     private processor: ScriptProcessorNode | null = null;
     private activeStream: MediaStream | null = null;
-    
-    // Simulation State
-    private silenceFrames = 0;
-    private speakingFrames = 0;
+    private autoTriggerTimer: any = null;
     private hasTriggeredResponse = false;
     private isCoachTalking = false;
-    private autoTriggerTimer: any = null;
-
-    constructor() {}
 
     public async startSession(
         profile: UserProfile, 
@@ -82,142 +75,67 @@ export class MockLiveService {
         onAudioLevel: (level: number, isModelSpeaking: boolean) => void, 
         onStatusChange: (status: string, isError?: boolean) => void,
         onToolCall: (name: string, args: any) => Promise<any>,
-        existingContext?: AudioContext // Accept external context
+        existingContext?: AudioContext 
     ) {
         onStatusChange("Modo Demo: Habla ahora...", false);
         this.hasTriggeredResponse = false;
-        
-        // Use passed context or create new (should be passed from click handler for mobile)
         this.audioContext = existingContext || new (window.AudioContext || (window as any).webkitAudioContext)();
         if (this.audioContext.state === 'suspended') await this.audioContext.resume();
-
-        // CONFIRM AUDIO OUT WORKS
         playPing(this.audioContext, 600, 'triangle');
 
         try {
-            this.activeStream = await navigator.mediaDevices.getUserMedia({ 
-                audio: { 
-                    echoCancellation: true, 
-                    noiseSuppression: false, 
-                    autoGainControl: false 
-                } 
-            });
-            
+            this.activeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             this.inputSource = this.audioContext.createMediaStreamSource(this.activeStream);
             this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
-
-            // FAILSAFE: Auto-trigger response after 5 seconds if VAD fails
+            
             this.autoTriggerTimer = setTimeout(() => {
-                if (!this.hasTriggeredResponse) {
-                    console.log("Demo Auto-Trigger fired");
-                    onStatusChange("Demo: Auto-respuesta...", false);
-                    this.triggerMockResponse(onStatusChange, onToolCall, onAudioLevel);
-                }
+                if (!this.hasTriggeredResponse) this.triggerMockResponse(onStatusChange, onToolCall, onAudioLevel);
             }, 5000);
 
             this.processor.onaudioprocess = (e) => {
                 if (this.isCoachTalking || this.hasTriggeredResponse) return;
-
                 const inputData = e.inputBuffer.getChannelData(0);
-                let sum = 0;
-                for(let i=0; i<inputData.length; i++) sum += inputData[i] * inputData[i];
+                let sum = 0; for(let i=0; i<inputData.length; i++) sum += inputData[i] * inputData[i];
                 const rms = Math.sqrt(sum / inputData.length);
-                
-                // Boost visual level for UI
                 onAudioLevel(rms * 5, false);
-
-                // LOWER THRESHOLD for Demo (sensitive)
-                if (rms > 0.01) { 
-                    this.speakingFrames++;
-                    this.silenceFrames = 0;
-                    onStatusChange("Te escucho...", false);
-                } else {
-                    this.silenceFrames++;
-                }
-
-                // Logic: Spoke for ~0.5s AND Silence for ~0.5s
-                if (this.speakingFrames > 10 && this.silenceFrames > 15 && !this.hasTriggeredResponse) {
-                    this.triggerMockResponse(onStatusChange, onToolCall, onAudioLevel);
+                if (rms > 0.02 && !this.hasTriggeredResponse) {
+                    setTimeout(() => this.triggerMockResponse(onStatusChange, onToolCall, onAudioLevel), 1000);
                 }
             };
-
             this.inputSource.connect(this.processor);
             this.processor.connect(this.audioContext.destination);
-
-        } catch (e) {
-            console.error("Demo Mic Error:", e);
-            onStatusChange("Error Micrófono Demo", true);
-            // Even if mic fails, trigger the demo experience after 2s
-            setTimeout(() => this.triggerMockResponse(onStatusChange, onToolCall, onAudioLevel), 2000);
-        }
+        } catch (e) { onStatusChange("Error Micrófono Demo", true); }
     }
 
-    private async triggerMockResponse(
-        onStatusChange: (s: string, isError?: boolean) => void, 
-        onToolCall: (n: string, a: any) => Promise<any>,
-        onAudioLevel: (l: number, m: boolean) => void
-    ) {
+    private triggerMockResponse(onStatusChange: any, onToolCall: any, onAudioLevel: any) {
         if (this.hasTriggeredResponse) return;
         this.hasTriggeredResponse = true;
-        if (this.autoTriggerTimer) clearTimeout(this.autoTriggerTimer);
-
         this.isCoachTalking = true;
-        onStatusChange("Procesando...", false);
-        
-        // 1. Thinking Delay
-        await new Promise(r => setTimeout(r, 1000));
-        
-        // 2. Speaking Simulation using NATIVE TTS
         onStatusChange("Coach Respondiendo...", false);
-        
-        const msg = "Entendido. Voy a ajustar la sesión de hoy a recuperación activa. Buen trabajo.";
-        const utterance = new SpeechSynthesisUtterance(msg);
+        const utterance = new SpeechSynthesisUtterance("Entendido atleta. Ajustaré tu carga para priorizar la recuperación. Buen trabajo hoy.");
         utterance.lang = "es-ES";
-        utterance.rate = 1.1;
-        utterance.pitch = 1.0;
-        
-        // Animate Visualizer while speaking
-        const speakInterval = setInterval(() => {
-            onAudioLevel(Math.random() * 0.6 + 0.2, true);
-        }, 80);
-
-        utterance.onend = async () => {
-            clearInterval(speakInterval);
+        utterance.rate = 0.9;
+        utterance.pitch = 0.8;
+        const interval = setInterval(() => onAudioLevel(Math.random() * 0.5 + 0.2, true), 100);
+        utterance.onend = () => {
+            clearInterval(interval);
             this.isCoachTalking = false;
             onAudioLevel(0, false);
-            
-            onStatusChange("Ejecutando cambios...", false);
-            
-            await onToolCall("modify_session", {
-                day: "Hoy",
-                newFocus: "Recuperación Activa (Demo)",
-                intensity: "Low"
-            });
-
+            onToolCall("modify_session", { day: "Hoy", newFocus: "Recuperación (Demo)", intensity: "Low" });
             onStatusChange("Demo Finalizada", false);
         };
-
-        // Fallback if TTS fails/not supported
-        utterance.onerror = () => {
-             clearInterval(speakInterval);
-             this.isCoachTalking = false;
-             onStatusChange("Error TTS Demo", true);
-        };
-
-        window.speechSynthesis.cancel(); // Clear queue
         window.speechSynthesis.speak(utterance);
     }
 
     public stop() {
         if (this.autoTriggerTimer) clearTimeout(this.autoTriggerTimer);
-        window.speechSynthesis.cancel(); // Stop talking
+        window.speechSynthesis.cancel();
         if (this.activeStream) this.activeStream.getTracks().forEach(t => t.stop());
         if (this.processor) this.processor.disconnect();
-        if (this.inputSource) this.inputSource.disconnect();
-        // Do NOT close context if it was passed in externally
     }
 }
 
+// --- ELITE LIVE SERVICE (THE REAL IA) ---
 export class EliteLiveService {
   private ai: GoogleGenAI;
   private audioContext: AudioContext | null = null;
@@ -225,14 +143,11 @@ export class EliteLiveService {
   private inputGain: GainNode | null = null; 
   private processor: ScriptProcessorNode | null = null;
   private currentSession: Promise<any> | null = null;
-  
   private audioQueue: Float32Array[] = [];
   private isPlaying = false;
   private nextStartTime = 0;
-  
   private activeStream: MediaStream | null = null;
   private inputSampleRate: number = 48000;
-  
   private silenceWatchdog: any = null;
 
   constructor(apiKey: string) {
@@ -246,287 +161,170 @@ export class EliteLiveService {
     onAudioLevel: (level: number, isModelSpeaking: boolean) => void, 
     onStatusChange: (status: string, isError?: boolean) => void,
     onToolCall: (name: string, args: any) => Promise<any>,
-    existingContext?: AudioContext // Accept external context
+    existingContext?: AudioContext 
   ) {
     if (this.currentSession) return;
+    onStatusChange("Abriendo canal...", false);
 
-    onStatusChange("Iniciando satélite...", false);
-
-    const todaysSession = currentPlan?.sessions.find(s => {
-        const today = new Date().getDay();
-        const map = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-        const dayName = map[today];
-        return s.day.includes(dayName) || s.day.includes(dayName.toLowerCase());
-    });
-
-    const systemInstruction = `
-    ERES: "Elite Coach", Staff Técnico Nivel V.
-    MODO: Llamada de Voz.
-    ESTADO: Atleta ${profile.name}. Hoy: ${todaysSession ? todaysSession.focus : "Descanso"}.
-    INSTRUCCIÓN: Respuestas cortas (1 frase). Entrenador militar pero empático.
-    `;
-
-    const tools = [{
-      functionDeclarations: [
-        {
-          name: "modify_session",
-          description: "Modifica la sesión.",
-          parameters: {
-            type: Type.OBJECT,
-            properties: {
-              day: { type: Type.STRING },
-              newFocus: { type: Type.STRING },
-              intensity: { type: Type.STRING, enum: ["Low", "Medium", "High", "Max"] }
-            },
-            required: ["day", "newFocus"]
-          }
-        },
-        {
-            name: "log_rpe",
-            description: "Registra RPE.",
-            parameters: {
-                type: Type.OBJECT,
-                properties: { rpe: { type: Type.NUMBER } },
-                required: ["rpe"]
-            }
-        }
-      ]
-    }];
+    const systemInstruction = `ERES: "Elite Coach", Staff Técnico Nivel V. RESPUESTAS: Muy cortas (máx 15 palabras). TONO: Firme y técnico. Atleta actual: ${profile.name}.`;
 
     try {
-        // USE EXTERNAL CONTEXT IF PROVIDED (Fixes Mobile Safari)
         this.audioContext = existingContext || new (window.AudioContext || (window as any).webkitAudioContext)();
         this.inputSampleRate = this.audioContext.sampleRate;
+        if (this.audioContext.state === 'suspended') await this.audioContext.resume();
         
-        if (this.audioContext.state === 'suspended') {
-            await this.audioContext.resume();
-        }
-        
-        // PING TO VERIFY AUDIO OUTPUT IS ALIVE
         playPing(this.audioContext, 880, 'sine');
-
         this.nextStartTime = this.audioContext.currentTime;
 
-        this.currentSession = this.ai.live.connect({
+        const sessionPromise = this.ai.live.connect({
             model: 'gemini-2.5-flash-native-audio-preview-09-2025',
             config: {
                 responseModalities: [Modality.AUDIO],
                 speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
                 systemInstruction: { parts: [{ text: systemInstruction }] },
-                tools: tools,
+                tools: [{
+                    functionDeclarations: [{
+                        name: "modify_session",
+                        description: "Modifica la sesión del atleta.",
+                        parameters: {
+                            type: Type.OBJECT,
+                            properties: { day: { type: Type.STRING }, newFocus: { type: Type.STRING }, intensity: { type: Type.STRING } },
+                            required: ["day", "newFocus"]
+                        }
+                    }]
+                }],
             },
             callbacks: {
                 onopen: async () => {
                     onStatusChange("Conectado", false);
                     await this.startMicrophone(onAudioLevel, onStatusChange);
                     
-                    // Sending initial Hello to wake up the model
-                    this.currentSession!.then(session => {
-                        session.sendRealtimeInput([{ mimeType: "text/plain", data: "Hola Coach." }]);
-                    });
+                    // MANDATORY WAKE-UP: Send text part to force a response.
+                    // Correct parameter structure: sendRealtimeInput expects an object with a media property.
+                    sessionPromise.then(session => {
+                        session.sendRealtimeInput({ media: { mimeType: "text/plain", data: btoa("Hola Coach, estoy listo para el reporte.") } });
+                    }).catch(e => console.error("Initial send failed", e));
                     
-                    // WATCHDOG: If no audio received in 5s after connect, it's a zombie connection
                     this.silenceWatchdog = setTimeout(() => {
                         if (!this.isPlaying) {
-                            onStatusChange("Sin audio de IA (Zombie)", true);
+                            onStatusChange("IA no responde (Zombie)", true);
                             this.stop();
                         }
-                    }, 8000);
+                    }, 10000);
                 },
-                onmessage: async (msg: LiveServerMessage) => {
-                    // Clear watchdog on first message
+                onmessage: async (message: LiveServerMessage) => {
                     if (this.silenceWatchdog) { clearTimeout(this.silenceWatchdog); this.silenceWatchdog = null; }
 
-                    const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
+                    const audioData = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
                     if (audioData) {
                         this.queueAudioChunk(audioData);
                         onAudioLevel(0.5, true); 
-                    } else {
-                        onAudioLevel(0, false);
                     }
                     
-                    if (msg.serverContent?.interrupted) {
-                        this.audioQueue = [];
-                        this.isPlaying = false;
-                        onStatusChange("Interrumpido...", false);
-                        setTimeout(() => onStatusChange("Escuchando...", false), 1000);
-                    }
-
-                    if (msg.toolCall) {
-                        const functionCalls = msg.toolCall.functionCalls;
-                        for (const call of functionCalls) {
+                    if (message.toolCall) {
+                        for (const call of message.toolCall.functionCalls) {
                             onStatusChange(`Ejecutando ${call.name}...`, false);
-                            try {
-                                const result = await onToolCall(call.name, call.args);
-                                this.currentSession!.then(session => {
-                                    session.sendToolResponse({
-                                        functionResponses: [{
-                                            id: call.id,
-                                            name: call.name,
-                                            response: { result: result }
-                                        }]
-                                    });
+                            const result = await onToolCall(call.name, call.args);
+                            sessionPromise.then(session => {
+                                session.sendToolResponse({
+                                    functionResponses: [{ id: call.id, name: call.name, response: { result: result } }]
                                 });
-                            } catch (err) {
-                                console.error("Tool execution failed:", err);
-                            }
-                            onStatusChange("Conectado", false);
+                            });
                         }
                     }
                 },
-                onclose: (e) => {
-                    console.log("Session Closed", e);
-                    onStatusChange("Desconectado", false);
-                    this.stop();
-                },
-                onerror: (err: any) => {
-                    console.error("Gemini Error Event:", err);
-                    let msg = "Error de Conexión";
-                    const errStr = JSON.stringify(err);
-                    if (errStr.includes("429") || errStr.includes("ResourceExhausted")) {
-                        msg = "Cuota Excedida (429)";
-                    }
+                onclose: () => { onStatusChange("Staff Offline", false); this.stop(); },
+                onerror: (err) => {
+                    console.error("Live Error:", err);
+                    let msg = "Error canal IA";
+                    if (JSON.stringify(err).includes("429")) msg = "Cuota Excedida (429)";
                     onStatusChange(msg, true);
                     this.stop();
                 }
             }
         });
 
+        this.currentSession = sessionPromise;
+
     } catch (e: any) {
-        console.error("Connection Failed Exception:", e);
-        let msg = "Fallo de Conexión";
-        if (e.message?.includes("429")) msg = "Cuota Excedida (429)";
-        onStatusChange(msg, true);
+        onStatusChange("Error de Conexión", true);
         this.stop();
     }
   }
 
-  private async startMicrophone(onLevel: (l: number, isModel: boolean) => void, onStatusChange: (status: string, isError?: boolean) => void) {
+  private async startMicrophone(onLevel: (l: number, isModel: boolean) => void, onStatusChange: any) {
       if (!this.audioContext) return;
-
       try {
-          if (this.audioContext.state === 'suspended') {
-              await this.audioContext.resume();
-          }
-
           this.activeStream = await navigator.mediaDevices.getUserMedia({ 
-              audio: {
-                  echoCancellation: true,
-                  autoGainControl: true,
-                  noiseSuppression: true,
-                  channelCount: 1,
-                  sampleRate: 16000 
-              }
+              audio: { echoCancellation: true, autoGainControl: true, noiseSuppression: true, sampleRate: 16000 }
           });
-
           this.inputSource = this.audioContext.createMediaStreamSource(this.activeStream);
           this.inputGain = this.audioContext.createGain();
-          this.inputGain.gain.value = 2.0; // Boost input
-
+          this.inputGain.gain.value = 1.5;
           this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
-
+          
           this.processor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
-              
-              let sum = 0;
-              for(let i=0; i<inputData.length; i++) sum += inputData[i] * inputData[i];
+              let sum = 0; for(let i=0; i<inputData.length; i++) sum += inputData[i] * inputData[i];
               const rms = Math.sqrt(sum / inputData.length);
-              
               if (rms > 0.01) onLevel(rms, false); 
-
-              const pcm16k = downsampleTo16k(inputData, this.inputSampleRate);
               
+              const pcm16k = downsampleTo16k(inputData, this.inputSampleRate);
               let binary = '';
-              const len = pcm16k.byteLength;
               const bytes = new Uint8Array(pcm16k.buffer);
-              const CHUNK_SIZE = 0x8000; 
-              for (let i = 0; i < len; i += CHUNK_SIZE) {
-                binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + CHUNK_SIZE, len)) as any);
-              }
+              for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
               const base64Data = btoa(binary);
 
               if (this.currentSession) {
                   this.currentSession.then(session => {
-                      session.sendRealtimeInput([{
-                          mimeType: "audio/pcm;rate=16000",
-                          data: base64Data
-                      }]);
-                  });
+                      // Correct parameter structure: wrap media in an object.
+                      session.sendRealtimeInput({ media: { mimeType: "audio/pcm;rate=16000", data: base64Data } });
+                  }).catch(() => {});
               }
           };
-
           this.inputSource.connect(this.inputGain);
           this.inputGain.connect(this.processor);
           this.processor.connect(this.audioContext.destination);
-
-      } catch (err) {
-          console.error("Microphone Access Error:", err);
-          onStatusChange("Error Micrófono", true);
-      }
+      } catch (err) { onStatusChange("Error Micrófono", true); }
   }
 
   private async queueAudioChunk(base64Data: string) {
       if (!this.audioContext) return;
-
-      const uint8Array = base64ToUint8Array(base64Data);
-      const int16Array = new Int16Array(uint8Array.buffer);
-      const float32Array = new Float32Array(int16Array.length);
-      
-      for (let i = 0; i < int16Array.length; i++) {
-          float32Array[i] = int16Array[i] / 32768; 
-      }
-
-      this.audioQueue.push(float32Array);
-      
-      if (!this.isPlaying) {
-          this.playQueue();
-      }
+      const bytes = base64ToUint8Array(base64Data);
+      const int16 = new Int16Array(bytes.buffer);
+      const float32 = new Float32Array(int16.length);
+      for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
+      this.audioQueue.push(float32);
+      if (!this.isPlaying) this.playQueue();
   }
 
   private playQueue() {
-      if (!this.audioContext || this.audioQueue.length === 0) {
-          this.isPlaying = false;
-          return;
-      }
-
+      if (!this.audioContext || this.audioQueue.length === 0) { this.isPlaying = false; return; }
       this.isPlaying = true;
       const audioData = this.audioQueue.shift()!;
-      
-      const audioBuffer = this.audioContext.createBuffer(1, audioData.length, 24000); 
-      audioBuffer.getChannelData(0).set(audioData);
-
+      const buffer = this.audioContext.createBuffer(1, audioData.length, 24000); 
+      buffer.getChannelData(0).set(audioData);
       const source = this.audioContext.createBufferSource();
-      source.buffer = audioBuffer;
+      source.buffer = buffer;
       source.connect(this.audioContext.destination);
-
-      const currentTime = this.audioContext.currentTime;
-      const startTime = Math.max(currentTime, this.nextStartTime);
-      
+      const startTime = Math.max(this.audioContext.currentTime, this.nextStartTime);
       source.start(startTime);
-      this.nextStartTime = startTime + audioBuffer.duration;
-
-      source.onended = () => {
-          this.playQueue();
-      };
+      this.nextStartTime = startTime + buffer.duration;
+      source.onended = () => this.playQueue();
   }
 
   public stop() {
       if (this.silenceWatchdog) clearTimeout(this.silenceWatchdog);
       if (this.currentSession) {
-          this.currentSession.then(s => s.close().catch(() => {})); 
+          // Robust cleanup: only attempt close if session exists
+          this.currentSession.then(s => {
+              try { s.close(); } catch(e) {}
+          }).catch(() => {});
           this.currentSession = null;
       }
-      if (this.activeStream) {
-          this.activeStream.getTracks().forEach(t => t.stop());
-          this.activeStream = null;
-      }
-      if (this.processor) { this.processor.disconnect(); this.processor = null; }
-      if (this.inputGain) { this.inputGain.disconnect(); this.inputGain = null; }
-      if (this.inputSource) { this.inputSource.disconnect(); this.inputSource = null; }
-      // Don't close context to avoid breaking re-entry
-      
-      this.audioQueue = [];
+      if (this.activeStream) this.activeStream.getTracks().forEach(t => t.stop());
+      if (this.processor) { try { this.processor.disconnect(); } catch(e) {} }
       this.isPlaying = false;
-      this.nextStartTime = 0;
+      this.audioQueue = [];
   }
 }
