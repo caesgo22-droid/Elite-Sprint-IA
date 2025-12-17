@@ -4,35 +4,26 @@ import { UserProfile, TrainingPlan, LoadStats } from "../types";
 
 // --- AUDIO UTILS ---
 
-// 1. Resampler: Downsample any browser rate (44.1k/48k) to Gemini's required 16k
 const downsampleTo16k = (input: Float32Array, sampleRate: number): Int16Array => {
   if (sampleRate === 16000) {
       return floatTo16BitPCM(input);
   }
-  
   const ratio = sampleRate / 16000;
   const newLength = Math.ceil(input.length / ratio);
   const result = new Int16Array(newLength);
-  
   for (let i = 0; i < newLength; i++) {
       const index = i * ratio;
       const floorIndex = Math.floor(index);
       const weight = index - floorIndex;
-      
       const val1 = input[floorIndex] || 0;
       const val2 = input[floorIndex + 1] || val1;
-      
-      // Linear Interpolation
       const val = val1 * (1 - weight) + val2 * weight;
-      
-      // Clamp & Convert
       const s = Math.max(-1, Math.min(1, val));
       result[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
   }
   return result;
 };
 
-// 2. Float32 -> Int16 PCM
 const floatTo16BitPCM = (float32Array: Float32Array): Int16Array => {
   const result = new Int16Array(float32Array.length);
   for (let i = 0; i < float32Array.length; i++) {
@@ -42,7 +33,6 @@ const floatTo16BitPCM = (float32Array: Float32Array): Int16Array => {
   return result;
 };
 
-// 3. Base64 -> Uint8
 const base64ToUint8Array = (base64: string) => {
   const binaryString = atob(base64);
   const len = binaryString.length;
@@ -57,16 +47,16 @@ export class EliteLiveService {
   private ai: GoogleGenAI;
   private audioContext: AudioContext | null = null;
   private inputSource: MediaStreamAudioSourceNode | null = null;
+  private inputGain: GainNode | null = null; // NEW: Boost volume
   private processor: ScriptProcessorNode | null = null;
   private currentSession: Promise<any> | null = null;
   
-  // Audio Queue Management
   private audioQueue: Float32Array[] = [];
   private isPlaying = false;
   private nextStartTime = 0;
   
   private activeStream: MediaStream | null = null;
-  private inputSampleRate: number = 48000; // Will be detected dynamically
+  private inputSampleRate: number = 48000;
 
   constructor(apiKey: string) {
     this.ai = new GoogleGenAI({ apiKey });
@@ -76,15 +66,14 @@ export class EliteLiveService {
     profile: UserProfile, 
     currentPlan: TrainingPlan | null, 
     acwr: LoadStats | null,
-    onAudioLevel: (level: number) => void,
+    onAudioLevel: (level: number, isModelSpeaking: boolean) => void, // Updated signature
     onStatusChange: (status: string) => void,
     onToolCall: (name: string, args: any) => Promise<any>
   ) {
     if (this.currentSession) return;
 
-    onStatusChange("Estableciendo enlace...");
+    onStatusChange("Conectando satélite...");
 
-    // 1. SYSTEM INSTRUCTION
     const todaysSession = currentPlan?.sessions.find(s => {
         const today = new Date().getDay();
         const map = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
@@ -93,29 +82,24 @@ export class EliteLiveService {
     });
 
     const systemInstruction = `
-    ERES: "Elite Coach", el Staff Técnico de World Athletics Nivel V.
-    MODELO: Conversación fluida de voz (Full Duplex).
-    VOZ: Kore (Autoritario, Calmado, Profesional).
-    IDIOMA: Español.
-
-    CONTEXTO DE TIEMPO REAL:
+    ERES: "Elite Coach", Staff Técnico Nivel V.
+    MODO: Llamada de Voz.
+    
+    ESTADO ACTUAL:
     - Atleta: ${profile.name}
-    - Fase: ${currentPlan?.phase || "General"}
-    - Objetivo: ${currentPlan?.weeklyGoal || "Base"}
-    - Hoy: ${todaysSession ? `${todaysSession.focus}` : "Descanso"}
-    - ACWR: ${acwr ? acwr.ratio : "N/A"}
-
-    COMPORTAMIENTO:
-    1. Respuestas CORTAS (máx 2 frases). Es una llamada, no un email.
-    2. Si el usuario habla, escucha.
-    3. Tono: Entrenador personal, directo y motivador.
+    - Hoy: ${todaysSession ? todaysSession.focus : "Descanso"}
+    
+    INSTRUCCIÓN CLAVE:
+    1. Eres un entrenador hablando por radio/teléfono.
+    2. RESPUESTAS MUY CORTAS (1-2 oraciones).
+    3. Si el usuario se queda callado, pregunta "¿Me copias?" o "¿Cómo te sientes?".
     `;
 
     const tools = [{
       functionDeclarations: [
         {
           name: "modify_session",
-          description: "Modifica la sesión de entrenamiento.",
+          description: "Modifica la sesión de hoy.",
           parameters: {
             type: Type.OBJECT,
             properties: {
@@ -139,7 +123,6 @@ export class EliteLiveService {
     }];
 
     try {
-        // 2. INIT AUDIO CONTEXT (Standard Browser Rate)
         this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         this.inputSampleRate = this.audioContext.sampleRate;
         
@@ -149,7 +132,6 @@ export class EliteLiveService {
 
         this.nextStartTime = this.audioContext.currentTime;
 
-        // 3. CONNECT GEMINI
         this.currentSession = this.ai.live.connect({
             model: 'gemini-2.5-flash-native-audio-preview-09-2025',
             config: {
@@ -162,21 +144,29 @@ export class EliteLiveService {
                 onopen: async () => {
                     onStatusChange("Conectado");
                     await this.startMicrophone(onAudioLevel);
+                    
+                    // KICKSTART: Send a text message to force the model to speak first.
+                    // This confirms the audio output path is working immediately.
+                    this.currentSession!.then(session => {
+                        session.sendRealtimeInput([{ mimeType: "text/plain", data: "Hola Coach, probando audio. ¿Me recibes?" }]);
+                    });
                 },
                 onmessage: async (msg: LiveServerMessage) => {
-                    // Audio Output
                     const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
                     if (audioData) {
                         this.queueAudioChunk(audioData);
+                        // Notify UI that model is speaking (fake level for visualizer)
+                        onAudioLevel(0.5, true); 
+                    } else {
+                        onAudioLevel(0, false);
                     }
                     
-                    // Interruption Handling
                     if (msg.serverContent?.interrupted) {
-                        this.audioQueue = []; // Clear buffer
+                        this.audioQueue = [];
                         this.isPlaying = false;
+                        onStatusChange("Interrumpido...");
                     }
 
-                    // Tool Calls
                     if (msg.toolCall) {
                         const functionCalls = msg.toolCall.functionCalls;
                         for (const call of functionCalls) {
@@ -191,7 +181,7 @@ export class EliteLiveService {
                                     }]
                                 });
                             });
-                            onStatusChange("Conectado"); // Revert status
+                            onStatusChange("Conectado");
                         }
                     }
                 },
@@ -201,8 +191,7 @@ export class EliteLiveService {
                 },
                 onerror: (err) => {
                     console.error("Gemini Error:", err);
-                    onStatusChange("Reconectando...");
-                    // Optional: logic to auto-reconnect could go here
+                    onStatusChange("Error de Conexión");
                 }
             }
         });
@@ -213,60 +202,68 @@ export class EliteLiveService {
     }
   }
 
-  private async startMicrophone(onLevel: (l: number) => void) {
+  private async startMicrophone(onLevel: (l: number, isModel: boolean) => void) {
       if (!this.audioContext) return;
 
-      // Get Mic Stream
-      this.activeStream = await navigator.mediaDevices.getUserMedia({ 
-          audio: {
-              echoCancellation: true,
-              autoGainControl: true,
-              noiseSuppression: true,
-              channelCount: 1
-          }
-      });
+      try {
+          this.activeStream = await navigator.mediaDevices.getUserMedia({ 
+              audio: {
+                  echoCancellation: true,
+                  autoGainControl: true, // Browser AGC
+                  noiseSuppression: true,
+                  channelCount: 1
+              }
+          });
 
-      this.inputSource = this.audioContext.createMediaStreamSource(this.activeStream);
-      
-      // Use ScriptProcessor for raw data access (BufferSize 4096 = ~85ms at 48k)
-      this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
-
-      this.processor.onaudioprocess = (e) => {
-          const inputData = e.inputBuffer.getChannelData(0);
+          this.inputSource = this.audioContext.createMediaStreamSource(this.activeStream);
           
-          // 1. Calculate Volume for UI
-          let sum = 0;
-          for(let i=0; i<inputData.length; i++) sum += inputData[i] * inputData[i];
-          const rms = Math.sqrt(sum / inputData.length);
-          onLevel(rms); 
+          // GAIN NODE: Boost volume by 1.5x to ensure VAD picks it up
+          this.inputGain = this.audioContext.createGain();
+          this.inputGain.gain.value = 1.5; 
 
-          // 2. RESAMPLE to 16kHz (Critical Fix)
-          const pcm16k = downsampleTo16k(inputData, this.inputSampleRate);
-          
-          // 3. Convert to Base64
-          let binary = '';
-          const len = pcm16k.byteLength;
-          const bytes = new Uint8Array(pcm16k.buffer);
-          // Chunk string building for performance
-          const CHUNK_SIZE = 0x8000; 
-          for (let i = 0; i < len; i += CHUNK_SIZE) {
-            binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + CHUNK_SIZE, len)) as any);
-          }
-          const base64Data = btoa(binary);
+          this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
 
-          // 4. Send to Gemini
-          if (this.currentSession) {
-              this.currentSession.then(session => {
-                  session.sendRealtimeInput([{
-                      mimeType: "audio/pcm;rate=16000",
-                      data: base64Data
-                  }]);
-              });
-          }
-      };
+          this.processor.onaudioprocess = (e) => {
+              const inputData = e.inputBuffer.getChannelData(0);
+              
+              // Visualizer Logic
+              let sum = 0;
+              for(let i=0; i<inputData.length; i++) sum += inputData[i] * inputData[i];
+              const rms = Math.sqrt(sum / inputData.length);
+              
+              // Only update UI if user is speaking loud enough
+              if (rms > 0.01) onLevel(rms, false); 
 
-      this.inputSource.connect(this.processor);
-      this.processor.connect(this.audioContext.destination);
+              const pcm16k = downsampleTo16k(inputData, this.inputSampleRate);
+              
+              // Optimized Base64 Conversion
+              let binary = '';
+              const len = pcm16k.byteLength;
+              const bytes = new Uint8Array(pcm16k.buffer);
+              const CHUNK_SIZE = 0x8000; 
+              for (let i = 0; i < len; i += CHUNK_SIZE) {
+                binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + CHUNK_SIZE, len)) as any);
+              }
+              const base64Data = btoa(binary);
+
+              if (this.currentSession) {
+                  this.currentSession.then(session => {
+                      session.sendRealtimeInput([{
+                          mimeType: "audio/pcm;rate=16000",
+                          data: base64Data
+                      }]);
+                  });
+              }
+          };
+
+          // Chain: Mic -> Gain -> Processor -> Destination (Muted to avoid feedback loop)
+          this.inputSource.connect(this.inputGain);
+          this.inputGain.connect(this.processor);
+          this.processor.connect(this.audioContext.destination);
+
+      } catch (err) {
+          console.error("Microphone Access Error:", err);
+      }
   }
 
   private async queueAudioChunk(base64Data: string) {
@@ -296,7 +293,6 @@ export class EliteLiveService {
       this.isPlaying = true;
       const audioData = this.audioQueue.shift()!;
       
-      // Gemini sends 24kHz audio
       const audioBuffer = this.audioContext.createBuffer(1, audioData.length, 24000); 
       audioBuffer.getChannelData(0).set(audioData);
 
@@ -305,7 +301,6 @@ export class EliteLiveService {
       source.connect(this.audioContext.destination);
 
       const currentTime = this.audioContext.currentTime;
-      // Ensure we schedule seamlessly
       const startTime = Math.max(currentTime, this.nextStartTime);
       
       source.start(startTime);
@@ -326,6 +321,7 @@ export class EliteLiveService {
           this.activeStream = null;
       }
       if (this.processor) { this.processor.disconnect(); this.processor = null; }
+      if (this.inputGain) { this.inputGain.disconnect(); this.inputGain = null; }
       if (this.inputSource) { this.inputSource.disconnect(); this.inputSource = null; }
       if (this.audioContext) { 
           this.audioContext.close(); 

@@ -16,6 +16,7 @@ export const GeminiLive: React.FC = () => {
   const { userProfile, currentPlan, acwrStats, updateSession, addLog } = useApp();
   const [isActive, setIsActive] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
+  const [isModelSpeaking, setIsModelSpeaking] = useState(false);
   const [status, setStatus] = useState("Staff Offline");
   const liveService = useRef<EliteLiveService | null>(null);
   
@@ -35,6 +36,7 @@ export const GeminiLive: React.FC = () => {
           liveService.current = null;
           setIsActive(false);
           setAudioLevel(0);
+          setIsModelSpeaking(false);
           setStatus("Staff Offline");
       } else {
           const key = getApiKey();
@@ -51,11 +53,14 @@ export const GeminiLive: React.FC = () => {
               userProfile,
               currentPlan,
               acwrStats,
-              (level) => setAudioLevel(level * 5), 
-              (newStatus) => {
-                  // Only update status if active
-                  setStatus(newStatus === "Conectado" ? "Micrófono Abierto" : newStatus);
-              },
+              (level, speaking) => {
+                  setAudioLevel(level * 5);
+                  setIsModelSpeaking(speaking);
+                  if (speaking) setStatus("Coach Hablando");
+                  else if (level > 0.1) setStatus("Te escucho...");
+                  else setStatus("Micrófono Abierto");
+              }, 
+              (newStatus) => setStatus(newStatus),
               async (name, args) => {
                   if (name === 'modify_session') {
                       updateSession(args.day, { 
@@ -91,9 +96,9 @@ export const GeminiLive: React.FC = () => {
         
         {/* Background Ambient */}
         <div className={`absolute inset-0 transition-opacity duration-1000 ${isActive ? 'opacity-100' : 'opacity-10'}`}>
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-yellow-500/10 rounded-full blur-[100px] animate-pulse-slow"></div>
+            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full blur-[100px] animate-pulse-slow ${isModelSpeaking ? 'bg-cyan-500/20' : 'bg-yellow-500/10'}`}></div>
             <div 
-                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] bg-cyan-600/20 rounded-full blur-[60px] transition-transform duration-75" 
+                className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] rounded-full blur-[60px] transition-transform duration-75 ${isModelSpeaking ? 'bg-emerald-600/30' : 'bg-cyan-600/20'}`}
                 style={{ transform: `scale(${1 + Math.min(audioLevel, 1.5)}) translate(-50%, -50%)` }}
             ></div>
         </div>
@@ -115,7 +120,7 @@ export const GeminiLive: React.FC = () => {
             {/* Main Interaction Orb */}
             <div className="relative group">
                 {/* Active Ring */}
-                <div className={`absolute inset-0 rounded-full border-2 border-yellow-500/50 transition-all duration-75 opacity-0 ${isActive ? 'opacity-100' : ''}`} style={{ transform: `scale(${1 + audioLevel * 0.8})` }}></div>
+                <div className={`absolute inset-0 rounded-full border-2 transition-all duration-75 opacity-0 ${isActive ? 'opacity-100' : ''} ${isModelSpeaking ? 'border-cyan-500/50' : 'border-yellow-500/50'}`} style={{ transform: `scale(${1 + audioLevel * 0.8})` }}></div>
                 <div className={`absolute inset-0 rounded-full border border-cyan-500/30 transition-all duration-500 opacity-0 ${isActive ? 'opacity-100 animate-ping' : ''}`} style={{ animationDuration: '3s' }}></div>
                 
                 <button 
@@ -124,7 +129,7 @@ export const GeminiLive: React.FC = () => {
                 >
                     {isActive ? (
                          <div className="relative w-full h-full flex items-center justify-center rounded-full overflow-hidden">
-                             <div className="absolute inset-0 bg-gradient-to-tr from-yellow-500/20 to-cyan-500/20 animate-spin-slow"></div>
+                             <div className={`absolute inset-0 bg-gradient-to-tr animate-spin-slow ${isModelSpeaking ? 'from-cyan-500/20 to-emerald-500/20' : 'from-yellow-500/20 to-cyan-500/20'}`}></div>
                              <Headphones size={40} className="text-white relative z-10"/>
                          </div>
                     ) : (
@@ -138,7 +143,7 @@ export const GeminiLive: React.FC = () => {
                 {bars.map((_, i) => (
                     <div 
                         key={i} 
-                        className={`w-1 rounded-full transition-all duration-75 ${isActive ? 'bg-gradient-to-t from-cyan-500 to-yellow-400' : 'bg-slate-800'}`}
+                        className={`w-1 rounded-full transition-all duration-75 ${isActive ? (isModelSpeaking ? 'bg-emerald-400' : 'bg-yellow-400') : 'bg-slate-800'}`}
                         style={{ 
                             height: isActive ? `${Math.max(10, Math.random() * 100 * audioLevel * (i % 2 === 0 ? 1.5 : 0.7))}%` : '4px',
                             opacity: isActive ? 0.6 + (audioLevel * 0.4) : 0.3
@@ -151,9 +156,10 @@ export const GeminiLive: React.FC = () => {
             <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl w-full text-center backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2">
                 {isActive ? (
                     <div className="space-y-1">
-                        <p className="text-xs text-emerald-400 font-bold uppercase animate-pulse">Enlace de Voz Activo</p>
-                        <p className="text-[10px] text-slate-400">Es como una llamada telefónica.</p>
-                        <p className="text-[10px] text-slate-400">Habla con normalidad, el Staff te responderá.</p>
+                        <p className={`text-xs font-bold uppercase animate-pulse ${isModelSpeaking ? 'text-cyan-400' : 'text-emerald-400'}`}>
+                            {isModelSpeaking ? 'Staff Respondiendo...' : 'Escuchando...'}
+                        </p>
+                        <p className="text-[10px] text-slate-400">Si no responde, habla más fuerte.</p>
                     </div>
                 ) : (
                     <div className="space-y-2">
