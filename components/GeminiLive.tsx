@@ -22,7 +22,7 @@ export const GeminiLive: React.FC = () => {
   const [demoMode, setDemoMode] = useState(false); 
   
   const liveService = useRef<EliteLiveService | MockLiveService | null>(null);
-  const connectionTimeout = useRef<any>(null); // To detect hangs
+  const connectionTimeout = useRef<any>(null); 
   
   // Clean up on unmount
   useEffect(() => {
@@ -36,6 +36,13 @@ export const GeminiLive: React.FC = () => {
   }, []);
 
   const startLiveSession = async (useDemo: boolean) => {
+      // 1. MOBILE SAFARI FIX: Create/Resume AudioContext synchronously inside this user-triggered function
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const audioCtx = new AudioContextClass();
+      if (audioCtx.state === 'suspended') {
+          await audioCtx.resume();
+      }
+
       const key = getApiKey();
       if (!key && !useDemo) {
           alert("⚠️ API Key no encontrada. Configura VITE_GEMINI_API_KEY.");
@@ -52,9 +59,9 @@ export const GeminiLive: React.FC = () => {
 
       setIsActive(true); 
       setIsError(false);
-      setStatus(useDemo ? "Iniciando Demo..." : "Conectando...");
+      setStatus(useDemo ? "Demo Iniciada..." : "Conectando...");
       
-      // SAFETY TIMEOUT: If connection takes too long (>8s), assume 429/Network issue and force error
+      // Safety Timeout for Desktop 429 (Stuck Listening)
       if (!useDemo) {
           connectionTimeout.current = setTimeout(() => {
               if (liveService.current && !demoMode) {
@@ -62,7 +69,7 @@ export const GeminiLive: React.FC = () => {
                   liveService.current.stop();
                   setIsActive(false);
                   setIsError(true);
-                  setStatus("Tiempo de espera agotado");
+                  setStatus("Sin respuesta del Servidor");
               }
           }, 8000);
       }
@@ -81,12 +88,9 @@ export const GeminiLive: React.FC = () => {
           (newStatus, error) => {
               setStatus(newStatus);
               
-              // Clear timeout on successful connection or interaction
-              if (newStatus === "Conectado" || newStatus === "Coach Hablando") {
-                  if (connectionTimeout.current) {
-                      clearTimeout(connectionTimeout.current);
-                      connectionTimeout.current = null;
-                  }
+              if ((newStatus === "Conectado" || newStatus === "Coach Hablando") && connectionTimeout.current) {
+                  clearTimeout(connectionTimeout.current);
+                  connectionTimeout.current = null;
               }
 
               if (error && !useDemo) { 
@@ -106,21 +110,9 @@ export const GeminiLive: React.FC = () => {
                   });
                   return { success: true, message: "Sesión actualizada." };
               }
-              if (name === 'log_rpe') {
-                  const today = new Date().toISOString().split('T')[0];
-                  addLog({
-                      id: Date.now().toString(),
-                      date: today,
-                      event: 'Therapy',
-                      type: 'Recovery',
-                      location: 'Voz',
-                      time: 0,
-                      notes: `RPE Reportado por Voz: ${args.rpe}. Nota: ${args.notes || ''}`
-                  });
-                  return { success: true };
-              }
-              return { success: false, message: "Herramienta desconocida" };
-          }
+              return { success: false };
+          },
+          audioCtx // Pass the robust context
       );
   };
 
@@ -136,7 +128,8 @@ export const GeminiLive: React.FC = () => {
           setIsError(false);
           setDemoMode(false);
       } else {
-          await startLiveSession(false); // Try real first
+          // This is a direct user action, safe for AudioContext creation
+          await startLiveSession(false); 
       }
   };
 
@@ -145,7 +138,6 @@ export const GeminiLive: React.FC = () => {
           liveService.current?.stop();
           liveService.current = null;
           setIsActive(false);
-          // Wait a tick to ensure cleanup
           setTimeout(() => startLiveSession(true), 100);
       } else {
           startLiveSession(true);
@@ -182,9 +174,7 @@ export const GeminiLive: React.FC = () => {
 
             {/* Main Interaction Orb */}
             <div className="relative group">
-                {/* Active Ring */}
                 <div className={`absolute inset-0 rounded-full border-2 transition-all duration-75 opacity-0 ${isActive ? 'opacity-100' : ''} ${isModelSpeaking ? 'border-cyan-500/50' : 'border-yellow-500/50'}`} style={{ transform: `scale(${1 + audioLevel * 0.8})` }}></div>
-                <div className={`absolute inset-0 rounded-full border border-cyan-500/30 transition-all duration-500 opacity-0 ${isActive ? 'opacity-100 animate-ping' : ''}`} style={{ animationDuration: '3s' }}></div>
                 
                 <button 
                     onClick={handleToggle}
@@ -235,8 +225,14 @@ export const GeminiLive: React.FC = () => {
                         <p className={`text-xs font-bold uppercase animate-pulse ${isModelSpeaking ? 'text-cyan-400' : 'text-emerald-400'}`}>
                             {isModelSpeaking ? 'Staff Respondiendo...' : 'Escuchando...'}
                         </p>
-                        <p className="text-[10px] text-slate-400">Si no responde, habla más fuerte.</p>
-                        {demoMode && <p className="text-[9px] text-yellow-500 pt-2 font-mono">MODO SIMULACIÓN: Habla para activar.</p>}
+                        {demoMode && (
+                            <div className="pt-2">
+                                <p className="text-[9px] text-yellow-500 font-mono mb-1">MODO SIMULACIÓN: Habla para activar.</p>
+                                <div className="h-1 w-20 bg-slate-800 rounded-full mx-auto overflow-hidden">
+                                    <div className="h-full bg-yellow-500 transition-all duration-100" style={{width: `${Math.min(audioLevel * 50, 100)}%`}}></div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="space-y-3">
@@ -247,7 +243,6 @@ export const GeminiLive: React.FC = () => {
                             </div>
                          </div>
                          
-                         {/* MANUAL DEMO TRIGGER - ALWAYS VISIBLE FALLBACK */}
                          <div className="pt-3 border-t border-slate-800">
                              <button onClick={handleDemoStart} className="text-[10px] text-emerald-500 hover:text-emerald-400 font-bold uppercase tracking-wider flex items-center justify-center gap-1 w-full opacity-70 hover:opacity-100 transition-opacity">
                                  <PlayCircle size={12}/> Probar Demo (Sin Cuota)

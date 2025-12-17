@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, LiveServerMessage, Modality, Type } from "@google/genai";
 import { UserProfile, TrainingPlan, LoadStats } from "../types";
 
@@ -43,7 +42,7 @@ const base64ToUint8Array = (base64: string) => {
   return bytes;
 };
 
-// --- MOCK SERVICE FOR DEMO MODE ---
+// --- MOCK SERVICE FOR DEMO MODE (ROBUST VERSION) ---
 export class MockLiveService {
     private audioContext: AudioContext | null = null;
     private inputSource: MediaStreamAudioSourceNode | null = null;
@@ -55,6 +54,7 @@ export class MockLiveService {
     private speakingFrames = 0;
     private hasTriggeredResponse = false;
     private isCoachTalking = false;
+    private autoTriggerTimer: any = null;
 
     constructor() {}
 
@@ -64,47 +64,58 @@ export class MockLiveService {
         acwr: LoadStats | null,
         onAudioLevel: (level: number, isModelSpeaking: boolean) => void, 
         onStatusChange: (status: string, isError?: boolean) => void,
-        onToolCall: (name: string, args: any) => Promise<any>
+        onToolCall: (name: string, args: any) => Promise<any>,
+        existingContext?: AudioContext // Accept external context
     ) {
-        onStatusChange("Modo Demo Activo", false);
+        onStatusChange("Modo Demo: Habla ahora...", false);
+        this.hasTriggeredResponse = false;
         
-        // Init Mic for visualizer only
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        this.audioContext = new AudioContextClass();
+        // Use passed context or create new (should be passed from click handler for mobile)
+        this.audioContext = existingContext || new (window.AudioContext || (window as any).webkitAudioContext)();
         if (this.audioContext.state === 'suspended') await this.audioContext.resume();
 
         try {
-            this.activeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.activeStream = await navigator.mediaDevices.getUserMedia({ 
+                audio: { 
+                    echoCancellation: true, 
+                    noiseSuppression: false, // Disable noise suppression for better raw detection in demo
+                    autoGainControl: false 
+                } 
+            });
+            
             this.inputSource = this.audioContext.createMediaStreamSource(this.activeStream);
             this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
 
-            this.processor.onaudioprocess = (e) => {
-                // If coach is "talking", ignore user input and simulate output levels
-                if (this.isCoachTalking) {
-                    const fakeLevel = Math.random() * 0.5 + 0.2;
-                    onAudioLevel(fakeLevel, true);
-                    return;
+            // FAILSAFE: Auto-trigger response after 6 seconds if VAD fails (noise/silence issues)
+            this.autoTriggerTimer = setTimeout(() => {
+                if (!this.hasTriggeredResponse) {
+                    console.log("Demo Auto-Trigger fired");
+                    this.triggerMockResponse(onStatusChange, onToolCall, onAudioLevel);
                 }
+            }, 6000);
+
+            this.processor.onaudioprocess = (e) => {
+                if (this.isCoachTalking || this.hasTriggeredResponse) return;
 
                 const inputData = e.inputBuffer.getChannelData(0);
                 let sum = 0;
                 for(let i=0; i<inputData.length; i++) sum += inputData[i] * inputData[i];
                 const rms = Math.sqrt(sum / inputData.length);
                 
-                onAudioLevel(rms, false);
+                // Boost visual level for UI
+                onAudioLevel(rms * 5, false);
 
-                // Simulation Logic: Detect speech then silence to trigger response
-                if (rms > 0.02) {
+                // LOWER THRESHOLD for Demo (sensitive)
+                if (rms > 0.01) { 
                     this.speakingFrames++;
                     this.silenceFrames = 0;
                     onStatusChange("Te escucho...", false);
                 } else {
                     this.silenceFrames++;
-                    onStatusChange("Micrófono Abierto", false);
                 }
 
-                // If user spoke for a bit (~1s) and then stopped for (~1s)
-                if (this.speakingFrames > 20 && this.silenceFrames > 30 && !this.hasTriggeredResponse) {
+                // Logic: Spoke for ~0.5s AND Silence for ~0.5s
+                if (this.speakingFrames > 10 && this.silenceFrames > 15 && !this.hasTriggeredResponse) {
                     this.triggerMockResponse(onStatusChange, onToolCall, onAudioLevel);
                 }
             };
@@ -113,48 +124,59 @@ export class MockLiveService {
             this.processor.connect(this.audioContext.destination);
 
         } catch (e) {
-            console.error(e);
+            console.error("Demo Mic Error:", e);
             onStatusChange("Error Micrófono Demo", true);
+            // Even if mic fails, trigger the demo experience after 2s
+            setTimeout(() => this.triggerMockResponse(onStatusChange, onToolCall, onAudioLevel), 2000);
         }
     }
 
     private async triggerMockResponse(
-        onStatusChange: (s: string) => void, 
+        onStatusChange: (s: string, isError?: boolean) => void, 
         onToolCall: (n: string, a: any) => Promise<any>,
         onAudioLevel: (l: number, m: boolean) => void
     ) {
+        if (this.hasTriggeredResponse) return;
         this.hasTriggeredResponse = true;
+        if (this.autoTriggerTimer) clearTimeout(this.autoTriggerTimer);
+
         this.isCoachTalking = true;
-        onStatusChange("Coach Pensando...");
+        onStatusChange("Procesando (Simulado)...", false);
         
-        // 1. Wait a bit (thinking)
-        await new Promise(r => setTimeout(r, 1000));
+        // 1. Thinking Delay
+        await new Promise(r => setTimeout(r, 1500));
         
-        // 2. "Speak"
-        onStatusChange("Coach Respondiendo...");
-        // Audio levels are handled in process loop via isCoachTalking flag
-        await new Promise(r => setTimeout(r, 3000)); // Coach talks for 3s
+        // 2. Speaking Simulation (Green Orb)
+        onStatusChange("Coach Respondiendo...", false);
         
-        // 3. Execute Tool
+        // Simulate audio waves
+        const speakInterval = setInterval(() => {
+            onAudioLevel(Math.random() * 0.5 + 0.3, true);
+        }, 100);
+
+        await new Promise(r => setTimeout(r, 3000)); 
+        clearInterval(speakInterval);
+        
+        // 3. Action
         this.isCoachTalking = false;
         onAudioLevel(0, false);
-        onStatusChange("Ejecutando cambios...");
+        onStatusChange("Ejecutando cambios...", false);
         
         await onToolCall("modify_session", {
             day: "Hoy",
-            newFocus: "Recuperación Activa (Demo)",
+            newFocus: "Recuperación Neural (Demo)",
             intensity: "Low"
         });
 
-        // Reset for another round? No, simple demo one-shot is safer to avoid loops
-        onStatusChange("Ciclo Demo Finalizado");
+        onStatusChange("Demo Finalizada", false);
     }
 
     public stop() {
+        if (this.autoTriggerTimer) clearTimeout(this.autoTriggerTimer);
         if (this.activeStream) this.activeStream.getTracks().forEach(t => t.stop());
         if (this.processor) this.processor.disconnect();
         if (this.inputSource) this.inputSource.disconnect();
-        if (this.audioContext) this.audioContext.close();
+        // Do NOT close context if it was passed in externally, but disconnecting nodes is fine.
     }
 }
 
@@ -172,6 +194,8 @@ export class EliteLiveService {
   
   private activeStream: MediaStream | null = null;
   private inputSampleRate: number = 48000;
+  
+  private silenceWatchdog: any = null;
 
   constructor(apiKey: string) {
     this.ai = new GoogleGenAI({ apiKey });
@@ -183,7 +207,8 @@ export class EliteLiveService {
     acwr: LoadStats | null,
     onAudioLevel: (level: number, isModelSpeaking: boolean) => void, 
     onStatusChange: (status: string, isError?: boolean) => void,
-    onToolCall: (name: string, args: any) => Promise<any>
+    onToolCall: (name: string, args: any) => Promise<any>,
+    existingContext?: AudioContext // Accept external context
   ) {
     if (this.currentSession) return;
 
@@ -199,22 +224,15 @@ export class EliteLiveService {
     const systemInstruction = `
     ERES: "Elite Coach", Staff Técnico Nivel V.
     MODO: Llamada de Voz.
-    
-    ESTADO ACTUAL:
-    - Atleta: ${profile.name}
-    - Hoy: ${todaysSession ? todaysSession.focus : "Descanso"}
-    
-    INSTRUCCIÓN CLAVE:
-    1. Eres un entrenador hablando por radio/teléfono.
-    2. RESPUESTAS MUY CORTAS (1-2 oraciones).
-    3. Si el usuario se queda callado, pregunta "¿Me copias?" o "¿Cómo te sientes?".
+    ESTADO: Atleta ${profile.name}. Hoy: ${todaysSession ? todaysSession.focus : "Descanso"}.
+    INSTRUCCIÓN: Respuestas cortas (1 frase). Entrenador militar pero empático.
     `;
 
     const tools = [{
       functionDeclarations: [
         {
           name: "modify_session",
-          description: "Modifica la sesión de hoy.",
+          description: "Modifica la sesión.",
           parameters: {
             type: Type.OBJECT,
             properties: {
@@ -238,12 +256,10 @@ export class EliteLiveService {
     }];
 
     try {
-        // Safe AudioContext Creation
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        this.audioContext = new AudioContextClass();
+        // USE EXTERNAL CONTEXT IF PROVIDED (Fixes Mobile Safari)
+        this.audioContext = existingContext || new (window.AudioContext || (window as any).webkitAudioContext)();
         this.inputSampleRate = this.audioContext.sampleRate;
         
-        // Force resume (Fix for some browsers)
         if (this.audioContext.state === 'suspended') {
             await this.audioContext.resume();
         }
@@ -263,12 +279,23 @@ export class EliteLiveService {
                     onStatusChange("Conectado", false);
                     await this.startMicrophone(onAudioLevel, onStatusChange);
                     
-                    // KICKSTART: Send greeting text to verify output path immediately
+                    // Sending initial Hello to wake up the model
                     this.currentSession!.then(session => {
-                        session.sendRealtimeInput([{ mimeType: "text/plain", data: "Hola Coach, probando audio. ¿Me recibes?" }]);
+                        session.sendRealtimeInput([{ mimeType: "text/plain", data: "Hola Coach." }]);
                     });
+                    
+                    // WATCHDOG: If no audio received in 5s after connect, it's a zombie connection (likely 429 disguised)
+                    this.silenceWatchdog = setTimeout(() => {
+                        if (!this.isPlaying) {
+                            onStatusChange("Sin respuesta de IA", true);
+                            this.stop();
+                        }
+                    }, 8000);
                 },
                 onmessage: async (msg: LiveServerMessage) => {
+                    // Clear watchdog on first message
+                    if (this.silenceWatchdog) { clearTimeout(this.silenceWatchdog); this.silenceWatchdog = null; }
+
                     const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
                     if (audioData) {
                         this.queueAudioChunk(audioData);
@@ -314,15 +341,10 @@ export class EliteLiveService {
                 onerror: (err: any) => {
                     console.error("Gemini Error Event:", err);
                     let msg = "Error de Conexión";
-                    
-                    // Check for Quota Exceeded (429) or other specific errors
                     const errStr = JSON.stringify(err);
                     if (errStr.includes("429") || errStr.includes("ResourceExhausted")) {
                         msg = "Cuota Excedida (429)";
-                    } else if (errStr.includes("503") || errStr.includes("Unavailable")) {
-                        msg = "Servidor Saturado";
                     }
-
                     onStatusChange(msg, true);
                     this.stop();
                 }
@@ -342,7 +364,6 @@ export class EliteLiveService {
       if (!this.audioContext) return;
 
       try {
-          // Ensure context is running again just in case
           if (this.audioContext.state === 'suspended') {
               await this.audioContext.resume();
           }
@@ -353,37 +374,27 @@ export class EliteLiveService {
                   autoGainControl: true,
                   noiseSuppression: true,
                   channelCount: 1,
-                  sampleRate: 16000 // Try to request 16k natively if supported
+                  sampleRate: 16000 
               }
           });
 
           this.inputSource = this.audioContext.createMediaStreamSource(this.activeStream);
-          
-          // INCREASED GAIN NODE (2.5x) to ensure VAD activation even with quiet input
           this.inputGain = this.audioContext.createGain();
-          this.inputGain.gain.value = 2.5; 
-
-          // High-pass filter to remove rumble that might confuse VAD
-          const filter = this.audioContext.createBiquadFilter();
-          filter.type = 'highpass';
-          filter.frequency.value = 85; 
+          this.inputGain.gain.value = 2.0; // Boost input
 
           this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
 
           this.processor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
               
-              // Visualizer Logic
               let sum = 0;
               for(let i=0; i<inputData.length; i++) sum += inputData[i] * inputData[i];
               const rms = Math.sqrt(sum / inputData.length);
               
-              // Only update UI if user is speaking loud enough (visual threshold)
               if (rms > 0.01) onLevel(rms, false); 
 
               const pcm16k = downsampleTo16k(inputData, this.inputSampleRate);
               
-              // Optimized Base64 Conversion
               let binary = '';
               const len = pcm16k.byteLength;
               const bytes = new Uint8Array(pcm16k.buffer);
@@ -403,9 +414,7 @@ export class EliteLiveService {
               }
           };
 
-          // Chain: Mic -> Filter -> Gain -> Processor -> Destination
-          this.inputSource.connect(filter);
-          filter.connect(this.inputGain);
+          this.inputSource.connect(this.inputGain);
           this.inputGain.connect(this.processor);
           this.processor.connect(this.audioContext.destination);
 
@@ -461,8 +470,9 @@ export class EliteLiveService {
   }
 
   public stop() {
+      if (this.silenceWatchdog) clearTimeout(this.silenceWatchdog);
       if (this.currentSession) {
-          this.currentSession.then(s => s.close().catch(() => {})); // Catch close errors
+          this.currentSession.then(s => s.close().catch(() => {})); 
           this.currentSession = null;
       }
       if (this.activeStream) {
@@ -472,10 +482,7 @@ export class EliteLiveService {
       if (this.processor) { this.processor.disconnect(); this.processor = null; }
       if (this.inputGain) { this.inputGain.disconnect(); this.inputGain = null; }
       if (this.inputSource) { this.inputSource.disconnect(); this.inputSource = null; }
-      if (this.audioContext) { 
-          this.audioContext.close(); 
-          this.audioContext = null; 
-      }
+      // Don't close context to avoid breaking re-entry
       
       this.audioQueue = [];
       this.isPlaying = false;
