@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { EliteLiveService } from '../services/liveService';
-import { Mic, PhoneOff, Radio, Globe, Zap, Headphones, Activity } from 'lucide-react';
+import { Mic, PhoneOff, Radio, Globe, Zap, Headphones, Activity, AlertCircle } from 'lucide-react';
 import { hasApiKey } from '../services/geminiService';
 
 const getApiKey = () => {
@@ -18,6 +18,7 @@ export const GeminiLive: React.FC = () => {
   const [audioLevel, setAudioLevel] = useState(0);
   const [isModelSpeaking, setIsModelSpeaking] = useState(false);
   const [status, setStatus] = useState("Staff Offline");
+  const [isError, setIsError] = useState(false); // Track error state
   const liveService = useRef<EliteLiveService | null>(null);
   
   // Clean up on unmount
@@ -38,6 +39,7 @@ export const GeminiLive: React.FC = () => {
           setAudioLevel(0);
           setIsModelSpeaking(false);
           setStatus("Staff Offline");
+          setIsError(false);
       } else {
           const key = getApiKey();
           if (!key) {
@@ -47,6 +49,7 @@ export const GeminiLive: React.FC = () => {
 
           liveService.current = new EliteLiveService(key);
           setIsActive(true); 
+          setIsError(false);
           setStatus("Iniciando...");
           
           await liveService.current.startSession(
@@ -60,7 +63,15 @@ export const GeminiLive: React.FC = () => {
                   else if (level > 0.1) setStatus("Te escucho...");
                   else setStatus("Micrófono Abierto");
               }, 
-              (newStatus) => setStatus(newStatus),
+              (newStatus, error) => {
+                  setStatus(newStatus);
+                  if (error) {
+                      setIsError(true);
+                      setIsActive(false); // Auto-stop UI animation on error
+                      liveService.current?.stop();
+                      liveService.current = null;
+                  }
+              },
               async (name, args) => {
                   if (name === 'modify_session') {
                       updateSession(args.day, { 
@@ -107,8 +118,8 @@ export const GeminiLive: React.FC = () => {
             
             {/* Status Header */}
             <div className="text-center space-y-3">
-                <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all ${isActive ? 'bg-emerald-900/30 border-emerald-500 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
-                    {isActive ? <Radio size={10} className="animate-pulse"/> : <Globe size={10}/>}
+                <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all ${isError ? 'bg-red-900/30 border-red-500 text-red-400' : isActive ? 'bg-emerald-900/30 border-emerald-500 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
+                    {isError ? <AlertCircle size={10}/> : isActive ? <Radio size={10} className="animate-pulse"/> : <Globe size={10}/>}
                     {status}
                 </div>
                 <div>
@@ -125,7 +136,7 @@ export const GeminiLive: React.FC = () => {
                 
                 <button 
                     onClick={handleToggle}
-                    className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl relative z-20 border-4 ${isActive ? 'bg-slate-900 border-yellow-500 shadow-yellow-900/20 scale-110' : 'bg-slate-900 hover:bg-slate-800 border-slate-700 hover:border-slate-500'}`}
+                    className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl relative z-20 border-4 ${isError ? 'bg-slate-900 border-red-500 text-red-400' : isActive ? 'bg-slate-900 border-yellow-500 shadow-yellow-900/20 scale-110' : 'bg-slate-900 hover:bg-slate-800 border-slate-700 hover:border-slate-500'}`}
                 >
                     {isActive ? (
                          <div className="relative w-full h-full flex items-center justify-center rounded-full overflow-hidden">
@@ -133,7 +144,7 @@ export const GeminiLive: React.FC = () => {
                              <Headphones size={40} className="text-white relative z-10"/>
                          </div>
                     ) : (
-                        <Mic size={40} className="text-slate-400 group-hover:text-white transition-colors"/>
+                        <Mic size={40} className={`transition-colors ${isError ? 'text-red-400' : 'text-slate-400 group-hover:text-white'}`}/>
                     )}
                 </button>
             </div>
@@ -143,7 +154,7 @@ export const GeminiLive: React.FC = () => {
                 {bars.map((_, i) => (
                     <div 
                         key={i} 
-                        className={`w-1 rounded-full transition-all duration-75 ${isActive ? (isModelSpeaking ? 'bg-emerald-400' : 'bg-yellow-400') : 'bg-slate-800'}`}
+                        className={`w-1 rounded-full transition-all duration-75 ${isError ? 'bg-red-900' : isActive ? (isModelSpeaking ? 'bg-emerald-400' : 'bg-yellow-400') : 'bg-slate-800'}`}
                         style={{ 
                             height: isActive ? `${Math.max(10, Math.random() * 100 * audioLevel * (i % 2 === 0 ? 1.5 : 0.7))}%` : '4px',
                             opacity: isActive ? 0.6 + (audioLevel * 0.4) : 0.3
@@ -154,7 +165,12 @@ export const GeminiLive: React.FC = () => {
 
             {/* Interaction Hint */}
             <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl w-full text-center backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2">
-                {isActive ? (
+                {isError ? (
+                    <div className="space-y-1">
+                        <p className="text-xs text-red-400 font-bold uppercase animate-pulse">Error de Conexión</p>
+                        <p className="text-[10px] text-slate-400">Posible cuota excedida o red inestable. Reintenta más tarde.</p>
+                    </div>
+                ) : isActive ? (
                     <div className="space-y-1">
                         <p className={`text-xs font-bold uppercase animate-pulse ${isModelSpeaking ? 'text-cyan-400' : 'text-emerald-400'}`}>
                             {isModelSpeaking ? 'Staff Respondiendo...' : 'Escuchando...'}

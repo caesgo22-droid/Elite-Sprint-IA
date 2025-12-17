@@ -47,7 +47,7 @@ export class EliteLiveService {
   private ai: GoogleGenAI;
   private audioContext: AudioContext | null = null;
   private inputSource: MediaStreamAudioSourceNode | null = null;
-  private inputGain: GainNode | null = null; // NEW: Boost volume
+  private inputGain: GainNode | null = null; 
   private processor: ScriptProcessorNode | null = null;
   private currentSession: Promise<any> | null = null;
   
@@ -66,13 +66,13 @@ export class EliteLiveService {
     profile: UserProfile, 
     currentPlan: TrainingPlan | null, 
     acwr: LoadStats | null,
-    onAudioLevel: (level: number, isModelSpeaking: boolean) => void, // Updated signature
-    onStatusChange: (status: string) => void,
+    onAudioLevel: (level: number, isModelSpeaking: boolean) => void, 
+    onStatusChange: (status: string, isError?: boolean) => void,
     onToolCall: (name: string, args: any) => Promise<any>
   ) {
     if (this.currentSession) return;
 
-    onStatusChange("Conectando satélite...");
+    onStatusChange("Conectando satélite...", false);
 
     const todaysSession = currentPlan?.sessions.find(s => {
         const today = new Date().getDay();
@@ -123,9 +123,12 @@ export class EliteLiveService {
     }];
 
     try {
-        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        // Safe AudioContext Creation
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        this.audioContext = new AudioContextClass();
         this.inputSampleRate = this.audioContext.sampleRate;
         
+        // Force resume (Fix for some browsers)
         if (this.audioContext.state === 'suspended') {
             await this.audioContext.resume();
         }
@@ -142,11 +145,10 @@ export class EliteLiveService {
             },
             callbacks: {
                 onopen: async () => {
-                    onStatusChange("Conectado");
+                    onStatusChange("Conectado", false);
                     await this.startMicrophone(onAudioLevel);
                     
-                    // KICKSTART: Send a text message to force the model to speak first.
-                    // This confirms the audio output path is working immediately.
+                    // KICKSTART: Send greeting text to verify output path immediately
                     this.currentSession!.then(session => {
                         session.sendRealtimeInput([{ mimeType: "text/plain", data: "Hola Coach, probando audio. ¿Me recibes?" }]);
                     });
@@ -155,7 +157,6 @@ export class EliteLiveService {
                     const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
                     if (audioData) {
                         this.queueAudioChunk(audioData);
-                        // Notify UI that model is speaking (fake level for visualizer)
                         onAudioLevel(0.5, true); 
                     } else {
                         onAudioLevel(0, false);
@@ -164,40 +165,60 @@ export class EliteLiveService {
                     if (msg.serverContent?.interrupted) {
                         this.audioQueue = [];
                         this.isPlaying = false;
-                        onStatusChange("Interrumpido...");
+                        onStatusChange("Interrumpido...", false);
+                        setTimeout(() => onStatusChange("Escuchando...", false), 1000);
                     }
 
                     if (msg.toolCall) {
                         const functionCalls = msg.toolCall.functionCalls;
                         for (const call of functionCalls) {
-                            onStatusChange(`Ejecutando ${call.name}...`);
-                            const result = await onToolCall(call.name, call.args);
-                            this.currentSession!.then(session => {
-                                session.sendToolResponse({
-                                    functionResponses: [{
-                                        id: call.id,
-                                        name: call.name,
-                                        response: { result: result }
-                                    }]
+                            onStatusChange(`Ejecutando ${call.name}...`, false);
+                            try {
+                                const result = await onToolCall(call.name, call.args);
+                                this.currentSession!.then(session => {
+                                    session.sendToolResponse({
+                                        functionResponses: [{
+                                            id: call.id,
+                                            name: call.name,
+                                            response: { result: result }
+                                        }]
+                                    });
                                 });
-                            });
-                            onStatusChange("Conectado");
+                            } catch (err) {
+                                console.error("Tool execution failed:", err);
+                            }
+                            onStatusChange("Conectado", false);
                         }
                     }
                 },
-                onclose: () => {
-                    onStatusChange("Finalizado");
+                onclose: (e) => {
+                    console.log("Session Closed", e);
+                    onStatusChange("Desconectado", false);
                     this.stop();
                 },
-                onerror: (err) => {
-                    console.error("Gemini Error:", err);
-                    onStatusChange("Error de Conexión");
+                onerror: (err: any) => {
+                    console.error("Gemini Error Event:", err);
+                    let msg = "Error de Conexión";
+                    
+                    // Check for Quota Exceeded (429) or other specific errors
+                    const errStr = JSON.stringify(err);
+                    if (errStr.includes("429") || errStr.includes("ResourceExhausted")) {
+                        msg = "Cuota Excedida (429)";
+                    } else if (errStr.includes("503") || errStr.includes("Unavailable")) {
+                        msg = "Servidor Saturado";
+                    }
+
+                    onStatusChange(msg, true);
+                    this.stop();
                 }
             }
         });
 
-    } catch (e) {
-        console.error("Connection Failed:", e);
+    } catch (e: any) {
+        console.error("Connection Failed Exception:", e);
+        let msg = "Fallo de Conexión";
+        if (e.message?.includes("429")) msg = "Cuota Excedida (429)";
+        onStatusChange(msg, true);
         this.stop();
     }
   }
@@ -206,20 +227,31 @@ export class EliteLiveService {
       if (!this.audioContext) return;
 
       try {
+          // Ensure context is running again just in case
+          if (this.audioContext.state === 'suspended') {
+              await this.audioContext.resume();
+          }
+
           this.activeStream = await navigator.mediaDevices.getUserMedia({ 
               audio: {
                   echoCancellation: true,
-                  autoGainControl: true, // Browser AGC
+                  autoGainControl: true,
                   noiseSuppression: true,
-                  channelCount: 1
+                  channelCount: 1,
+                  sampleRate: 16000 // Try to request 16k natively if supported
               }
           });
 
           this.inputSource = this.audioContext.createMediaStreamSource(this.activeStream);
           
-          // GAIN NODE: Boost volume by 1.5x to ensure VAD picks it up
+          // INCREASED GAIN NODE (2.5x) to ensure VAD activation even with quiet input
           this.inputGain = this.audioContext.createGain();
-          this.inputGain.gain.value = 1.5; 
+          this.inputGain.gain.value = 2.5; 
+
+          // High-pass filter to remove rumble that might confuse VAD
+          const filter = this.audioContext.createBiquadFilter();
+          filter.type = 'highpass';
+          filter.frequency.value = 85; 
 
           this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
 
@@ -231,7 +263,7 @@ export class EliteLiveService {
               for(let i=0; i<inputData.length; i++) sum += inputData[i] * inputData[i];
               const rms = Math.sqrt(sum / inputData.length);
               
-              // Only update UI if user is speaking loud enough
+              // Only update UI if user is speaking loud enough (visual threshold)
               if (rms > 0.01) onLevel(rms, false); 
 
               const pcm16k = downsampleTo16k(inputData, this.inputSampleRate);
@@ -256,13 +288,15 @@ export class EliteLiveService {
               }
           };
 
-          // Chain: Mic -> Gain -> Processor -> Destination (Muted to avoid feedback loop)
-          this.inputSource.connect(this.inputGain);
+          // Chain: Mic -> Filter -> Gain -> Processor -> Destination
+          this.inputSource.connect(filter);
+          filter.connect(this.inputGain);
           this.inputGain.connect(this.processor);
           this.processor.connect(this.audioContext.destination);
 
       } catch (err) {
           console.error("Microphone Access Error:", err);
+          onStatusChange("Error Micrófono", true);
       }
   }
 
@@ -313,7 +347,7 @@ export class EliteLiveService {
 
   public stop() {
       if (this.currentSession) {
-          this.currentSession.then(s => s.close());
+          this.currentSession.then(s => s.close().catch(() => {})); // Catch close errors
           this.currentSession = null;
       }
       if (this.activeStream) {
@@ -332,4 +366,9 @@ export class EliteLiveService {
       this.isPlaying = false;
       this.nextStartTime = 0;
   }
+}
+
+// Helper for UI callback
+function onStatusChange(msg: string, isError: boolean) {
+    // This will be replaced by the actual callback passed in startSession
 }
