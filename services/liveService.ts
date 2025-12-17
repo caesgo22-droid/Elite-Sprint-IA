@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, LiveServerMessage, Modality, Type } from "@google/genai";
 import { UserProfile, TrainingPlan, LoadStats } from "../types";
 
@@ -42,7 +43,23 @@ const base64ToUint8Array = (base64: string) => {
   return bytes;
 };
 
-// --- MOCK SERVICE FOR DEMO MODE (ROBUST VERSION) ---
+// Helper: Play a quick "Ping" sound to verify AudioContext is unlocked
+const playPing = (ctx: AudioContext, frequency: number = 440, type: 'sine' | 'triangle' = 'sine') => {
+    try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.value = frequency;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+    } catch(e) { console.error("Audio Ping Failed", e); }
+};
+
+// --- MOCK SERVICE FOR DEMO MODE (ROBUST VERSION WITH TTS) ---
 export class MockLiveService {
     private audioContext: AudioContext | null = null;
     private inputSource: MediaStreamAudioSourceNode | null = null;
@@ -74,11 +91,14 @@ export class MockLiveService {
         this.audioContext = existingContext || new (window.AudioContext || (window as any).webkitAudioContext)();
         if (this.audioContext.state === 'suspended') await this.audioContext.resume();
 
+        // CONFIRM AUDIO OUT WORKS
+        playPing(this.audioContext, 600, 'triangle');
+
         try {
             this.activeStream = await navigator.mediaDevices.getUserMedia({ 
                 audio: { 
                     echoCancellation: true, 
-                    noiseSuppression: false, // Disable noise suppression for better raw detection in demo
+                    noiseSuppression: false, 
                     autoGainControl: false 
                 } 
             });
@@ -86,13 +106,14 @@ export class MockLiveService {
             this.inputSource = this.audioContext.createMediaStreamSource(this.activeStream);
             this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
 
-            // FAILSAFE: Auto-trigger response after 6 seconds if VAD fails (noise/silence issues)
+            // FAILSAFE: Auto-trigger response after 5 seconds if VAD fails
             this.autoTriggerTimer = setTimeout(() => {
                 if (!this.hasTriggeredResponse) {
                     console.log("Demo Auto-Trigger fired");
+                    onStatusChange("Demo: Auto-respuesta...", false);
                     this.triggerMockResponse(onStatusChange, onToolCall, onAudioLevel);
                 }
-            }, 6000);
+            }, 5000);
 
             this.processor.onaudioprocess = (e) => {
                 if (this.isCoachTalking || this.hasTriggeredResponse) return;
@@ -141,42 +162,59 @@ export class MockLiveService {
         if (this.autoTriggerTimer) clearTimeout(this.autoTriggerTimer);
 
         this.isCoachTalking = true;
-        onStatusChange("Procesando (Simulado)...", false);
+        onStatusChange("Procesando...", false);
         
         // 1. Thinking Delay
-        await new Promise(r => setTimeout(r, 1500));
+        await new Promise(r => setTimeout(r, 1000));
         
-        // 2. Speaking Simulation (Green Orb)
+        // 2. Speaking Simulation using NATIVE TTS
         onStatusChange("Coach Respondiendo...", false);
         
-        // Simulate audio waves
+        const msg = "Entendido. Voy a ajustar la sesión de hoy a recuperación activa. Buen trabajo.";
+        const utterance = new SpeechSynthesisUtterance(msg);
+        utterance.lang = "es-ES";
+        utterance.rate = 1.1;
+        utterance.pitch = 1.0;
+        
+        // Animate Visualizer while speaking
         const speakInterval = setInterval(() => {
-            onAudioLevel(Math.random() * 0.5 + 0.3, true);
-        }, 100);
+            onAudioLevel(Math.random() * 0.6 + 0.2, true);
+        }, 80);
 
-        await new Promise(r => setTimeout(r, 3000)); 
-        clearInterval(speakInterval);
-        
-        // 3. Action
-        this.isCoachTalking = false;
-        onAudioLevel(0, false);
-        onStatusChange("Ejecutando cambios...", false);
-        
-        await onToolCall("modify_session", {
-            day: "Hoy",
-            newFocus: "Recuperación Neural (Demo)",
-            intensity: "Low"
-        });
+        utterance.onend = async () => {
+            clearInterval(speakInterval);
+            this.isCoachTalking = false;
+            onAudioLevel(0, false);
+            
+            onStatusChange("Ejecutando cambios...", false);
+            
+            await onToolCall("modify_session", {
+                day: "Hoy",
+                newFocus: "Recuperación Activa (Demo)",
+                intensity: "Low"
+            });
 
-        onStatusChange("Demo Finalizada", false);
+            onStatusChange("Demo Finalizada", false);
+        };
+
+        // Fallback if TTS fails/not supported
+        utterance.onerror = () => {
+             clearInterval(speakInterval);
+             this.isCoachTalking = false;
+             onStatusChange("Error TTS Demo", true);
+        };
+
+        window.speechSynthesis.cancel(); // Clear queue
+        window.speechSynthesis.speak(utterance);
     }
 
     public stop() {
         if (this.autoTriggerTimer) clearTimeout(this.autoTriggerTimer);
+        window.speechSynthesis.cancel(); // Stop talking
         if (this.activeStream) this.activeStream.getTracks().forEach(t => t.stop());
         if (this.processor) this.processor.disconnect();
         if (this.inputSource) this.inputSource.disconnect();
-        // Do NOT close context if it was passed in externally, but disconnecting nodes is fine.
+        // Do NOT close context if it was passed in externally
     }
 }
 
@@ -212,7 +250,7 @@ export class EliteLiveService {
   ) {
     if (this.currentSession) return;
 
-    onStatusChange("Conectando satélite...", false);
+    onStatusChange("Iniciando satélite...", false);
 
     const todaysSession = currentPlan?.sessions.find(s => {
         const today = new Date().getDay();
@@ -263,6 +301,9 @@ export class EliteLiveService {
         if (this.audioContext.state === 'suspended') {
             await this.audioContext.resume();
         }
+        
+        // PING TO VERIFY AUDIO OUTPUT IS ALIVE
+        playPing(this.audioContext, 880, 'sine');
 
         this.nextStartTime = this.audioContext.currentTime;
 
@@ -284,10 +325,10 @@ export class EliteLiveService {
                         session.sendRealtimeInput([{ mimeType: "text/plain", data: "Hola Coach." }]);
                     });
                     
-                    // WATCHDOG: If no audio received in 5s after connect, it's a zombie connection (likely 429 disguised)
+                    // WATCHDOG: If no audio received in 5s after connect, it's a zombie connection
                     this.silenceWatchdog = setTimeout(() => {
                         if (!this.isPlaying) {
-                            onStatusChange("Sin respuesta de IA", true);
+                            onStatusChange("Sin audio de IA (Zombie)", true);
                             this.stop();
                         }
                     }, 8000);
