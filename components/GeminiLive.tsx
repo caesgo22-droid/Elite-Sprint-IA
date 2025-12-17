@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { EliteLiveService, MockLiveService } from '../services/liveService';
-import { Mic, PhoneOff, Radio, Globe, Zap, Headphones, Activity, AlertCircle, PlayCircle } from 'lucide-react';
+import { Mic, PhoneOff, Radio, Globe, Zap, Headphones, Activity, AlertCircle, PlayCircle, Clock } from 'lucide-react';
 import { hasApiKey } from '../services/geminiService';
 
 const getApiKey = () => {
@@ -18,11 +18,11 @@ export const GeminiLive: React.FC = () => {
   const [audioLevel, setAudioLevel] = useState(0);
   const [isModelSpeaking, setIsModelSpeaking] = useState(false);
   const [status, setStatus] = useState("Staff Offline");
-  const [isError, setIsError] = useState(false); // Track error state
-  const [demoMode, setDemoMode] = useState(false); // New Demo State
+  const [isError, setIsError] = useState(false); 
+  const [demoMode, setDemoMode] = useState(false); 
   
-  // Use a union type to allow either Real or Mock service
   const liveService = useRef<EliteLiveService | MockLiveService | null>(null);
+  const connectionTimeout = useRef<any>(null); // To detect hangs
   
   // Clean up on unmount
   useEffect(() => {
@@ -31,6 +31,7 @@ export const GeminiLive: React.FC = () => {
               liveService.current.stop();
               liveService.current = null;
           }
+          if (connectionTimeout.current) clearTimeout(connectionTimeout.current);
       };
   }, []);
 
@@ -41,7 +42,6 @@ export const GeminiLive: React.FC = () => {
           return;
       }
 
-      // Select Service Implementation
       if (useDemo) {
           liveService.current = new MockLiveService();
           setDemoMode(true);
@@ -52,7 +52,20 @@ export const GeminiLive: React.FC = () => {
 
       setIsActive(true); 
       setIsError(false);
-      setStatus(useDemo ? "Iniciando Demo..." : "Iniciando Satélite...");
+      setStatus(useDemo ? "Iniciando Demo..." : "Conectando...");
+      
+      // SAFETY TIMEOUT: If connection takes too long (>8s), assume 429/Network issue and force error
+      if (!useDemo) {
+          connectionTimeout.current = setTimeout(() => {
+              if (liveService.current && !demoMode) {
+                  console.warn("Connection timeout enforced.");
+                  liveService.current.stop();
+                  setIsActive(false);
+                  setIsError(true);
+                  setStatus("Tiempo de espera agotado");
+              }
+          }, 8000);
+      }
       
       await liveService.current.startSession(
           userProfile,
@@ -67,7 +80,17 @@ export const GeminiLive: React.FC = () => {
           }, 
           (newStatus, error) => {
               setStatus(newStatus);
-              if (error && !useDemo) { // Only stop on real errors
+              
+              // Clear timeout on successful connection or interaction
+              if (newStatus === "Conectado" || newStatus === "Coach Hablando") {
+                  if (connectionTimeout.current) {
+                      clearTimeout(connectionTimeout.current);
+                      connectionTimeout.current = null;
+                  }
+              }
+
+              if (error && !useDemo) { 
+                  if (connectionTimeout.current) clearTimeout(connectionTimeout.current);
                   setIsError(true);
                   setIsActive(false); 
                   liveService.current?.stop();
@@ -103,6 +126,7 @@ export const GeminiLive: React.FC = () => {
 
   const handleToggle = async () => {
       if (isActive) {
+          if (connectionTimeout.current) clearTimeout(connectionTimeout.current);
           liveService.current?.stop();
           liveService.current = null;
           setIsActive(false);
@@ -117,8 +141,15 @@ export const GeminiLive: React.FC = () => {
   };
 
   const handleDemoStart = async () => {
-      if (isActive) handleToggle();
-      setTimeout(() => startLiveSession(true), 500); // Small delay to clear previous state
+      if (isActive) {
+          liveService.current?.stop();
+          liveService.current = null;
+          setIsActive(false);
+          // Wait a tick to ensure cleanup
+          setTimeout(() => startLiveSession(true), 100);
+      } else {
+          startLiveSession(true);
+      }
   };
 
   const bars = Array.from({ length: 20 });
@@ -189,8 +220,8 @@ export const GeminiLive: React.FC = () => {
                 {isError ? (
                     <div className="space-y-3">
                         <div>
-                            <p className="text-xs text-red-400 font-bold uppercase animate-pulse">Cuota API Excedida</p>
-                            <p className="text-[10px] text-slate-400 mt-1">Google ha pausado las peticiones temporalmente.</p>
+                            <p className="text-xs text-red-400 font-bold uppercase animate-pulse">Problema de Conexión</p>
+                            <p className="text-[10px] text-slate-400 mt-1">La IA no responde (Posible Cuota Excedida).</p>
                         </div>
                         <button 
                             onClick={handleDemoStart}
@@ -205,15 +236,22 @@ export const GeminiLive: React.FC = () => {
                             {isModelSpeaking ? 'Staff Respondiendo...' : 'Escuchando...'}
                         </p>
                         <p className="text-[10px] text-slate-400">Si no responde, habla más fuerte.</p>
-                        {demoMode && <p className="text-[9px] text-yellow-500 pt-2 font-mono">MODO SIMULACIÓN: Habla para activar el trigger.</p>}
+                        {demoMode && <p className="text-[9px] text-yellow-500 pt-2 font-mono">MODO SIMULACIÓN: Habla para activar.</p>}
                     </div>
                 ) : (
-                    <div className="space-y-2">
-                         <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center justify-center gap-2"><Zap size={12}/> Comandos de Voz</p>
-                         <div className="space-y-1 text-sm text-slate-300 font-medium">
-                            <p>"Analiza mi carga (ACWR)."</p>
-                            <p>"Cambia la sesión de hoy."</p>
-                            <p>"Registra un RPE de 8."</p>
+                    <div className="space-y-3">
+                         <div className="space-y-1">
+                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center justify-center gap-2"><Zap size={12}/> Comandos</p>
+                            <div className="text-sm text-slate-300 font-medium">
+                                "Analiza mi carga", "Cambia el plan", "RPE 8"
+                            </div>
+                         </div>
+                         
+                         {/* MANUAL DEMO TRIGGER - ALWAYS VISIBLE FALLBACK */}
+                         <div className="pt-3 border-t border-slate-800">
+                             <button onClick={handleDemoStart} className="text-[10px] text-emerald-500 hover:text-emerald-400 font-bold uppercase tracking-wider flex items-center justify-center gap-1 w-full opacity-70 hover:opacity-100 transition-opacity">
+                                 <PlayCircle size={12}/> Probar Demo (Sin Cuota)
+                             </button>
                          </div>
                     </div>
                 )}
