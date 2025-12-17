@@ -1,10 +1,8 @@
-
-
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { Zap, TrendingUp, CalendarCheck, CheckSquare, X, BatteryCharging, ArrowRight, BrainCircuit, Sparkles, Activity, Clock, MapPin, Info, MessageCircle, HeartPulse, Stethoscope, AlertTriangle, UserCog, Calendar, Save, ChevronLeft, ScanLine } from 'lucide-react';
-import { useHistory } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { calculateRecovery } from '../utils/recoveryEngine';
 import { generateNexusInsight } from '../services/geminiService';
@@ -13,7 +11,7 @@ import { AthletePassport } from './AthletePassport';
 
 export const HomeDashboard: React.FC = () => {
   const { userProfile, currentPlan, logs, updateSession, lastAnalysis, acwrStats, nexusInsight, setNexusInsight, addLog, t, language } = useApp();
-  const history = useHistory();
+  const navigate = useNavigate();
   
   const [showFeedbackModal, setShowFeedbackModal] = useState<any>(null);
   const [showSundayPrompt, setShowSundayPrompt] = useState(false);
@@ -217,7 +215,7 @@ export const HomeDashboard: React.FC = () => {
       {showSundayPrompt && (
           <div className="bg-gradient-to-r from-cyan-900 to-blue-900 p-4 rounded-xl border border-cyan-500/30 flex items-center justify-between shadow-lg">
               <div><h3 className="text-white font-bold text-sm">{t.dashboard.sundayPrompt}</h3></div>
-              <button onClick={() => history.push('/plan')} className="bg-white text-cyan-900 text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1">{t.dashboard.planBtn} <ArrowRight size={12}/></button>
+              <button onClick={() => navigate('/plan')} className="bg-white text-cyan-900 text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1">{t.dashboard.planBtn} <ArrowRight size={12}/></button>
           </div>
       )}
 
@@ -233,7 +231,7 @@ export const HomeDashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div onClick={() => history.push('/tracker')} className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex flex-col justify-between relative overflow-hidden cursor-pointer hover:bg-slate-900/80 transition-colors">
+        <div onClick={() => navigate('/tracker')} className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 flex flex-col justify-between relative overflow-hidden cursor-pointer hover:bg-slate-900/80 transition-colors">
           <div className="flex items-center gap-2 text-emerald-400 mb-2 z-10"><TrendingUp size={18} /><span className="text-xs font-semibold uppercase">{t.dashboard.progress}</span></div>
           <div className="absolute bottom-2 left-0 right-0 h-12 px-2">
              {chartData.length > 0 ? (
@@ -306,7 +304,7 @@ export const HomeDashboard: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="text-center py-8"><p className="text-slate-400 mb-4">{t.dashboard.noSession}</p><button onClick={() => history.push('/plan')} className="bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-2 rounded-full text-sm font-semibold">{t.dashboard.genPlan}</button></div>
+            <div className="text-center py-8"><p className="text-slate-400 mb-4">{t.dashboard.noSession}</p><button onClick={() => navigate('/plan')} className="bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-2 rounded-full text-sm font-semibold">{t.dashboard.genPlan}</button></div>
           )}
         </div>
       </div>

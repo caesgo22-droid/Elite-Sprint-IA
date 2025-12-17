@@ -1,9 +1,8 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import { UserProfile, TrainingPlan, PerformanceLog, ChatMessage, BiomechanicalAnalysis, NexusInsight } from '../types';
+import { UserProfile, TrainingPlan, PerformanceLog, ChatMessage, BiomechanicalAnalysis, NexusInsight, LoadStats } from '../types';
 import { auth, saveUserProfile, saveTrainingPlan, addPerformanceLog, updatePerformanceLog, deletePerformanceLog, fetchUserData, saveAnalysisToHistory, getAnalysisHistory, isInitialized, archivePlan, getPlanHistory } from '../services/firebase';
 import * as firebaseAuth from 'firebase/auth';
-import { calculateACWR, LoadStats } from '../utils/loadCalculator';
+import { calculateACWR } from '../utils/loadCalculator';
 import { Language, TRANSLATIONS } from '../utils/translations';
 
 const { onAuthStateChanged } = firebaseAuth as any;

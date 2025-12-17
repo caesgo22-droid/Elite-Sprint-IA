@@ -1,8 +1,6 @@
-
-
 import * as React from 'react';
 import { useState } from 'react';
-import { Link, useHistory, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Home, Calendar, Activity, MessageSquare, Video, Users, ShieldCheck, Briefcase, Eye, User, LogOut, RefreshCw, ChevronDown, Languages, Mic2 } from 'lucide-react';
 import { TechnicalWhitepaper } from '../TechnicalWhitepaper';
 import { useApp } from '../../contexts/AppContext';
@@ -19,7 +17,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [showScience, setShowScience] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { adminProfile, userProfile, updateProfile, viewingAthleteId, switchAthlete, language, setLanguage, t } = useApp();
-  const history = useHistory();
+  const navigate = useNavigate();
   const location = useLocation();
 
   // Navigation Logic based on Role (Using Translations)
@@ -48,7 +46,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     const newRole = adminProfile.role === 'staff' ? 'athlete' : 'staff';
     updateProfile({ ...adminProfile, role: newRole });
     setShowUserMenu(false);
-    history.push('/');
+    navigate('/');
   };
 
   const toggleLanguage = () => {
@@ -116,7 +114,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                                 <button onClick={toggleRole} className="w-full text-left px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-lg flex items-center gap-2 transition-colors">
                                     <RefreshCw size={14}/> {t.layout.changeRole} {adminProfile.role === 'staff' ? t.role.athlete : t.role.staff}
                                 </button>
-                                <button onClick={() => { setShowUserMenu(false); history.push('/plan?edit=true'); }} className="w-full text-left px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-lg flex items-center gap-2 transition-colors">
+                                <button onClick={() => { setShowUserMenu(false); navigate('/plan?edit=true'); }} className="w-full text-left px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-lg flex items-center gap-2 transition-colors">
                                     <User size={14}/> {t.layout.editProfile}
                                 </button>
                                 <div className="h-px bg-slate-800 my-1"></div>

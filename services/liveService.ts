@@ -1,5 +1,4 @@
-
-import { GoogleGenAI, LiveServerMessage, Modality, Type, LiveSession } from "@google/genai";
+import { GoogleGenAI, LiveServerMessage, Modality, Type } from "@google/genai";
 import { UserProfile, TrainingPlan, LoadStats } from "../types";
 
 // --- AUDIO UTILS (Raw PCM Handling) ---
@@ -32,7 +31,7 @@ export class EliteLiveService {
   private audioContext: AudioContext | null = null;
   private inputSource: MediaStreamAudioSourceNode | null = null;
   private processor: ScriptProcessorNode | null = null;
-  private currentSession: Promise<LiveSession> | null = null;
+  private currentSession: Promise<any> | null = null;
   
   // Audio Queue Management
   private audioQueue: Float32Array[] = [];
