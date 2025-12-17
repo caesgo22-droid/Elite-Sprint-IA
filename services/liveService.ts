@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, LiveServerMessage, Modality, Type } from "@google/genai";
 import { UserProfile, TrainingPlan, LoadStats } from "../types";
 
@@ -65,25 +66,23 @@ export class EliteLiveService {
     });
 
     const systemInstruction = `
-    ERES: "Elite Coach", la IA de voz de la plataforma Elite Sprint Coach AI.
-    MODELO DE INTERACCIÓN: Conversación natural, fluida y realista (NO robótica).
+    ERES: "Elite Coach", el Staff Técnico de World Athletics Nivel V.
+    MODELO: Conversación fluida de voz (Full Duplex).
     VOZ: Kore (Autoritario, Calmado, Profesional).
     IDIOMA: Español.
 
-    CONTEXTO DE TIEMPO REAL (OMNI-AWARENESS):
+    CONTEXTO DE TIEMPO REAL:
     - Atleta: ${profile.name} (${profile.events.join('/')})
     - Fase: ${currentPlan?.phase || "General"}
     - Objetivo: ${currentPlan?.weeklyGoal || "Base"}
     - ACWR: ${acwr ? acwr.ratio : "N/A"} (${acwr ? acwr.status : "Desconocido"})
-    - Hoy (${new Date().toLocaleDateString()}): ${todaysSession ? `${todaysSession.focus} - Intensidad: ${todaysSession.intensity}` : "Descanso o No Planificado"}
-    - Detalles Sesión Hoy: ${todaysSession ? `Rutina: ${todaysSession.trackRoutine.join(', ')}. KPI: ${todaysSession.biomechanicsKpi}` : "N/A"}
+    - Hoy (${new Date().toLocaleDateString()}): ${todaysSession ? `${todaysSession.focus} - Intensidad: ${todaysSession.intensity}` : "Descanso"}
     - Lesiones: ${profile.injuries.length > 0 ? profile.injuries.map(i => `${i.location} (${i.status})`).join(', ') : "Ninguna"}
 
-    REGLAS DE ORO (COMPORTAMIENTO):
-    1. **HABLA COMO UN COACH**: Usa frases cortas. No des discursos. Ve al grano.
-    2. **PERSONALIDAD**: Eres exigente pero motivador. Usa jerga técnica: "Whip", "Stiffness", "GCT", "Triple Extensión".
-    3. **SEGURIDAD**: Si ACWR > 1.3 o hay dolor, sugiere bajar la intensidad INMEDIATAMENTE usando la herramienta 'modify_session'.
-    4. **NO LEAS JSON**: Nunca digas "Tu array de lesiones tiene...". Di "Veo que te molesta el isquio".
+    COMPORTAMIENTO:
+    1. **SÉ BREVE**: Es una llamada de voz. Respuestas de 1-2 frases máximo.
+    2. **PERSONALIDAD**: Entrenador de élite. Usa jerga técnica pero sé directo.
+    3. **SEGURIDAD**: Si hay dolor o ACWR alto, ordena descanso o terapia.
     `;
 
     // 2. DEFINE TOOLS
@@ -91,12 +90,12 @@ export class EliteLiveService {
       functionDeclarations: [
         {
           name: "modify_session",
-          description: "Modifica la sesión de entrenamiento de hoy en el calendario.",
+          description: "Modifica la sesión de entrenamiento de hoy.",
           parameters: {
             type: Type.OBJECT,
             properties: {
-              day: { type: Type.STRING, description: "El día a modificar (ej: 'Hoy', 'Lunes')" },
-              newFocus: { type: Type.STRING, description: "El nuevo enfoque principal" },
+              day: { type: Type.STRING, description: "El día a modificar (ej: 'Hoy')" },
+              newFocus: { type: Type.STRING, description: "El nuevo enfoque" },
               intensity: { type: Type.STRING, enum: ["Low", "Medium", "High", "Max"] }
             },
             required: ["day", "newFocus"]
@@ -104,12 +103,12 @@ export class EliteLiveService {
         },
         {
             name: "log_rpe",
-            description: "Registra el esfuerzo percibido (RPE) del atleta.",
+            description: "Registra el esfuerzo percibido (RPE).",
             parameters: {
                 type: Type.OBJECT,
                 properties: {
-                    rpe: { type: Type.NUMBER, description: "Valor de 1 a 10" },
-                    notes: { type: Type.STRING, description: "Comentario corto" }
+                    rpe: { type: Type.NUMBER, description: "Valor 1-10" },
+                    notes: { type: Type.STRING, description: "Nota opcional" }
                 },
                 required: ["rpe"]
             }
@@ -118,28 +117,34 @@ export class EliteLiveService {
     }];
 
     try {
-        // 3. INIT AUDIO CONTEXT (Output @ 24kHz for Gemini Native Quality)
+        // 3. INIT AUDIO CONTEXT
         this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        
+        // CRITICAL FIX: Resume context if suspended (Browser Autoplay Policy)
+        if (this.audioContext.state === 'suspended') {
+            await this.audioContext.resume();
+        }
+
         this.nextStartTime = this.audioContext.currentTime;
 
         // 4. CONNECT TO GEMINI LIVE
         this.currentSession = this.ai.live.connect({
             model: 'gemini-2.5-flash-native-audio-preview-09-2025',
             config: {
-                responseModalities: [Modality.AUDIO], // CRITICAL: Forces Audio Output
+                responseModalities: [Modality.AUDIO], // Forces Audio Output
                 speechConfig: {
-                    voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } // High Quality Voice
+                    voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }
                 },
                 systemInstruction: { parts: [{ text: systemInstruction }] },
                 tools: tools,
             },
             callbacks: {
                 onopen: async () => {
-                    onStatusChange("🔴 EN VIVO");
+                    onStatusChange("Conectado");
                     await this.startMicrophone(onAudioLevel);
                 },
                 onmessage: async (msg: LiveServerMessage) => {
-                    // A. Handle Audio Output (PCM)
+                    // A. Handle Audio Output
                     const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
                     if (audioData) {
                         this.queueAudioChunk(audioData);
@@ -152,7 +157,6 @@ export class EliteLiveService {
                             onStatusChange(`⚡ Ejecutando: ${call.name}...`);
                             const result = await onToolCall(call.name, call.args);
                             
-                            // Send response back to Gemini so it knows tool finished
                             this.currentSession!.then(session => {
                                 session.sendToolResponse({
                                     functionResponses: [{
@@ -162,12 +166,12 @@ export class EliteLiveService {
                                     }]
                                 });
                             });
-                            onStatusChange("🔴 EN VIVO");
+                            onStatusChange("Conectado");
                         }
                     }
                 },
                 onclose: () => {
-                    onStatusChange("Desconectado");
+                    onStatusChange("Finalizado");
                     this.stop();
                 },
                 onerror: (err) => {
@@ -189,7 +193,7 @@ export class EliteLiveService {
 
       this.activeStream = await navigator.mediaDevices.getUserMedia({ 
           audio: {
-              sampleRate: 16000, // Gemini prefers 16kHz input
+              sampleRate: 16000, 
               channelCount: 1,
               echoCancellation: true,
               autoGainControl: true,
@@ -207,12 +211,10 @@ export class EliteLiveService {
           let sum = 0;
           for(let i=0; i<inputData.length; i++) sum += inputData[i] * inputData[i];
           const rms = Math.sqrt(sum / inputData.length);
-          onLevel(rms); // Update UI
+          onLevel(rms); 
 
-          // Convert to PCM Int16
           const pcmData = floatTo16BitPCM(inputData);
           
-          // Convert to Base64
           let binary = '';
           const len = pcmData.byteLength;
           const bytes = new Uint8Array(pcmData.buffer);
@@ -221,7 +223,6 @@ export class EliteLiveService {
           }
           const base64Data = btoa(binary);
 
-          // Send to Gemini
           if (this.currentSession) {
               this.currentSession.then(session => {
                   session.sendRealtimeInput([{
@@ -239,13 +240,12 @@ export class EliteLiveService {
   private async queueAudioChunk(base64Data: string) {
       if (!this.audioContext) return;
 
-      // Decode Base64 -> Uint8 -> Int16 -> Float32
       const uint8Array = base64ToUint8Array(base64Data);
       const int16Array = new Int16Array(uint8Array.buffer);
       const float32Array = new Float32Array(int16Array.length);
       
       for (let i = 0; i < int16Array.length; i++) {
-          float32Array[i] = int16Array[i] / 32768; // Normalize to -1.0 to 1.0
+          float32Array[i] = int16Array[i] / 32768; 
       }
 
       this.audioQueue.push(float32Array);
@@ -264,14 +264,13 @@ export class EliteLiveService {
       this.isPlaying = true;
       const audioData = this.audioQueue.shift()!;
       
-      const audioBuffer = this.audioContext.createBuffer(1, audioData.length, 24000); // 24kHz Output
+      const audioBuffer = this.audioContext.createBuffer(1, audioData.length, 24000); 
       audioBuffer.getChannelData(0).set(audioData);
 
       const source = this.audioContext.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(this.audioContext.destination);
 
-      // Schedule seamless playback
       const currentTime = this.audioContext.currentTime;
       const startTime = Math.max(currentTime, this.nextStartTime);
       

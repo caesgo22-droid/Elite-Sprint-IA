@@ -1,3 +1,4 @@
+
 import * as React from 'react';
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -28,7 +29,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/', icon: Home, label: t.nav.home },
     { to: '/plan', icon: Calendar, label: t.nav.plan },
     { to: '/video', icon: Video, label: t.nav.analysis },
-    { to: '/live', icon: Mic2, label: 'Voice' }, // NEW: Voice Route
+    { to: '/tracker', icon: Activity, label: t.nav.stats }, // RESTORED STATS
+    { to: '/live', icon: Mic2, label: 'Voice' }, 
     { 
         to: isStaff ? '/coach-dashboard' : '/staff', 
         icon: isStaff ? Briefcase : Users, 
