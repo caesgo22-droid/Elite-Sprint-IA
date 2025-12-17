@@ -1,3 +1,4 @@
+
 import * as React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './contexts/AppContext';
@@ -10,7 +11,7 @@ import PerformanceTracker from './components/PerformanceTracker';
 import { StaffHub } from './components/StaffHub'; 
 import { CoachDashboard } from './components/CoachDashboard';
 import { AuthScreen } from './components/AuthScreen';
-import { EliteVoiceCoach } from './components/EliteVoiceCoach'; // RENAMED IMPORT
+import { GeminiLive } from './components/GeminiLive'; // FIXED IMPORT
 import { Loader2 } from 'lucide-react';
 
 const AppContent: React.FC = () => {
@@ -40,7 +41,7 @@ const AppContent: React.FC = () => {
           <Route path="/staff" element={<StaffHub />} />
           <Route path="/coach-dashboard" element={<CoachDashboard />} />
           <Route path="/chat" element={<LiveCoach />} />
-          <Route path="/live" element={<EliteVoiceCoach />} />
+          <Route path="/live" element={<GeminiLive />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>
