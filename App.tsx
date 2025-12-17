@@ -1,4 +1,3 @@
-
 import * as React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './contexts/AppContext';
@@ -11,7 +10,7 @@ import PerformanceTracker from './components/PerformanceTracker';
 import { StaffHub } from './components/StaffHub'; 
 import { CoachDashboard } from './components/CoachDashboard';
 import { AuthScreen } from './components/AuthScreen';
-import { GeminiLive } from './components/GeminiLive'; // FIXED IMPORT
+import { GeminiLive } from './components/GeminiLive';
 import { Loader2 } from 'lucide-react';
 
 const AppContent: React.FC = () => {

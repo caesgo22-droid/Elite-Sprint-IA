@@ -1,9 +1,8 @@
-
 import * as React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { EliteLiveService } from '../services/liveService';
-import { Mic, PhoneOff, Radio, Globe, Activity, Zap } from 'lucide-react';
+import { Mic, PhoneOff, Radio, Globe, Zap } from 'lucide-react';
 import { hasApiKey } from '../services/geminiService';
 
 const getApiKey = () => {
@@ -19,7 +18,6 @@ export const GeminiLive: React.FC = () => {
   const [status, setStatus] = useState("Listo para conectar");
   const liveService = useRef<EliteLiveService | null>(null);
   
-  // Clean up on unmount
   useEffect(() => {
       return () => {
           if (liveService.current) {
