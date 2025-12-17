@@ -2,8 +2,8 @@
 import * as React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { EliteLiveService } from '../services/liveService';
-import { Mic, PhoneOff, Radio, Globe, Zap, Headphones, Activity, AlertCircle } from 'lucide-react';
+import { EliteLiveService, MockLiveService } from '../services/liveService';
+import { Mic, PhoneOff, Radio, Globe, Zap, Headphones, Activity, AlertCircle, PlayCircle } from 'lucide-react';
 import { hasApiKey } from '../services/geminiService';
 
 const getApiKey = () => {
@@ -19,7 +19,10 @@ export const GeminiLive: React.FC = () => {
   const [isModelSpeaking, setIsModelSpeaking] = useState(false);
   const [status, setStatus] = useState("Staff Offline");
   const [isError, setIsError] = useState(false); // Track error state
-  const liveService = useRef<EliteLiveService | null>(null);
+  const [demoMode, setDemoMode] = useState(false); // New Demo State
+  
+  // Use a union type to allow either Real or Mock service
+  const liveService = useRef<EliteLiveService | MockLiveService | null>(null);
   
   // Clean up on unmount
   useEffect(() => {
@@ -31,6 +34,73 @@ export const GeminiLive: React.FC = () => {
       };
   }, []);
 
+  const startLiveSession = async (useDemo: boolean) => {
+      const key = getApiKey();
+      if (!key && !useDemo) {
+          alert("⚠️ API Key no encontrada. Configura VITE_GEMINI_API_KEY.");
+          return;
+      }
+
+      // Select Service Implementation
+      if (useDemo) {
+          liveService.current = new MockLiveService();
+          setDemoMode(true);
+      } else {
+          liveService.current = new EliteLiveService(key);
+          setDemoMode(false);
+      }
+
+      setIsActive(true); 
+      setIsError(false);
+      setStatus(useDemo ? "Iniciando Demo..." : "Iniciando Satélite...");
+      
+      await liveService.current.startSession(
+          userProfile,
+          currentPlan,
+          acwrStats,
+          (level, speaking) => {
+              setAudioLevel(level * 5);
+              setIsModelSpeaking(speaking);
+              if (speaking) setStatus("Coach Hablando");
+              else if (level > 0.1) setStatus("Te escucho...");
+              else setStatus("Micrófono Abierto");
+          }, 
+          (newStatus, error) => {
+              setStatus(newStatus);
+              if (error && !useDemo) { // Only stop on real errors
+                  setIsError(true);
+                  setIsActive(false); 
+                  liveService.current?.stop();
+                  liveService.current = null;
+              }
+          },
+          async (name, args) => {
+              if (name === 'modify_session') {
+                  updateSession(args.day, { 
+                      focus: args.newFocus, 
+                      intensity: args.intensity,
+                      coachNotes: `[VOZ] Modificado: ${args.newFocus}`
+                  });
+                  return { success: true, message: "Sesión actualizada." };
+              }
+              if (name === 'log_rpe') {
+                  const today = new Date().toISOString().split('T')[0];
+                  addLog({
+                      id: Date.now().toString(),
+                      date: today,
+                      event: 'Therapy',
+                      type: 'Recovery',
+                      location: 'Voz',
+                      time: 0,
+                      notes: `RPE Reportado por Voz: ${args.rpe}. Nota: ${args.notes || ''}`
+                  });
+                  return { success: true };
+              }
+              return { success: false, message: "Herramienta desconocida" };
+          }
+      );
+  };
+
   const handleToggle = async () => {
       if (isActive) {
           liveService.current?.stop();
@@ -40,64 +110,15 @@ export const GeminiLive: React.FC = () => {
           setIsModelSpeaking(false);
           setStatus("Staff Offline");
           setIsError(false);
+          setDemoMode(false);
       } else {
-          const key = getApiKey();
-          if (!key) {
-              alert("⚠️ API Key no encontrada. Configura VITE_GEMINI_API_KEY.");
-              return;
-          }
-
-          liveService.current = new EliteLiveService(key);
-          setIsActive(true); 
-          setIsError(false);
-          setStatus("Iniciando...");
-          
-          await liveService.current.startSession(
-              userProfile,
-              currentPlan,
-              acwrStats,
-              (level, speaking) => {
-                  setAudioLevel(level * 5);
-                  setIsModelSpeaking(speaking);
-                  if (speaking) setStatus("Coach Hablando");
-                  else if (level > 0.1) setStatus("Te escucho...");
-                  else setStatus("Micrófono Abierto");
-              }, 
-              (newStatus, error) => {
-                  setStatus(newStatus);
-                  if (error) {
-                      setIsError(true);
-                      setIsActive(false); // Auto-stop UI animation on error
-                      liveService.current?.stop();
-                      liveService.current = null;
-                  }
-              },
-              async (name, args) => {
-                  if (name === 'modify_session') {
-                      updateSession(args.day, { 
-                          focus: args.newFocus, 
-                          intensity: args.intensity,
-                          coachNotes: `[VOZ] Modificado: ${args.newFocus}`
-                      });
-                      return { success: true, message: "Sesión actualizada." };
-                  }
-                  if (name === 'log_rpe') {
-                      const today = new Date().toISOString().split('T')[0];
-                      addLog({
-                          id: Date.now().toString(),
-                          date: today,
-                          event: 'Therapy',
-                          type: 'Recovery',
-                          location: 'Voz',
-                          time: 0,
-                          notes: `RPE Reportado por Voz: ${args.rpe}. Nota: ${args.notes || ''}`
-                      });
-                      return { success: true };
-                  }
-                  return { success: false, message: "Herramienta desconocida" };
-              }
-          );
+          await startLiveSession(false); // Try real first
       }
+  };
+
+  const handleDemoStart = async () => {
+      if (isActive) handleToggle();
+      setTimeout(() => startLiveSession(true), 500); // Small delay to clear previous state
   };
 
   const bars = Array.from({ length: 20 });
@@ -120,7 +141,7 @@ export const GeminiLive: React.FC = () => {
             <div className="text-center space-y-3">
                 <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all ${isError ? 'bg-red-900/30 border-red-500 text-red-400' : isActive ? 'bg-emerald-900/30 border-emerald-500 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
                     {isError ? <AlertCircle size={10}/> : isActive ? <Radio size={10} className="animate-pulse"/> : <Globe size={10}/>}
-                    {status}
+                    {status} {demoMode && "(DEMO)"}
                 </div>
                 <div>
                     <h2 className="text-3xl font-black text-white tracking-tighter">ELITE STAFF VOICE</h2>
@@ -163,12 +184,20 @@ export const GeminiLive: React.FC = () => {
                 ))}
             </div>
 
-            {/* Interaction Hint */}
+            {/* Interaction Hint & Error Recovery */}
             <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl w-full text-center backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2">
                 {isError ? (
-                    <div className="space-y-1">
-                        <p className="text-xs text-red-400 font-bold uppercase animate-pulse">Error de Conexión</p>
-                        <p className="text-[10px] text-slate-400">Posible cuota excedida o red inestable. Reintenta más tarde.</p>
+                    <div className="space-y-3">
+                        <div>
+                            <p className="text-xs text-red-400 font-bold uppercase animate-pulse">Cuota API Excedida</p>
+                            <p className="text-[10px] text-slate-400 mt-1">Google ha pausado las peticiones temporalmente.</p>
+                        </div>
+                        <button 
+                            onClick={handleDemoStart}
+                            className="w-full bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold py-2 rounded-lg border border-slate-600 flex items-center justify-center gap-2"
+                        >
+                            <PlayCircle size={14} className="text-emerald-400"/> Probar Simulación (Demo)
+                        </button>
                     </div>
                 ) : isActive ? (
                     <div className="space-y-1">
@@ -176,6 +205,7 @@ export const GeminiLive: React.FC = () => {
                             {isModelSpeaking ? 'Staff Respondiendo...' : 'Escuchando...'}
                         </p>
                         <p className="text-[10px] text-slate-400">Si no responde, habla más fuerte.</p>
+                        {demoMode && <p className="text-[9px] text-yellow-500 pt-2 font-mono">MODO SIMULACIÓN: Habla para activar el trigger.</p>}
                     </div>
                 ) : (
                     <div className="space-y-2">

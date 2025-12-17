@@ -43,6 +43,121 @@ const base64ToUint8Array = (base64: string) => {
   return bytes;
 };
 
+// --- MOCK SERVICE FOR DEMO MODE ---
+export class MockLiveService {
+    private audioContext: AudioContext | null = null;
+    private inputSource: MediaStreamAudioSourceNode | null = null;
+    private processor: ScriptProcessorNode | null = null;
+    private activeStream: MediaStream | null = null;
+    
+    // Simulation State
+    private silenceFrames = 0;
+    private speakingFrames = 0;
+    private hasTriggeredResponse = false;
+    private isCoachTalking = false;
+
+    constructor() {}
+
+    public async startSession(
+        profile: UserProfile, 
+        currentPlan: TrainingPlan | null, 
+        acwr: LoadStats | null,
+        onAudioLevel: (level: number, isModelSpeaking: boolean) => void, 
+        onStatusChange: (status: string, isError?: boolean) => void,
+        onToolCall: (name: string, args: any) => Promise<any>
+    ) {
+        onStatusChange("Modo Demo Activo", false);
+        
+        // Init Mic for visualizer only
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        this.audioContext = new AudioContextClass();
+        if (this.audioContext.state === 'suspended') await this.audioContext.resume();
+
+        try {
+            this.activeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.inputSource = this.audioContext.createMediaStreamSource(this.activeStream);
+            this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
+
+            this.processor.onaudioprocess = (e) => {
+                // If coach is "talking", ignore user input and simulate output levels
+                if (this.isCoachTalking) {
+                    const fakeLevel = Math.random() * 0.5 + 0.2;
+                    onAudioLevel(fakeLevel, true);
+                    return;
+                }
+
+                const inputData = e.inputBuffer.getChannelData(0);
+                let sum = 0;
+                for(let i=0; i<inputData.length; i++) sum += inputData[i] * inputData[i];
+                const rms = Math.sqrt(sum / inputData.length);
+                
+                onAudioLevel(rms, false);
+
+                // Simulation Logic: Detect speech then silence to trigger response
+                if (rms > 0.02) {
+                    this.speakingFrames++;
+                    this.silenceFrames = 0;
+                    onStatusChange("Te escucho...", false);
+                } else {
+                    this.silenceFrames++;
+                    onStatusChange("Micrófono Abierto", false);
+                }
+
+                // If user spoke for a bit (~1s) and then stopped for (~1s)
+                if (this.speakingFrames > 20 && this.silenceFrames > 30 && !this.hasTriggeredResponse) {
+                    this.triggerMockResponse(onStatusChange, onToolCall, onAudioLevel);
+                }
+            };
+
+            this.inputSource.connect(this.processor);
+            this.processor.connect(this.audioContext.destination);
+
+        } catch (e) {
+            console.error(e);
+            onStatusChange("Error Micrófono Demo", true);
+        }
+    }
+
+    private async triggerMockResponse(
+        onStatusChange: (s: string) => void, 
+        onToolCall: (n: string, a: any) => Promise<any>,
+        onAudioLevel: (l: number, m: boolean) => void
+    ) {
+        this.hasTriggeredResponse = true;
+        this.isCoachTalking = true;
+        onStatusChange("Coach Pensando...");
+        
+        // 1. Wait a bit (thinking)
+        await new Promise(r => setTimeout(r, 1000));
+        
+        // 2. "Speak"
+        onStatusChange("Coach Respondiendo...");
+        // Audio levels are handled in process loop via isCoachTalking flag
+        await new Promise(r => setTimeout(r, 3000)); // Coach talks for 3s
+        
+        // 3. Execute Tool
+        this.isCoachTalking = false;
+        onAudioLevel(0, false);
+        onStatusChange("Ejecutando cambios...");
+        
+        await onToolCall("modify_session", {
+            day: "Hoy",
+            newFocus: "Recuperación Activa (Demo)",
+            intensity: "Low"
+        });
+
+        // Reset for another round? No, simple demo one-shot is safer to avoid loops
+        onStatusChange("Ciclo Demo Finalizado");
+    }
+
+    public stop() {
+        if (this.activeStream) this.activeStream.getTracks().forEach(t => t.stop());
+        if (this.processor) this.processor.disconnect();
+        if (this.inputSource) this.inputSource.disconnect();
+        if (this.audioContext) this.audioContext.close();
+    }
+}
+
 export class EliteLiveService {
   private ai: GoogleGenAI;
   private audioContext: AudioContext | null = null;
@@ -146,7 +261,7 @@ export class EliteLiveService {
             callbacks: {
                 onopen: async () => {
                     onStatusChange("Conectado", false);
-                    await this.startMicrophone(onAudioLevel);
+                    await this.startMicrophone(onAudioLevel, onStatusChange);
                     
                     // KICKSTART: Send greeting text to verify output path immediately
                     this.currentSession!.then(session => {
@@ -223,7 +338,7 @@ export class EliteLiveService {
     }
   }
 
-  private async startMicrophone(onLevel: (l: number, isModel: boolean) => void) {
+  private async startMicrophone(onLevel: (l: number, isModel: boolean) => void, onStatusChange: (status: string, isError?: boolean) => void) {
       if (!this.audioContext) return;
 
       try {
@@ -366,9 +481,4 @@ export class EliteLiveService {
       this.isPlaying = false;
       this.nextStartTime = 0;
   }
-}
-
-// Helper for UI callback
-function onStatusChange(msg: string, isError: boolean) {
-    // This will be replaced by the actual callback passed in startSession
 }
