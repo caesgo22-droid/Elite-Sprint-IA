@@ -1,13 +1,10 @@
 
-import { GoogleGenAI, Type, GenerateContentResponse, FunctionDeclaration } from "@google/genai";
+import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { TrainingPlan, BiomechanicalAnalysis, UserProfile, NexusInsight } from "../types";
 
-// Inicialización con API Key dinámica
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-// Fix: Export hasApiKey as expected by VideoAnalyzer.tsx
-export const hasApiKey = !!process.env.API_KEY;
-
+/**
+ * Utility to safely parse JSON from model responses.
+ */
 const cleanAndParseJSON = (text: string) => {
   if (!text) return null;
   try {
@@ -24,7 +21,6 @@ const cleanAndParseJSON = (text: string) => {
   }
 };
 
-// Fix: Removed Schema type annotation as it is not exported from @google/genai
 const PLAN_SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -50,18 +46,15 @@ const PLAN_SCHEMA = {
 };
 
 /**
- * GENERACIÓN DE PLAN (FLASH) - Optimizado para Estructura Técnica
+ * GENERACIÓN DE PLAN (FLASH)
  */
 export const generateTrainingPlan = async (profile: UserProfile, readiness: any, currentDate: string, focusEvent?: string, acwr?: any): Promise<TrainingPlan | null> => {
     try {
-        const ai = getAI();
+        // Instantiate right before call for security and dynamic key updates
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
-            contents: `Eres un Head Coach de World Athletics. Diseña un microciclo de alta precisión para un atleta de nivel ${profile.experienceLevel}.
-            Evento Objetivo: ${focusEvent}.
-            Estado Biométrico: ${JSON.stringify(readiness)}.
-            Ratio de Carga ACWR: ${acwr?.ratio || 1.0}.
-            Utiliza una periodización basada en Bondarchuk. Prioriza la calidad sobre el volumen.`,
+            contents: `Como Head Coach Nivel V, genera microciclo. Atleta: ${profile.name}. Nivel: ${profile.experienceLevel}. Evento: ${focusEvent}. Readiness: ${JSON.stringify(readiness)}. ACWR: ${acwr?.ratio}.`,
             config: { 
                 responseMimeType: "application/json", 
                 responseSchema: PLAN_SCHEMA,
@@ -70,39 +63,32 @@ export const generateTrainingPlan = async (profile: UserProfile, readiness: any,
         });
         return cleanAndParseJSON(response.text);
     } catch (e) {
-        console.error(e);
+        console.error("Plan Gen Error:", e);
         return null;
     }
 };
 
 /**
- * ANÁLISIS TÉCNICO MULTIMODAL (FLASH/PRO)
- * Realiza una validación cruzada entre los datos físicos calculados y la percepción visual de la IA.
+ * ANÁLISIS DE VISIÓN (PRO/FLASH)
  */
 export const analyzeTechnique = async (images: string[], bioData: any, advancedMetrics: any, analysisMode: string): Promise<any> => {
     try {
-        const ai = getAI();
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const imageParts = images.map(img => ({
             inlineData: { mimeType: "image/jpeg", data: img }
         }));
 
-        const prompt = `Actúa como Biomecánico de Élite. Analiza esta secuencia de sprint.
-        Detección Física Matemática: ${JSON.stringify(bioData)}.
-        Métricas de Cinética: ${JSON.stringify(advancedMetrics)}.
-        
-        TAREA:
-        1. Valida visualmente si los ángulos matemáticos coinciden con la imagen.
-        2. Identifica "Frontside Mechanics" y eficiencia de la "Triple Extensión".
-        3. Detecta errores sutiles de tensión o postura que no se ven en los números.
-        
-        Responde estrictamente en JSON: phaseDetected, criticalErrors, correctiveDrills, coachShouts, score.`;
+        const isPro = analysisMode === 'External' || (images.length > 1);
+        const model = isPro ? "gemini-3-pro-image-preview" : "gemini-3-flash-preview";
+
+        const prompt = `Analiza biomecánica de sprint nivel World Athletics. Datos: ${JSON.stringify(bioData)}. Métricas: ${JSON.stringify(advancedMetrics)}. Responde JSON: phaseDetected, criticalErrors, correctiveDrills, coachShouts, score.`;
 
         const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: model,
             contents: { parts: [...imageParts, { text: prompt }] },
             config: { 
                 responseMimeType: "application/json",
-                maxOutputTokens: 1000
+                thinkingConfig: { thinkingBudget: isPro ? 2048 : 0 }
             }
         });
 
@@ -114,58 +100,41 @@ export const analyzeTechnique = async (images: string[], bioData: any, advancedM
 };
 
 /**
- * NEXUS INTELLIGENCE PRO (RAZONAMIENTO PROFUNDO)
- * Busca patrones no obvios en el historial de entrenamiento para predecir picos de forma o riesgos de sobreentrenamiento.
+ * NEXUS ELITE (DEEP THINKING PRO)
  */
 export const generateNexusInsight = async (logs: any[], readiness: any, lastAnalysis: any, acwr: any): Promise<NexusInsight | null> => {
     try {
-        const ai = getAI();
-        // Poda estratégica: últimos 5 logs + resumen de carga
-        const contextLogs = logs.slice(-5).map(l => `${l.date}: ${l.event} - ${l.time}s (${l.type})`);
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const contextLogs = logs.slice(-5);
         
         const response = await ai.models.generateContent({
             model: "gemini-3-pro-preview",
-            contents: `AUDITORÍA DE RENDIMIENTO ELITE.
-            Historial Reciente: ${JSON.stringify(contextLogs)}
-            Readiness Diario: ${JSON.stringify(readiness)}
-            Biomecánica Reciente: ${JSON.stringify(lastAnalysis?.kinetics)}
-            Estado de Carga ACWR: ${acwr?.ratio}.
-            
-            Como Estratega Deportivo, realiza una correlación profunda. ¿Hay una caída de velocidad correlacionada con un aumento de dolor o fatiga? ¿La técnica está degenerando por la carga acumulada?
-            
-            Genera un JSON con: status, headline, analysis (razonamiento técnico), recommendation (acción inmediata).`,
+            contents: `AUDITORÍA ELITE SPRINT. Historial: ${JSON.stringify(contextLogs)}. Estado: ${JSON.stringify(readiness)}. Bio: ${JSON.stringify(lastAnalysis)}. Carga: ${acwr?.ratio}. Buscamos picos de forma y riesgos de lesión.`,
             config: { 
                 responseMimeType: "application/json",
-                thinkingConfig: { thinkingBudget: 32768 } // Deep reasoning for clinical sports auditing
+                thinkingConfig: { thinkingBudget: 32768 } // Max reasoning for paid tier
             }
         });
         return cleanAndParseJSON(response.text);
-    } catch (e) {
-        console.error("Nexus Pro Error:", e);
-        return null;
+    } catch (e: any) {
+        console.error("Nexus Elite Error:", e);
+        throw e; // Rethrow to let components handle key selection flow
     }
 };
 
 /**
- * CHAT CONTEXTUAL STAFF-AWARE
+ * CHAT ELITE (FLASH)
  */
 export const chatWithCoach = async (history: any[], message: string, context: any) => {
     try {
-        const ai = getAI();
-        const staff = context.profile.coaches || [];
-        const staffContext = staff.map((c: any) => `${c.name} (${c.role})`).join(", ");
-
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
             contents: [
-                ...history.slice(-4),
-                { role: 'user', parts: [{ text: `Eres el coach principal de ${context.profile.name}.
-                Equipo de apoyo: ${staffContext}.
-                Fase actual: ${context.plan?.phase}.
-                Pregunta del atleta: ${message}` }] }
+                ...history.slice(-4).map(m => ({ role: m.role, parts: [{ text: m.parts[0].text }] })),
+                { role: 'user', parts: [{ text: `Atleta: ${context.profile.name}. Fase: ${context.plan?.phase}. Msg: ${message}` }] }
             ],
             config: {
-                maxOutputTokens: 600,
                 thinkingConfig: { thinkingBudget: 0 }
             }
         });
@@ -174,7 +143,7 @@ export const chatWithCoach = async (history: any[], message: string, context: an
             functionCall: response.functionCalls?.[0]
         };
     } catch (e) {
-        console.error(e);
-        return { text: "Error en la conexión con el Coach." };
+        console.error("Chat Error:", e);
+        return { text: "Error de comunicación elite." };
     }
 };
