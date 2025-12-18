@@ -44,7 +44,8 @@ export const HomeDashboard: React.FC = () => {
       if (aistudio) {
           await aistudio.openSelectKey();
           setErrorStatus('none');
-          setTimeout(() => fetchNexus(true), 500);
+          // Wait briefly for environment sync
+          setTimeout(() => fetchNexus(true), 1000);
       }
   };
 
@@ -64,27 +65,27 @@ export const HomeDashboard: React.FC = () => {
   };
 
   /**
-   * FIX: Robust day matching to ensure training is always visible regardless of AI language
+   * ROBUST DAY MATCHER:
+   * Translates JS current day to multiple possible AI representations.
    */
   const todaysSession = (() => {
       if (!currentPlan?.sessions) return null;
-      const dayIndex = new Date().getDay();
+      const todayIdx = new Date().getDay();
       
-      // Mapping JS Day Index to multiple possible search strings
-      const daySearchTerms: Record<number, string[]> = {
-          0: ['dom', 'sun'],
-          1: ['lun', 'mon'],
-          2: ['mar', 'tue'],
-          3: ['mie', 'wed'],
-          4: ['jue', 'thu'],
-          5: ['vie', 'fri'],
-          6: ['sab', 'sat']
+      const dayMap: Record<number, string[]> = {
+          0: ['dom', 'sun', 'sunday', 'domingo'],
+          1: ['lun', 'mon', 'monday', 'lunes'],
+          2: ['mar', 'tue', 'tuesday', 'martes'],
+          3: ['mie', 'wed', 'wednesday', 'miercoles'],
+          4: ['jue', 'thu', 'thursday', 'jueves'],
+          5: ['vie', 'fri', 'friday', 'viernes'],
+          6: ['sab', 'sat', 'saturday', 'sabado']
       };
 
-      const terms = daySearchTerms[dayIndex];
+      const targets = dayMap[todayIdx];
       return currentPlan.sessions.find(s => {
-          const dayVal = s.day.toLowerCase();
-          return terms.some(term => dayVal.includes(term));
+          const sessionDay = s.day.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          return targets.some(target => sessionDay.includes(target));
       });
   })();
 
@@ -122,7 +123,6 @@ export const HomeDashboard: React.FC = () => {
           </button>
       </div>
 
-      {/* NEXUS ELITE MONITOR */}
       <div className={`bg-gradient-to-br border rounded-[2rem] p-5 relative overflow-hidden shadow-xl transition-all duration-700 ${nexusInsight ? getStatusColor(nexusInsight.status) : 'from-slate-900 to-slate-950 border-slate-800'}`}>
           <div className="absolute top-0 right-0 p-4">
               <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10">
@@ -148,13 +148,13 @@ export const HomeDashboard: React.FC = () => {
           {errorStatus === 'key_missing' ? (
               <div className="py-6 text-center space-y-3 bg-black/20 rounded-2xl border border-white/5">
                   <Key size={24} className="mx-auto text-red-400 opacity-50"/>
-                  <p className="text-[10px] text-white/80 font-bold px-8 uppercase tracking-wider">Requiere Clave de Pago para Nexus</p>
+                  <p className="text-[10px] text-white/80 font-bold px-8 uppercase tracking-wider">Requiere Clave de Pago (GCP)</p>
                   <button onClick={handleOpenKey} className="bg-white text-slate-950 text-[10px] font-black px-6 py-2.5 rounded-xl uppercase tracking-widest hover:bg-slate-200 shadow-xl transition-all">Configurar Key</button>
               </div>
           ) : loadingNexus ? (
               <div className="h-32 flex flex-col items-center justify-center gap-3">
                 <Activity className="animate-pulse text-purple-400" size={32} />
-                <p className="text-[9px] text-white/60 uppercase font-black tracking-[0.2em] animate-pulse">Auditando Datos...</p>
+                <p className="text-[9px] text-white/60 uppercase font-black tracking-[0.2em] animate-pulse">Analizando Microciclo...</p>
               </div>
           ) : nexusInsight ? (
               <div className="relative z-10 space-y-3 animate-in slide-in-from-bottom-4">
@@ -170,55 +170,53 @@ export const HomeDashboard: React.FC = () => {
           ) : (
               <div className="text-center py-10 space-y-2 opacity-30">
                   <AlertTriangle size={24} className="mx-auto"/>
-                  <p className="text-[9px] font-black uppercase tracking-widest">Esperando Auditoría Pro</p>
+                  <p className="text-[9px] font-black uppercase tracking-widest">Sin Auditoría Reciente</p>
               </div>
           )}
       </div>
 
-      {/* TRAINING PREVIEW - FIXED VISIBILITY */}
       <div className="bg-slate-900 border border-slate-800 rounded-[2rem] p-5 shadow-xl relative z-10 overflow-hidden">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
               <div className="p-2 bg-cyan-500/10 rounded-xl border border-cyan-500/20">
                 <CalendarCheck size={18} className="text-cyan-400" />
               </div>
-              <h3 className="font-bold text-base text-white">Próximo Entreno</h3>
+              <h3 className="font-bold text-base text-white">Entrenamiento de Hoy</h3>
           </div>
-          <span className="text-[8px] font-black bg-slate-800 px-3 py-1 rounded-full text-slate-400 uppercase tracking-widest">Hoy</span>
+          <span className="text-[8px] font-black bg-slate-800 px-3 py-1 rounded-full text-slate-400 uppercase tracking-widest">Sprint Session</span>
         </div>
         
         {todaysSession ? (
           <div className="space-y-4">
             <div>
-                <p className="text-lg font-black text-white leading-tight tracking-tight line-clamp-2">{todaysSession.focus}</p>
+                <p className="text-lg font-black text-white leading-tight tracking-tight line-clamp-2 uppercase">{todaysSession.focus}</p>
                 <div className="flex gap-2 mt-2">
                     <span className="px-2 py-0.5 rounded bg-slate-800 text-[8px] font-bold text-slate-400 uppercase border border-slate-700">{todaysSession.intensity} Intensity</span>
                 </div>
             </div>
             <button onClick={() => navigate('/plan')} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-3.5 rounded-2xl text-xs font-black border border-slate-700 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg">
-              Ver Detalles del Plan <ArrowRight size={14}/>
+              Ver Detalles <ArrowRight size={14}/>
             </button>
           </div>
         ) : (
           <div className="text-center py-6 space-y-3">
             <p className="text-xs text-slate-500 font-medium italic">Sin sesión programada para hoy.</p>
-            <button onClick={() => navigate('/plan')} className="bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-cyan-900/30">Abrir Planificador</button>
+            <button onClick={() => navigate('/plan')} className="bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-cyan-900/30">Generar Microciclo</button>
           </div>
         )}
       </div>
 
-      {/* THERAPY MODAL */}
       {showTherapyModal && (
           <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-6" onClick={() => setShowTherapyModal(false)}>
               <div className="bg-slate-900 border border-blue-500/30 p-8 rounded-[2.5rem] max-w-sm text-center relative shadow-2xl" onClick={e => e.stopPropagation()}>
                   <div className="w-16 h-16 bg-blue-500/10 rounded-3xl border border-blue-500/20 flex items-center justify-center mx-auto mb-4">
                       <Stethoscope size={32} className="text-blue-400" />
                   </div>
-                  <h4 className="text-xl font-black text-white mb-2 uppercase tracking-tight">Bitácora de Terapia</h4>
-                  <p className="text-xs text-slate-400 leading-relaxed mb-6">Registra tu descarga para informar al Nexus que estás en fase de recuperación.</p>
+                  <h4 className="text-xl font-black text-white mb-2 uppercase tracking-tight">Registro de Terapia</h4>
+                  <p className="text-xs text-slate-400 leading-relaxed mb-6">Informa al Nexus sobre tu sesión de descarga para optimizar el cálculo de fatiga.</p>
                   <div className="flex flex-col gap-3">
-                      <button onClick={handleTherapyLog} className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl uppercase tracking-widest text-[10px] hover:bg-blue-500 transition-all">Registrar Ahora</button>
-                      <button onClick={() => setShowTherapyModal(false)} className="w-full bg-slate-800 text-slate-400 font-bold py-3 rounded-2xl uppercase tracking-widest text-[10px]">Cancelar</button>
+                      <button onClick={handleTherapyLog} className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl uppercase tracking-widest text-[10px] hover:bg-blue-500 transition-all shadow-xl shadow-blue-900/40">Guardar Sesión</button>
+                      <button onClick={() => setShowTherapyModal(false)} className="w-full bg-slate-800 text-slate-400 font-bold py-3 rounded-2xl uppercase tracking-widest text-[10px]">Cerrar</button>
                   </div>
               </div>
           </div>

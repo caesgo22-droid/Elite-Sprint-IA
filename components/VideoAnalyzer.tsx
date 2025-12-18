@@ -6,7 +6,7 @@ import { analyzeTechnique } from '../services/geminiService';
 import { LocalExpert } from '../services/localExpert';
 import { ElitePhysicsEngine } from '../utils/biomechanicsUtils';
 import { BiomechanicalAnalysis } from '../types';
-import { Loader2, ScanLine, UploadCloud, History, Key, Info, X, ShieldCheck, Microscope } from 'lucide-react';
+import { Loader2, ScanLine, UploadCloud, History, Key, Info, X, ShieldCheck, Microscope, AlertCircle } from 'lucide-react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 
 const getAIStudio = () => (window as any).aistudio;
@@ -22,6 +22,7 @@ const VideoAnalyzer: React.FC = () => {
   const [analysisMode, setAnalysisMode] = useState<'Personal' | 'External'>('Personal');
   const [hasKey, setHasKey] = useState<boolean>(true);
   const [capturedFrames, setCapturedFrames] = useState<string[]>([]);
+  const [degradedMode, setDegradedMode] = useState(false);
 
   const physicsEngine = useRef<ElitePhysicsEngine>(new ElitePhysicsEngine());
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -36,7 +37,7 @@ const VideoAnalyzer: React.FC = () => {
             modelAssetPath: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task`, 
             delegate: "GPU" 
           },
-          runningMode: "IMAGE", // USAR IMAGE ELIMINA EL ERROR DE TIMESTAMP MISMATCH
+          runningMode: "IMAGE",
           numPoses: 1
         });
         setPoseLandmarker(landmarker);
@@ -63,13 +64,14 @@ const VideoAnalyzer: React.FC = () => {
     if(!previewUrl || !videoRef.current || !poseLandmarker) return;
     setLoading(true);
     setCapturedFrames([]);
+    setDegradedMode(false);
     setStatusMessage("Inicializando Scan...");
     physicsEngine.current.reset();
     
     try {
         const video = videoRef.current;
         const duration = video.duration;
-        const scanSteps = 12; // Cantidad de fotogramas clave
+        const scanSteps = 12;
         const tempHistory: any[] = [];
         const frames: string[] = [];
 
@@ -77,7 +79,6 @@ const VideoAnalyzer: React.FC = () => {
             const time = (duration / scanSteps) * i;
             video.currentTime = time;
             
-            // Esperar a que el video busque el frame
             await new Promise((resolve) => {
                 const onSeeked = () => {
                     video.removeEventListener('seeked', onSeeked);
@@ -86,10 +87,7 @@ const VideoAnalyzer: React.FC = () => {
                 video.addEventListener('seeked', onSeeked);
             });
 
-            // Dar un tiempo extra para que el canvas se pinte
             await new Promise(r => setTimeout(r, 50));
-
-            // Detectar como IMAGEN (no Video) para evitar problemas de timestamp
             const result = poseLandmarker.detect(video);
             
             if(result?.landmarks?.[0]) {
@@ -108,9 +106,7 @@ const VideoAnalyzer: React.FC = () => {
             setStatusMessage(`Escaneando: ${Math.round((i/scanSteps)*100)}%`);
         }
 
-        if (tempHistory.length === 0) {
-            throw new Error("No se detectó el cuerpo del atleta. Asegúrate de que sea visible de cuerpo completo.");
-        }
+        if (tempHistory.length === 0) throw new Error("Atleta no detectado.");
 
         setCapturedFrames(frames);
         const { maxExtensionFrame } = physicsEngine.current.detectSprintPhases(tempHistory);
@@ -123,13 +119,13 @@ const VideoAnalyzer: React.FC = () => {
 
         setStatusMessage(analysisMode === 'External' ? "Auditoría Gemini Pro..." : "Analizando Técnica...");
         
-        let analysis: BiomechanicalAnalysis;
+        let analysis: BiomechanicalAnalysis | null = null;
         try {
-            const result = await analyzeTechnique([capturedImageBase64], bestFrame.mechanics, bestFrame.advanced, analysisMode);
-            if (!result) throw new Error("Null AI");
+            analysis = await analyzeTechnique([capturedImageBase64], bestFrame.mechanics, bestFrame.advanced, analysisMode);
+            if (!analysis) throw new Error("Gemini Fallback");
             
             analysis = { 
-                ...result, id: Date.now().toString(), type: 'Single', category: analysisMode,
+                ...analysis, id: Date.now().toString(), type: 'Single', category: analysisMode,
                 thumbnail: `data:image/jpeg;base64,${capturedImageBase64}`, 
                 kinetics: { 
                     comVelocity: bestFrame.advanced.velocity, 
@@ -142,15 +138,23 @@ const VideoAnalyzer: React.FC = () => {
                 timestamp: bestFrame.timestamp / 1000 
             };
         } catch (e: any) {
-            if (e.message === "KEY_REQUIRED") { handleOpenKey(); throw e; }
-            analysis = { ...LocalExpert.analyze(bestFrame.mechanics, bestFrame.advanced, { comVelocity: bestFrame.advanced.velocity, forceApplicationIndex: bestFrame.advanced.forceFactor, verticalOscillation: bestFrame.advanced.verticalOscillation }), thumbnail: `data:image/jpeg;base64,${capturedImageBase64}`, timestamp: bestFrame.timestamp / 1000, category: analysisMode };
+            console.log("Activando LocalExpert por fallo de IA remota");
+            setDegradedMode(true);
+            analysis = { 
+                ...LocalExpert.analyze(bestFrame.mechanics, bestFrame.advanced, { comVelocity: bestFrame.advanced.velocity, forceApplicationIndex: bestFrame.advanced.forceFactor, verticalOscillation: bestFrame.advanced.verticalOscillation }), 
+                thumbnail: `data:image/jpeg;base64,${capturedImageBase64}`, 
+                timestamp: bestFrame.timestamp / 1000, 
+                category: analysisMode 
+            };
         }
 
-        setSessionAnalyses(prev => [analysis, ...prev]);
-        if (analysisMode === 'External') saveAnalysis(analysis);
+        if (analysis) {
+            setSessionAnalyses(prev => [analysis as BiomechanicalAnalysis, ...prev]);
+            saveAnalysis(analysis as BiomechanicalAnalysis);
+        }
 
     } catch(e: any) { 
-        alert(e.message || "Fallo en el análisis biomecánico.");
+        alert(e.message || "Fallo en el análisis.");
     } finally { setLoading(false); }
   };
 
@@ -163,13 +167,22 @@ const VideoAnalyzer: React.FC = () => {
           </div>
           <div className="flex gap-2">
             {!hasKey && (
-                <button onClick={handleOpenKey} className="bg-red-500/10 border border-red-500/30 text-red-500 px-3 py-1.5 rounded-full text-[9px] font-black uppercase flex items-center gap-1 animate-pulse">
-                    <Key size={10}/> Activar API
+                <button onClick={handleOpenKey} className="bg-red-500/10 border border-red-500/30 text-red-500 px-3 py-1.5 rounded-full text-[9px] font-black uppercase flex items-center gap-1">
+                    <Key size={10}/> Configurar Key
                 </button>
             )}
             <button onClick={() => setViewHistory(!viewHistory)} className="text-[9px] font-black uppercase tracking-widest bg-slate-800 px-4 py-2 rounded-full border border-slate-700 text-slate-400 hover:text-white transition-all"><History size={12} className="inline mr-1"/> Historial</button>
           </div>
        </div>
+
+       {degradedMode && (
+           <div className="bg-amber-900/20 border border-amber-500/30 p-3 rounded-2xl flex items-center gap-3 animate-in slide-in-from-top-2">
+               <AlertCircle className="text-amber-500 shrink-0" size={18} />
+               <p className="text-[10px] text-amber-200 font-bold uppercase leading-tight">
+                   IA de pago no disponible. Usando motor biomecánico local (LocalExpert).
+               </p>
+           </div>
+       )}
 
        {!previewUrl ? (
            <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-700 rounded-[2.5rem] aspect-video flex flex-col items-center justify-center cursor-pointer hover:bg-slate-900/50 transition-all group overflow-hidden relative">
@@ -192,12 +205,12 @@ const VideoAnalyzer: React.FC = () => {
                     <button onClick={() => setAnalysisMode('Personal')} className={`py-4 rounded-2xl flex flex-col items-center gap-1 transition-all ${analysisMode === 'Personal' ? 'bg-slate-800 border border-slate-700 text-white shadow-md' : 'text-slate-500'}`}>
                         <Info size={16}/>
                         <span className="text-[10px] font-black uppercase tracking-widest">Didáctico</span>
-                        <span className="text-[8px] opacity-40 font-bold">(Rápido)</span>
+                        <span className="text-[8px] opacity-40 font-bold">(Rápido/Flash)</span>
                     </button>
                     <button onClick={() => setAnalysisMode('External')} className={`py-4 rounded-2xl flex flex-col items-center gap-1 transition-all ${analysisMode === 'External' ? 'bg-indigo-900/40 border border-indigo-500/50 text-indigo-400 shadow-md' : 'text-slate-500'}`}>
                         <ShieldCheck size={16}/>
                         <span className="text-[10px] font-black uppercase tracking-widest">Auditoría Pro</span>
-                        <span className="text-[8px] opacity-40 font-bold">(Historial)</span>
+                        <span className="text-[8px] opacity-40 font-bold">(Deep Scan)</span>
                     </button>
                 </div>
 
@@ -217,7 +230,7 @@ const VideoAnalyzer: React.FC = () => {
                                     <h3 className={`font-black text-2xl tracking-tighter uppercase ${analysis.category === 'External' ? 'text-indigo-400' : 'text-white'}`}>{analysis.phaseDetected}</h3>
                                     <div className="flex items-center gap-2 mt-1">
                                         <Microscope size={12} className="text-slate-500"/>
-                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Motor: {analysis.category === 'External' ? 'Deep Pro' : 'Local'}</span>
+                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Motor: {analysis.coachNotes?.includes("OFFLINE") ? 'Local' : (analysis.category === 'External' ? 'Deep Pro' : 'Flash')}</span>
                                     </div>
                                 </div>
                                 <div className="text-right">
