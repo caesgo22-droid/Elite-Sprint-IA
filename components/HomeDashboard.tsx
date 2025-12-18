@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { Zap, TrendingUp, CalendarCheck, CheckSquare, X, BatteryCharging, ArrowRight, BrainCircuit, Sparkles, Activity, Clock, MapPin, Info, MessageCircle, HeartPulse, Stethoscope, AlertTriangle, UserCog, Calendar, Save, ChevronLeft, ScanLine, History, ClipboardList, ShieldCheck, RefreshCw, Loader2, Key } from 'lucide-react';
+import { BrainCircuit, Activity, RefreshCw, Key, ShieldCheck, ArrowRight, CalendarCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { generateNexusInsight } from '../services/geminiService';
 import { AthletePassport } from './AthletePassport';
@@ -27,11 +27,8 @@ export const HomeDashboard: React.FC = () => {
               if (insight) setNexusInsight(insight);
           } catch (error: any) {
               console.error("Nexus Failed:", error);
-              const errMsg = error?.message?.toLowerCase() || "";
-              // Trigger key selection if generic error or specifically requested
-              if (errMsg.includes("api key") || errMsg.includes("not found") || errMsg.includes("billing")) {
+              if (error.message === "KEY_REQUIRED") {
                   setErrorStatus('key_missing');
-                  // Auto-open key selector if obvious key error
                   const aistudio = getAIStudio();
                   if (aistudio) aistudio.openSelectKey();
               } else {
@@ -51,7 +48,6 @@ export const HomeDashboard: React.FC = () => {
       const aistudio = getAIStudio();
       if (aistudio) {
           await aistudio.openSelectKey();
-          // Proceder inmediatamente asumiendo éxito como dicta la norma
           setErrorStatus('none');
           fetchNexus(true);
       }
@@ -99,14 +95,13 @@ export const HomeDashboard: React.FC = () => {
                   <div className="w-12 h-12 bg-red-900/20 border border-red-500/30 rounded-full flex items-center justify-center mx-auto text-red-500">
                       <Key size={20}/>
                   </div>
-                  <div className="px-4">
-                      <p className="text-xs text-slate-200 font-bold">Configuración de Pago Requerida</p>
-                      <p className="text-[10px] text-slate-500 mt-1">El motor Pro requiere una API Key de un proyecto de Google Cloud con facturación activa.</p>
+                  <div className="px-4 text-center">
+                      <p className="text-xs text-slate-200 font-bold">Validación de Pago Fallida</p>
+                      <p className="text-[10px] text-slate-500 mt-1">Tu proyecto está en nivel de pago pero la llave no ha sido seleccionada en esta sesión.</p>
                   </div>
-                  <button onClick={handleOpenKey} className="bg-white text-slate-900 text-xs font-black px-6 py-2 rounded-lg transition-colors hover:bg-slate-200 shadow-lg">
-                      Vincular Llave de Pago
+                  <button onClick={handleOpenKey} className="bg-white text-slate-900 text-[10px] font-black px-6 py-2 rounded-lg transition-colors hover:bg-slate-200 shadow-lg uppercase tracking-tighter">
+                      Vincular Llave de Pago Ahora
                   </button>
-                  <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="block text-[9px] text-slate-600 underline">Documentación de Facturación</a>
               </div>
           ) : loadingNexus ? (
               <div className="h-32 flex flex-col items-center justify-center gap-3">
@@ -136,7 +131,6 @@ export const HomeDashboard: React.FC = () => {
                 Registra actividad para activar la auditoría Pro de 32k tokens.
               </div>
           )}
-          <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-purple-600/5 rounded-full blur-3xl pointer-events-none"></div>
       </div>
 
       {/* Sesión de Hoy */}
@@ -178,5 +172,3 @@ export const HomeDashboard: React.FC = () => {
     </div>
   );
 };
-
-export default HomeDashboard;

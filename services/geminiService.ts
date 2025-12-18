@@ -50,15 +50,13 @@ const PLAN_SCHEMA = {
  */
 export const generateTrainingPlan = async (profile: UserProfile, readiness: any, currentDate: string, focusEvent?: string, acwr?: any): Promise<TrainingPlan | null> => {
     try {
-        // Instantiate right before call for security and dynamic key updates
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
             contents: `Como Head Coach Nivel V, genera microciclo. Atleta: ${profile.name}. Nivel: ${profile.experienceLevel}. Evento: ${focusEvent}. Readiness: ${JSON.stringify(readiness)}. ACWR: ${acwr?.ratio}.`,
             config: { 
                 responseMimeType: "application/json", 
-                responseSchema: PLAN_SCHEMA,
-                thinkingConfig: { thinkingBudget: 0 }
+                responseSchema: PLAN_SCHEMA
             }
         });
         return cleanAndParseJSON(response.text);
@@ -78,10 +76,10 @@ export const analyzeTechnique = async (images: string[], bioData: any, advancedM
             inlineData: { mimeType: "image/jpeg", data: img }
         }));
 
-        const isPro = analysisMode === 'External' || (images.length > 1);
+        const isPro = analysisMode === 'External';
         const model = isPro ? "gemini-3-pro-image-preview" : "gemini-3-flash-preview";
 
-        const prompt = `Analiza biomecánica de sprint nivel World Athletics. Datos: ${JSON.stringify(bioData)}. Métricas: ${JSON.stringify(advancedMetrics)}. Responde JSON: phaseDetected, criticalErrors, correctiveDrills, coachShouts, score.`;
+        const prompt = `Analiza biomecánica de sprint nivel World Athletics. Modo: ${analysisMode}. Datos: ${JSON.stringify(bioData)}. Métricas: ${JSON.stringify(advancedMetrics)}. Responde JSON: phaseDetected, criticalErrors, correctiveDrills, coachShouts, score.`;
 
         const response = await ai.models.generateContent({
             model: model,
@@ -93,8 +91,11 @@ export const analyzeTechnique = async (images: string[], bioData: any, advancedM
         });
 
         return cleanAndParseJSON(response.text);
-    } catch (e) {
+    } catch (e: any) {
         console.error("Vision Analysis Error:", e);
+        if (e.message?.includes("not found") || e.message?.includes("API Key")) {
+            throw new Error("KEY_REQUIRED");
+        }
         return null;
     }
 };
@@ -109,41 +110,66 @@ export const generateNexusInsight = async (logs: any[], readiness: any, lastAnal
         
         const response = await ai.models.generateContent({
             model: "gemini-3-pro-preview",
-            contents: `AUDITORÍA ELITE SPRINT. Historial: ${JSON.stringify(contextLogs)}. Estado: ${JSON.stringify(readiness)}. Bio: ${JSON.stringify(lastAnalysis)}. Carga: ${acwr?.ratio}. Buscamos picos de forma y riesgos de lesión.`,
+            contents: `AUDITORÍA ELITE SPRINT. Historial: ${JSON.stringify(contextLogs)}. Estado: ${JSON.stringify(readiness)}. Bio: ${JSON.stringify(lastAnalysis)}. Carga: ${acwr?.ratio}.`,
             config: { 
                 responseMimeType: "application/json",
-                thinkingConfig: { thinkingBudget: 32768 } // Max reasoning for paid tier
+                thinkingConfig: { thinkingBudget: 32768 } 
             }
         });
         return cleanAndParseJSON(response.text);
     } catch (e: any) {
         console.error("Nexus Elite Error:", e);
-        throw e; // Rethrow to let components handle key selection flow
+        if (e.message?.includes("not found") || e.message?.includes("API Key")) {
+            throw new Error("KEY_REQUIRED");
+        }
+        throw e;
     }
 };
 
 /**
- * CHAT ELITE (FLASH)
+ * CHAT CON EL COACH (FLASH)
+ * Implementado para resolver el error en LiveCoach.tsx y permitir el uso de herramientas de IA para modificar sesiones.
  */
-export const chatWithCoach = async (history: any[], message: string, context: any) => {
+export const chatWithCoach = async (history: any[], message: string, context: any): Promise<any> => {
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        
+        const modifySessionTool: FunctionDeclaration = {
+            name: "modifySession",
+            description: "Modifica una sesión de entrenamiento específica del plan actual.",
+            parameters: {
+                type: Type.OBJECT,
+                properties: {
+                    day: { type: Type.STRING, description: "Día de la semana a modificar (ej: Lunes, Martes)" },
+                    newFocus: { type: Type.STRING, description: "Nuevo enfoque de la sesión" },
+                    newRoutine: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista de ejercicios de pista" },
+                    newIntensity: { type: Type.STRING, description: "Intensidad: Low, Medium, High, Max" }
+                },
+                required: ["day", "newFocus", "newRoutine", "newIntensity"]
+            }
+        };
+
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
             contents: [
-                ...history.slice(-4).map(m => ({ role: m.role, parts: [{ text: m.parts[0].text }] })),
-                { role: 'user', parts: [{ text: `Atleta: ${context.profile.name}. Fase: ${context.plan?.phase}. Msg: ${message}` }] }
+                ...history,
+                { role: "user", parts: [{ text: message }] }
             ],
             config: {
-                thinkingConfig: { thinkingBudget: 0 }
+                systemInstruction: `Eres un Coach de Sprint Nivel V. Contexto completo del atleta: ${JSON.stringify(context)}. Responde con autoridad técnica y motivación. Si el usuario pide cambios en su rutina de hoy o mañana, utiliza la herramienta modifySession para actualizar el plan directamente.`,
+                tools: [{ functionDeclarations: [modifySessionTool] }]
             }
         });
-        return { 
-            text: response.text || "",
+
+        return {
+            text: response.text,
             functionCall: response.functionCalls?.[0]
         };
-    } catch (e) {
-        console.error("Chat Error:", e);
-        return { text: "Error de comunicación elite." };
+    } catch (e: any) {
+        console.error("Chat API Error:", e);
+        if (e.message?.includes("not found") || e.message?.includes("API Key")) {
+            throw new Error("KEY_REQUIRED");
+        }
+        return { text: "Lo siento, el servicio de coaching no está disponible en este momento." };
     }
 };
