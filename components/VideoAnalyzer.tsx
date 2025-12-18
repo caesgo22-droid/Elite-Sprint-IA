@@ -1,4 +1,3 @@
-
 import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
@@ -122,7 +121,7 @@ const VideoAnalyzer: React.FC = () => {
         let analysis: BiomechanicalAnalysis | null = null;
         try {
             analysis = await analyzeTechnique([capturedImageBase64], bestFrame.mechanics, bestFrame.advanced, analysisMode);
-            if (!analysis) throw new Error("Gemini Fallback");
+            if (!analysis) throw new Error("IA offline o requiere configuración.");
             
             analysis = { 
                 ...analysis, id: Date.now().toString(), type: 'Single', category: analysisMode,
@@ -138,8 +137,14 @@ const VideoAnalyzer: React.FC = () => {
                 timestamp: bestFrame.timestamp / 1000 
             };
         } catch (e: any) {
-            console.log("Activando LocalExpert por fallo de IA remota");
+            console.warn("Fallo en IA remota:", e.message);
             setDegradedMode(true);
+            
+            // Si el error es de "no encontrado", abrir selector
+            if (e.message?.includes("not found")) {
+                handleOpenKey();
+            }
+
             analysis = { 
                 ...LocalExpert.analyze(bestFrame.mechanics, bestFrame.advanced, { comVelocity: bestFrame.advanced.velocity, forceApplicationIndex: bestFrame.advanced.forceFactor, verticalOscillation: bestFrame.advanced.verticalOscillation }), 
                 thumbnail: `data:image/jpeg;base64,${capturedImageBase64}`, 
