@@ -1,4 +1,3 @@
-
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
@@ -18,8 +17,8 @@ export const HomeDashboard: React.FC = () => {
 
   const fetchNexus = async (force: boolean = false) => {
       const apiKey = process.env.API_KEY;
-      if (!apiKey) {
-          setErrorStatus('key_missing');
+      if (!apiKey && !force) {
+          // No bloqueamos, pero marcamos estado si es necesario
           return;
       }
       if (nexusInsight && !force) return;
@@ -30,8 +29,8 @@ export const HomeDashboard: React.FC = () => {
           const insight = await generateNexusInsight(logs, { fatigue: 5 }, lastAnalysis, acwrStats);
           if (insight) setNexusInsight(insight);
       } catch (error: any) {
-          if (error.message === "KEY_REQUIRED") setErrorStatus('key_missing');
-          else setErrorStatus('error');
+          console.error("Nexus Insight Error:", error);
+          setErrorStatus('error');
       } finally { setLoadingNexus(false); }
   };
 
@@ -44,7 +43,6 @@ export const HomeDashboard: React.FC = () => {
       if (aistudio) {
           await aistudio.openSelectKey();
           setErrorStatus('none');
-          // Wait briefly for environment sync
           setTimeout(() => fetchNexus(true), 1000);
       }
   };
@@ -61,17 +59,11 @@ export const HomeDashboard: React.FC = () => {
       };
       addLog(therapyLog);
       setShowTherapyModal(false);
-      alert("✅ Sesión de Terapia registrada.");
   };
 
-  /**
-   * ROBUST DAY MATCHER:
-   * Translates JS current day to multiple possible AI representations.
-   */
   const todaysSession = (() => {
       if (!currentPlan?.sessions) return null;
       const todayIdx = new Date().getDay();
-      
       const dayMap: Record<number, string[]> = {
           0: ['dom', 'sun', 'sunday', 'domingo'],
           1: ['lun', 'mon', 'monday', 'lunes'],
@@ -81,7 +73,6 @@ export const HomeDashboard: React.FC = () => {
           5: ['vie', 'fri', 'friday', 'viernes'],
           6: ['sab', 'sat', 'saturday', 'sabado']
       };
-
       const targets = dayMap[todayIdx];
       return currentPlan.sessions.find(s => {
           const sessionDay = s.day.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -145,13 +136,7 @@ export const HomeDashboard: React.FC = () => {
               </button>
           </div>
           
-          {errorStatus === 'key_missing' ? (
-              <div className="py-6 text-center space-y-3 bg-black/20 rounded-2xl border border-white/5">
-                  <Key size={24} className="mx-auto text-red-400 opacity-50"/>
-                  <p className="text-[10px] text-white/80 font-bold px-8 uppercase tracking-wider">Requiere Clave de Pago (GCP)</p>
-                  <button onClick={handleOpenKey} className="bg-white text-slate-950 text-[10px] font-black px-6 py-2.5 rounded-xl uppercase tracking-widest hover:bg-slate-200 shadow-xl transition-all">Configurar Key</button>
-              </div>
-          ) : loadingNexus ? (
+          {loadingNexus ? (
               <div className="h-32 flex flex-col items-center justify-center gap-3">
                 <Activity className="animate-pulse text-purple-400" size={32} />
                 <p className="text-[9px] text-white/60 uppercase font-black tracking-[0.2em] animate-pulse">Analizando Microciclo...</p>
@@ -168,9 +153,9 @@ export const HomeDashboard: React.FC = () => {
                   </div>
               </div>
           ) : (
-              <div className="text-center py-10 space-y-2 opacity-30">
-                  <AlertTriangle size={24} className="mx-auto"/>
-                  <p className="text-[9px] font-black uppercase tracking-widest">Sin Auditoría Reciente</p>
+              <div className="text-center py-10 space-y-4">
+                  <AlertTriangle size={24} className="mx-auto text-slate-700"/>
+                  <button onClick={() => fetchNexus(true)} className="text-[9px] font-black uppercase tracking-widest text-cyan-400 border border-cyan-500/20 px-4 py-2 rounded-full">Solicitar Auditoría</button>
               </div>
           )}
       </div>
@@ -183,7 +168,6 @@ export const HomeDashboard: React.FC = () => {
               </div>
               <h3 className="font-bold text-base text-white">Entrenamiento de Hoy</h3>
           </div>
-          <span className="text-[8px] font-black bg-slate-800 px-3 py-1 rounded-full text-slate-400 uppercase tracking-widest">Sprint Session</span>
         </div>
         
         {todaysSession ? (
