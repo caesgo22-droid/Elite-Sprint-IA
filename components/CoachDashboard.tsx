@@ -1,210 +1,91 @@
-
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { findAthleteByEmail, fetchUserData, saveUserProfile, getPlanHistory } from '../services/firebase';
-import { Users, Plus, Search, ChevronRight, UserCircle2, Briefcase, Eye, LogOut, Activity, AlertTriangle, BatteryCharging, ArrowRight } from 'lucide-react';
+import { findAthleteByEmail, fetchUserData, getPlanHistory } from '../services/firebase';
+import { Users, Plus, Search, UserCircle2, Briefcase, Eye, LogOut, Activity, ArrowRight } from 'lucide-react';
 import { UserProfile } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 
-export const CoachDashboard: React.FC = () => {
-  // Use adminProfile for IDENTITY (The Coach's Roster), not userProfile (The Viewed Data)
+const CoachDashboard: React.FC = () => {
   const { adminProfile, user, updateRoster, viewingAthleteId, switchAthlete, t } = useApp();
-  
   const [emailQuery, setEmailQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [rosterData, setRosterData] = useState<{uid: string, profile: UserProfile, risk: 'High' | 'Low' | 'Optimal', lastPain?: number}[]>([]);
   const [loadingRoster, setLoadingRoster] = useState(false);
 
-  // Fetch full profiles AND ANALYTICS for the roster list
   useEffect(() => {
       const loadRoster = async () => {
           if (!adminProfile.roster || adminProfile.roster.length === 0) {
-              setRosterData([]); // Clear if empty
+              setRosterData([]);
               return;
           }
           setLoadingRoster(true);
           const profiles = [];
-          
           for (const uid of adminProfile.roster) {
               const data = await fetchUserData(uid);
-              const planHistory = await getPlanHistory(uid);
-              
+              const pHist = await getPlanHistory(uid);
               let risk: 'High' | 'Low' | 'Optimal' = 'Optimal';
-              let pain = 0;
-
-              // Calculate basic risk metric for the dashboard
               if (data.currentPlan) {
-                  const acwr = calculateACWR([data.currentPlan as any, ...planHistory as any]);
+                  const acwr = calculateACWR([data.currentPlan as any, ...pHist as any]);
                   if (acwr.status === 'Alto Riesgo') risk = 'High';
-                  if (acwr.status === 'Carga Baja') risk = 'Low';
-                  
-                  // Check last completed session for pain
-                  const lastSession = data.currentPlan.sessions.find(s => s.feedback?.completed);
-                  if (lastSession?.feedback?.painLevel) {
-                      pain = lastSession.feedback.painLevel;
-                      if (pain > 4) risk = 'High'; // Override risk if pain is high
-                  }
+                  else if (acwr.status === 'Carga Baja') risk = 'Low';
               }
-
-              if (data.profile) {
-                  profiles.push({ 
-                      uid, 
-                      profile: data.profile as UserProfile,
-                      risk,
-                      lastPain: pain
-                  });
-              }
+              if (data.profile) profiles.push({ uid, profile: data.profile as UserProfile, risk });
           }
           setRosterData(profiles);
           setLoadingRoster(false);
       };
-      
-      // Always load roster from Admin Profile, regardless of viewing mode
       loadRoster();
-  }, [adminProfile.roster]); // Depend on adminProfile.roster
+  }, [adminProfile.roster]);
 
   const handleAddAthlete = async () => {
       if (!emailQuery.trim()) return;
       setSearching(true);
-      
-      const cleanEmail = emailQuery.trim().toLowerCase();
-      const athlete = await findAthleteByEmail(cleanEmail);
-      
+      const athlete = await findAthleteByEmail(emailQuery.trim().toLowerCase());
       if (athlete) {
-          if (adminProfile.roster?.includes(athlete.uid)) {
-              alert("Este atleta ya está en tu roster.");
-          } else {
-              const newRoster = [...(adminProfile.roster || []), athlete.uid];
-              // Use the dedicated updateRoster helper
-              updateRoster(newRoster);
-              setEmailQuery('');
-              alert(`Atleta agregado exitosamente: ${athlete.profile?.name || 'Usuario'}`);
-          }
-      } else {
-          alert("No se encontró usuario con ese email.\n\nCONSEJOS:\n1. Asegúrate que el atleta se haya registrado y entrado al menos una vez.\n2. Verifica mayúsculas/minúsculas (el sistema prefiere minúsculas).\n3. Si usó Google, debe haber completado el registro inicial.");
-      }
+          if (adminProfile.roster?.includes(athlete.uid)) alert("Ya en roster.");
+          else updateRoster([...(adminProfile.roster || []), athlete.uid]);
+          setEmailQuery('');
+      } else alert("No encontrado.");
       setSearching(false);
-  };
-
-  const handleSelectAthlete = (uid: string) => {
-      switchAthlete(uid);
   };
 
   if (viewingAthleteId) {
       return (
-          <div className="p-6 text-center space-y-6 animate-in zoom-in-95">
-              <div className="bg-indigo-900/30 border border-indigo-500/50 rounded-3xl p-8 relative overflow-hidden shadow-2xl">
-                  {/* Background Decoration */}
-                  <div className="absolute top-[-50px] right-[-50px] w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl"></div>
-                  
-                  <Eye className="w-16 h-16 text-indigo-400 mx-auto mb-4 relative z-10"/>
-                  <h2 className="text-2xl font-bold text-white mb-2 relative z-10">Monitor Remoto Activo</h2>
-                  
-                  <p className="text-indigo-200 text-sm mb-8 leading-relaxed max-w-xs mx-auto relative z-10">
-                      Estás gestionando el perfil de un atleta. Tienes permisos de edición sobre su Plan y Calendario.
-                  </p>
-                  
-                  <div className="grid gap-3 max-w-xs mx-auto relative z-10">
-                      <button 
-                        onClick={() => switchAthlete(null)}
-                        className="bg-white text-indigo-900 hover:bg-indigo-50 border border-transparent px-6 py-4 rounded-xl font-bold flex items-center justify-center gap-2 w-full transition-all shadow-lg active:scale-95"
-                      >
-                          <LogOut size={20}/> Volver a mi Panel
-                      </button>
-                  </div>
+          <div className="p-6 text-center space-y-6">
+              <div className="bg-indigo-900/30 border border-indigo-500/50 rounded-3xl p-8">
+                  <Eye className="w-16 h-16 text-indigo-400 mx-auto mb-4"/>
+                  <h2 className="text-2xl font-bold text-white mb-8">Monitor Activo</h2>
+                  <button onClick={() => switchAthlete(null)} className="bg-white text-indigo-900 px-6 py-4 rounded-xl font-bold flex items-center justify-center gap-2 w-full">
+                      <LogOut size={20}/> Volver
+                  </button>
               </div>
           </div>
       );
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-20">
-      
-      {/* Header */}
-      <div className="bg-gradient-to-br from-indigo-900 to-slate-900 p-6 rounded-2xl border border-indigo-500/30 relative overflow-hidden shadow-2xl">
-          <div className="relative z-10">
-              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                  <Briefcase className="text-indigo-400" /> {t.staff.title}
-              </h2>
-              <p className="text-indigo-200 text-sm mt-1">{t.staff.subtitle}</p>
-          </div>
-          <Users className="absolute -right-4 -bottom-4 text-indigo-900/50 w-32 h-32"/>
+    <div className="space-y-6 pb-20">
+      <div className="bg-indigo-900 p-6 rounded-2xl border border-indigo-500/30">
+          <h2 className="text-2xl font-bold text-white flex items-center gap-2"><Briefcase /> {t.staff.title}</h2>
       </div>
-
-      {/* Add Athlete */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-          <h3 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2"><Plus size={12}/> {t.staff.add}</h3>
-          <div className="flex gap-2">
-              <div className="relative flex-1">
-                  <Search className="absolute left-3 top-3 text-slate-500" size={16}/>
-                  <input 
-                    type="email" 
-                    placeholder={t.staff.searchPlaceholder}
-                    value={emailQuery}
-                    onChange={(e) => setEmailQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddAthlete()}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-10 pr-4 py-2.5 text-sm text-white focus:border-indigo-500 outline-none"
-                  />
-              </div>
-              <button 
-                onClick={handleAddAthlete}
-                disabled={searching || !emailQuery}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 rounded-lg font-bold text-xs disabled:opacity-50"
-              >
-                  {searching ? '...' : 'Agregar'}
-              </button>
-          </div>
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex gap-2">
+          <input type="email" placeholder={t.staff.searchPlaceholder} value={emailQuery} onChange={e => setEmailQuery(e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white" />
+          <button onClick={handleAddAthlete} disabled={searching} className="bg-indigo-600 text-white px-4 rounded-lg font-bold">Agregar</button>
       </div>
-
-      {/* Squad Pulse Roster */}
       <div className="space-y-3">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 flex justify-between items-center">
-              <span>{t.staff.pulseTitle}</span>
-              <span className="bg-slate-800 text-[10px] px-2 py-0.5 rounded">{rosterData.length}</span>
-          </h3>
-          
-          {loadingRoster ? (
-              <div className="text-center py-8 text-slate-500 text-xs">{t.staff.loading}</div>
-          ) : rosterData.length === 0 ? (
-              <div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-xl">
-                  <Users className="mx-auto text-slate-600 mb-2"/>
-                  <p className="text-slate-500 text-sm">{t.staff.noAthletes}</p>
+          {rosterData.map(data => (
+              <div key={data.uid} onClick={() => switchAthlete(data.uid)} className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex justify-between items-center cursor-pointer">
+                  <div className="flex items-center gap-3">
+                      <UserCircle2 className="text-slate-400" />
+                      <div className="font-bold text-white">{data.profile?.name}</div>
+                  </div>
+                  <ArrowRight className="text-slate-600" />
               </div>
-          ) : (
-              <div className="grid gap-3">
-                  {rosterData.map((data) => (
-                      <div 
-                        key={data.uid}
-                        onClick={() => handleSelectAthlete(data.uid)}
-                        className={`bg-slate-900 border rounded-xl p-3 flex justify-between items-center cursor-pointer transition-all hover:bg-slate-800 group ${data.risk === 'High' ? 'border-red-900/50 shadow-[0_0_15px_-3px_rgba(239,68,68,0.2)]' : 'border-slate-800'}`}
-                      >
-                          <div className="flex items-center gap-3">
-                              <div className="relative">
-                                  <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center">
-                                      <UserCircle2 className="text-slate-400 group-hover:text-indigo-400 transition-colors"/>
-                                  </div>
-                                  {/* Status Dot */}
-                                  <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 flex items-center justify-center ${data.risk === 'High' ? 'bg-red-500' : data.risk === 'Low' ? 'bg-yellow-500' : 'bg-emerald-500'}`}>
-                                      <Activity size={8} className="text-black fill-current"/>
-                                  </div>
-                              </div>
-                              <div>
-                                  <div className="font-bold text-white text-sm">{data.profile?.name || 'Sin Nombre'}</div>
-                                  <div className="text-[10px] text-slate-500 flex gap-2 items-center">
-                                      <span>{data.profile?.events?.[0] || 'Sprint'}</span>
-                                      {data.risk === 'High' && <span className="text-red-400 font-bold flex items-center gap-1">• {t.staff.highRisk}</span>}
-                                      {data.lastPain > 0 && <span className="text-orange-400 font-bold flex items-center gap-1">• {t.staff.painAlert} ({data.lastPain}/10)</span>}
-                                  </div>
-                              </div>
-                          </div>
-                          
-                          <ArrowRight className="text-slate-600 group-hover:text-indigo-400 transition-colors" size={18}/>
-                      </div>
-                  ))}
-              </div>
-          )}
+          ))}
       </div>
     </div>
   );
 };
+
+export default CoachDashboard;
