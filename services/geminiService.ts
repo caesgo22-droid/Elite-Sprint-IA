@@ -1,12 +1,5 @@
-
-import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { TrainingPlan, BiomechanicalAnalysis, UserProfile, NexusInsight } from "../types";
-
-const getAI = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey || apiKey.trim() === "") throw new Error("KEY_REQUIRED");
-  return new GoogleGenAI({ apiKey });
-};
 
 const cleanAndParseJSON = (text: string) => {
   if (!text) return null;
@@ -28,8 +21,11 @@ const cleanAndParseJSON = (text: string) => {
  * ANALIZADOR BIOMECÁNICO (FLASH/PRO)
  */
 export const analyzeTechnique = async (images: string[], bioData: any, advancedMetrics: any, analysisMode: string): Promise<any> => {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) throw new Error("KEY_REQUIRED");
+    
     try {
-        const ai = getAI();
+        const ai = new GoogleGenAI({ apiKey });
         const isPro = analysisMode === 'External';
         const model = isPro ? "gemini-3-pro-image-preview" : "gemini-3-flash-preview";
         
@@ -52,8 +48,8 @@ export const analyzeTechnique = async (images: string[], bioData: any, advancedM
 
         return cleanAndParseJSON(response.text);
     } catch (e: any) {
-        if (e.message?.includes("not found") || e.message?.includes("API Key") || e.message === "KEY_REQUIRED") throw new Error("KEY_REQUIRED");
-        return null;
+        if (e.message?.includes("not found") || e.message?.includes("API key")) throw new Error("KEY_REQUIRED");
+        throw e;
     }
 };
 
@@ -61,8 +57,11 @@ export const analyzeTechnique = async (images: string[], bioData: any, advancedM
  * NEXUS ELITE (DEEP THINKING MONITOR)
  */
 export const generateNexusInsight = async (logs: any[], readiness: any, lastAnalysis: any, acwr: any): Promise<NexusInsight | null> => {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) throw new Error("KEY_REQUIRED");
+
     try {
-        const ai = getAI();
+        const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateContent({
             model: "gemini-3-pro-preview",
             contents: `AUDITORÍA MULTIMODAL ELITE. 
@@ -79,14 +78,17 @@ export const generateNexusInsight = async (logs: any[], readiness: any, lastAnal
         });
         return cleanAndParseJSON(response.text);
     } catch (e: any) {
-        if (e.message?.includes("not found") || e.message?.includes("API Key") || e.message === "KEY_REQUIRED") throw new Error("KEY_REQUIRED");
-        return null;
+        if (e.message?.includes("not found") || e.message?.includes("API key")) throw new Error("KEY_REQUIRED");
+        throw e;
     }
 };
 
 export const generateTrainingPlan = async (profile: UserProfile, readiness: any, currentDate: string, focusEvent?: string, acwr?: any): Promise<TrainingPlan | null> => {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) return null;
+    
     try {
-        const ai = getAI();
+        const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
             contents: `Genera microciclo. Atleta: ${profile.name}. Readiness: ${JSON.stringify(readiness)}. ACWR: ${acwr?.ratio}.`,
@@ -97,8 +99,11 @@ export const generateTrainingPlan = async (profile: UserProfile, readiness: any,
 };
 
 export const chatWithCoach = async (history: any[], message: string, context: any): Promise<any> => {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) return { text: "Error: No API Key found." };
+    
     try {
-        const ai = getAI();
+        const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
             contents: [...history, { role: "user", parts: [{ text: message }] }],
