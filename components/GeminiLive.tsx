@@ -2,257 +2,115 @@
 import * as React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { EliteLiveService, MockLiveService } from '../services/liveService';
-import { Mic, PhoneOff, Radio, Globe, Zap, Headphones, Activity, AlertCircle, PlayCircle, Clock } from 'lucide-react';
-import { hasApiKey } from '../services/geminiService';
-
-const getApiKey = () => {
-  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) return process.env.API_KEY;
-  if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_GEMINI_API_KEY) return (import.meta as any).env.VITE_GEMINI_API_KEY;
-  return "";
-}
+import { EliteLiveService } from '../services/liveService';
+import { Mic, Radio, Headphones, X, Zap, Activity } from 'lucide-react';
 
 export const GeminiLive: React.FC = () => {
-  const { userProfile, currentPlan, acwrStats, updateSession, addLog } = useApp();
+  const { userProfile, currentPlan, acwrStats, updateSession } = useApp();
   const [isActive, setIsActive] = useState(false);
-  const [audioLevel, setAudioLevel] = useState(0);
-  const [isModelSpeaking, setIsModelSpeaking] = useState(false);
-  const [status, setStatus] = useState("Staff Offline");
-  const [isError, setIsError] = useState(false); 
-  const [demoMode, setDemoMode] = useState(false); 
+  const [status, setStatus] = useState("Voz Inactiva");
+  const [level, setLevel] = useState(0);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   
-  const liveService = useRef<EliteLiveService | MockLiveService | null>(null);
-  const connectionTimeout = useRef<any>(null); 
-  
-  // Clean up on unmount
+  const liveService = useRef<EliteLiveService | null>(null);
+
+  const startSession = async () => {
+    const key = process.env.API_KEY;
+    if (!key) return alert("API Key no configurada.");
+
+    liveService.current = new EliteLiveService(key);
+    setIsActive(true);
+
+    await liveService.current.startSession(
+      userProfile,
+      currentPlan,
+      acwrStats,
+      (l, m) => {
+        setLevel(l * 10);
+        setIsSpeaking(m);
+      },
+      (s) => setStatus(s),
+      async (name, args) => {
+        if (name === "modify_session") {
+          updateSession("Hoy", { focus: args.newFocus, intensity: args.newIntensity });
+          return "OK, sesión actualizada.";
+        }
+        return "Desconocido";
+      }
+    );
+  };
+
+  const stopSession = () => {
+    liveService.current?.stop();
+    setIsActive(false);
+    setStatus("Voz Inactiva");
+    setLevel(0);
+  };
+
   useEffect(() => {
-      return () => {
-          if (liveService.current) {
-              liveService.current.stop();
-              liveService.current = null;
-          }
-          if (connectionTimeout.current) clearTimeout(connectionTimeout.current);
-      };
+    return () => stopSession();
   }, []);
 
-  const startLiveSession = async (useDemo: boolean) => {
-      // 1. MOBILE SAFARI FIX: Create/Resume AudioContext synchronously inside this user-triggered function
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      const audioCtx = new AudioContextClass();
-      if (audioCtx.state === 'suspended') {
-          await audioCtx.resume();
-      }
-
-      const key = getApiKey();
-      if (!key && !useDemo) {
-          alert("⚠️ API Key no encontrada. Configura VITE_GEMINI_API_KEY.");
-          return;
-      }
-
-      if (useDemo) {
-          liveService.current = new MockLiveService();
-          setDemoMode(true);
-      } else {
-          liveService.current = new EliteLiveService(key);
-          setDemoMode(false);
-      }
-
-      setIsActive(true); 
-      setIsError(false);
-      setStatus(useDemo ? "Demo Iniciada..." : "Conectando...");
-      
-      // Safety Timeout for Desktop 429 (Stuck Listening)
-      if (!useDemo) {
-          connectionTimeout.current = setTimeout(() => {
-              if (liveService.current && !demoMode) {
-                  console.warn("Connection timeout enforced.");
-                  liveService.current.stop();
-                  setIsActive(false);
-                  setIsError(true);
-                  setStatus("Sin respuesta del Servidor");
-              }
-          }, 8000);
-      }
-      
-      await liveService.current.startSession(
-          userProfile,
-          currentPlan,
-          acwrStats,
-          (level, speaking) => {
-              setAudioLevel(level * 5);
-              setIsModelSpeaking(speaking);
-              if (speaking) setStatus("Coach Hablando");
-              else if (level > 0.1) setStatus("Te escucho...");
-              else setStatus("Micrófono Abierto");
-          }, 
-          (newStatus, error) => {
-              setStatus(newStatus);
-              
-              if ((newStatus === "Conectado" || newStatus === "Coach Hablando") && connectionTimeout.current) {
-                  clearTimeout(connectionTimeout.current);
-                  connectionTimeout.current = null;
-              }
-
-              if (error && !useDemo) { 
-                  if (connectionTimeout.current) clearTimeout(connectionTimeout.current);
-                  setIsError(true);
-                  setIsActive(false); 
-                  liveService.current?.stop();
-                  liveService.current = null;
-              }
-          },
-          async (name, args) => {
-              if (name === 'modify_session') {
-                  updateSession(args.day, { 
-                      focus: args.newFocus, 
-                      intensity: args.intensity,
-                      coachNotes: `[VOZ] Modificado: ${args.newFocus}`
-                  });
-                  return { success: true, message: "Sesión actualizada." };
-              }
-              return { success: false };
-          },
-          audioCtx // Pass the robust context
-      );
-  };
-
-  const handleToggle = async () => {
-      if (isActive) {
-          if (connectionTimeout.current) clearTimeout(connectionTimeout.current);
-          liveService.current?.stop();
-          liveService.current = null;
-          setIsActive(false);
-          setAudioLevel(0);
-          setIsModelSpeaking(false);
-          setStatus("Staff Offline");
-          setIsError(false);
-          setDemoMode(false);
-      } else {
-          // This is a direct user action, safe for AudioContext creation
-          await startLiveSession(false); 
-      }
-  };
-
-  const handleDemoStart = async () => {
-      if (isActive) {
-          liveService.current?.stop();
-          liveService.current = null;
-          setIsActive(false);
-          setTimeout(() => startLiveSession(true), 100);
-      } else {
-          startLiveSession(true);
-      }
-  };
-
-  const bars = Array.from({ length: 20 });
-
   return (
-    <div className="h-[calc(100dvh-140px)] flex flex-col items-center justify-center p-6 relative overflow-hidden bg-slate-950">
+    <div className="h-[calc(100dvh-160px)] flex flex-col items-center justify-center relative bg-slate-950 rounded-3xl overflow-hidden border border-slate-800 shadow-2xl">
+      
+      {/* Fondo Animado */}
+      <div className={`absolute inset-0 transition-opacity duration-1000 ${isActive ? 'opacity-20' : 'opacity-5'}`}>
+        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-gradient-to-br from-cyan-500 via-blue-900 to-purple-900 blur-3xl ${isActive ? 'animate-pulse' : ''}`}></div>
+      </div>
+
+      <div className="z-10 flex flex-col items-center gap-12 w-full max-w-xs">
         
-        {/* Background Ambient */}
-        <div className={`absolute inset-0 transition-opacity duration-1000 ${isActive ? 'opacity-100' : 'opacity-10'}`}>
-            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full blur-[100px] animate-pulse-slow ${isModelSpeaking ? 'bg-cyan-500/20' : 'bg-yellow-500/10'}`}></div>
-            <div 
-                className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] rounded-full blur-[60px] transition-transform duration-75 ${isModelSpeaking ? 'bg-emerald-600/30' : 'bg-cyan-600/20'}`}
-                style={{ transform: `scale(${1 + Math.min(audioLevel, 1.5)}) translate(-50%, -50%)` }}
-            ></div>
+        <div className="text-center">
+          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border mb-4 transition-colors ${isActive ? 'bg-cyan-900/30 border-cyan-500 text-cyan-400' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
+            {isActive ? <Radio size={12} className="animate-pulse"/> : <Mic size={12}/>}
+            {status}
+          </div>
+          <h2 className="text-2xl font-black text-white tracking-tight uppercase">Coach de Voz Elite</h2>
+          <p className="text-xs text-slate-500 mt-1">Conectado a tu Biomecánica y Plan</p>
         </div>
 
-        <div className="z-10 flex flex-col items-center space-y-10 w-full max-w-sm">
-            
-            {/* Status Header */}
-            <div className="text-center space-y-3">
-                <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all ${isError ? 'bg-red-900/30 border-red-500 text-red-400' : isActive ? 'bg-emerald-900/30 border-emerald-500 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
-                    {isError ? <AlertCircle size={10}/> : isActive ? <Radio size={10} className="animate-pulse"/> : <Globe size={10}/>}
-                    {status} {demoMode && "(DEMO)"}
-                </div>
-                <div>
-                    <h2 className="text-3xl font-black text-white tracking-tighter">ELITE STAFF VOICE</h2>
-                    <p className="text-xs text-yellow-500 font-bold uppercase tracking-widest mt-1">Nivel V Intelligence • Real-Time</p>
-                </div>
-            </div>
+        {/* Círculo de Voz Central */}
+        <div className="relative">
+          {/* Ondas de choque visuales */}
+          <div className={`absolute inset-0 rounded-full border-2 border-cyan-500/30 transition-transform duration-75 ${isActive ? '' : 'hidden'}`} style={{ transform: `scale(${1 + level * 2})` }}></div>
+          <div className={`absolute inset-0 rounded-full border border-cyan-500/10 transition-transform duration-150 ${isActive ? '' : 'hidden'}`} style={{ transform: `scale(${1 + level * 4})` }}></div>
 
-            {/* Main Interaction Orb */}
-            <div className="relative group">
-                <div className={`absolute inset-0 rounded-full border-2 transition-all duration-75 opacity-0 ${isActive ? 'opacity-100' : ''} ${isModelSpeaking ? 'border-cyan-500/50' : 'border-yellow-500/50'}`} style={{ transform: `scale(${1 + audioLevel * 0.8})` }}></div>
-                
-                <button 
-                    onClick={handleToggle}
-                    className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl relative z-20 border-4 ${isError ? 'bg-slate-900 border-red-500 text-red-400' : isActive ? 'bg-slate-900 border-yellow-500 shadow-yellow-900/20 scale-110' : 'bg-slate-900 hover:bg-slate-800 border-slate-700 hover:border-slate-500'}`}
-                >
-                    {isActive ? (
-                         <div className="relative w-full h-full flex items-center justify-center rounded-full overflow-hidden">
-                             <div className={`absolute inset-0 bg-gradient-to-tr animate-spin-slow ${isModelSpeaking ? 'from-cyan-500/20 to-emerald-500/20' : 'from-yellow-500/20 to-cyan-500/20'}`}></div>
-                             <Headphones size={40} className="text-white relative z-10"/>
-                         </div>
-                    ) : (
-                        <Mic size={40} className={`transition-colors ${isError ? 'text-red-400' : 'text-slate-400 group-hover:text-white'}`}/>
-                    )}
-                </button>
-            </div>
-
-            {/* Waveform Visualizer */}
-            <div className="h-16 flex items-end justify-center gap-1 w-full max-w-[200px]">
-                {bars.map((_, i) => (
-                    <div 
-                        key={i} 
-                        className={`w-1 rounded-full transition-all duration-75 ${isError ? 'bg-red-900' : isActive ? (isModelSpeaking ? 'bg-emerald-400' : 'bg-yellow-400') : 'bg-slate-800'}`}
-                        style={{ 
-                            height: isActive ? `${Math.max(10, Math.random() * 100 * audioLevel * (i % 2 === 0 ? 1.5 : 0.7))}%` : '4px',
-                            opacity: isActive ? 0.6 + (audioLevel * 0.4) : 0.3
-                        }}
-                    ></div>
-                ))}
-            </div>
-
-            {/* Interaction Hint & Error Recovery */}
-            <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl w-full text-center backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2">
-                {isError ? (
-                    <div className="space-y-3">
-                        <div>
-                            <p className="text-xs text-red-400 font-bold uppercase animate-pulse">Problema de Conexión</p>
-                            <p className="text-[10px] text-slate-400 mt-1">La IA no responde (Posible Cuota Excedida).</p>
-                        </div>
-                        <button 
-                            onClick={handleDemoStart}
-                            className="w-full bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold py-2 rounded-lg border border-slate-600 flex items-center justify-center gap-2"
-                        >
-                            <PlayCircle size={14} className="text-emerald-400"/> Probar Simulación (Demo)
-                        </button>
-                    </div>
-                ) : isActive ? (
-                    <div className="space-y-1">
-                        <p className={`text-xs font-bold uppercase animate-pulse ${isModelSpeaking ? 'text-cyan-400' : 'text-emerald-400'}`}>
-                            {isModelSpeaking ? 'Staff Respondiendo...' : 'Escuchando...'}
-                        </p>
-                        {demoMode && (
-                            <div className="pt-2">
-                                <p className="text-[9px] text-yellow-500 font-mono mb-1">MODO SIMULACIÓN: Habla para activar.</p>
-                                <div className="h-1 w-20 bg-slate-800 rounded-full mx-auto overflow-hidden">
-                                    <div className="h-full bg-yellow-500 transition-all duration-100" style={{width: `${Math.min(audioLevel * 50, 100)}%`}}></div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                         <div className="space-y-1">
-                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center justify-center gap-2"><Zap size={12}/> Comandos</p>
-                            <div className="text-sm text-slate-300 font-medium">
-                                "Analiza mi carga", "Cambia el plan", "RPE 8"
-                            </div>
-                         </div>
-                         
-                         <div className="pt-3 border-t border-slate-800">
-                             <button onClick={handleDemoStart} className="text-[10px] text-emerald-500 hover:text-emerald-400 font-bold uppercase tracking-wider flex items-center justify-center gap-1 w-full opacity-70 hover:opacity-100 transition-opacity">
-                                 <PlayCircle size={12}/> Probar Demo (Sin Cuota)
-                             </button>
-                         </div>
-                    </div>
-                )}
-            </div>
-
+          <button 
+            onClick={isActive ? stopSession : startSession}
+            className={`w-40 h-40 rounded-full flex items-center justify-center transition-all duration-500 shadow-2xl relative z-20 border-4 ${isActive ? 'bg-slate-900 border-cyan-500 scale-110' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}
+          >
+            {isActive ? (
+              <div className="flex flex-col items-center gap-1">
+                <Headphones size={48} className={isSpeaking ? 'text-cyan-400' : 'text-slate-400'}/>
+                <span className="text-[10px] font-bold text-cyan-500 animate-pulse">{isSpeaking ? 'HABLANDO' : 'ESCUCHANDO'}</span>
+              </div>
+            ) : (
+              <Mic size={48} className="text-slate-600"/>
+            )}
+          </button>
         </div>
+
+        <div className="grid grid-cols-2 gap-3 w-full">
+          <div className="bg-slate-900/50 p-3 rounded-2xl border border-slate-800 text-center">
+            <Zap size={16} className="text-yellow-500 mx-auto mb-1"/>
+            <div className="text-[10px] text-slate-500 uppercase font-bold">Respuesta</div>
+            <div className="text-xs text-white font-bold">Nativa (No TTS)</div>
+          </div>
+          <div className="bg-slate-900/50 p-3 rounded-2xl border border-slate-800 text-center">
+            <Activity size={16} className="text-emerald-500 mx-auto mb-1"/>
+            <div className="text-[10px] text-slate-500 uppercase font-bold">Latencia</div>
+            <div className="text-xs text-white font-bold">&lt; 100ms</div>
+          </div>
+        </div>
+
+        <p className="text-[10px] text-slate-500 text-center leading-relaxed">
+          Usa auriculares para evitar el eco. El coach puede ver tu fatiga subjetiva y planes históricos.
+        </p>
+      </div>
+
     </div>
   );
 };
+
+export default GeminiLive;
