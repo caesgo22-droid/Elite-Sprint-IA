@@ -1,3 +1,4 @@
+
 import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
@@ -31,8 +32,12 @@ const VideoAnalyzer: React.FC = () => {
       try {
         const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/wasm");
         const landmarker = await PoseLandmarker.createFromOptions(vision, {
-          baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task`, delegate: "GPU" },
-          runningMode: "VIDEO", numPoses: 1
+          baseOptions: { 
+            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task`, 
+            delegate: "GPU" 
+          },
+          runningMode: "IMAGE", // USAR IMAGE ELIMINA EL ERROR DE TIMESTAMP MISMATCH
+          numPoses: 1
         });
         setPoseLandmarker(landmarker);
       } catch (error) { console.error("MediaPipe Error:", error); }
@@ -43,10 +48,7 @@ const VideoAnalyzer: React.FC = () => {
 
   const checkKey = async () => {
     const aistudio = getAIStudio();
-    if (aistudio) {
-        const keyExists = await aistudio.hasSelectedApiKey();
-        setHasKey(keyExists);
-    }
+    if (aistudio) setHasKey(await aistudio.hasSelectedApiKey());
   };
 
   const handleOpenKey = async () => {
@@ -67,18 +69,15 @@ const VideoAnalyzer: React.FC = () => {
     try {
         const video = videoRef.current;
         const duration = video.duration;
-        const scanSteps = 15; 
+        const scanSteps = 12; // Cantidad de fotogramas clave
         const tempHistory: any[] = [];
         const frames: string[] = [];
-
-        // CRITICAL: Use a synthetic strictly increasing timestamp to avoid MediaPipe Graph errors
-        let frameTimestamp = 0;
 
         for (let i = 0; i <= scanSteps; i++) {
             const time = (duration / scanSteps) * i;
             video.currentTime = time;
             
-            // Wait for video frame to be ready and seeked
+            // Esperar a que el video busque el frame
             await new Promise((resolve) => {
                 const onSeeked = () => {
                     video.removeEventListener('seeked', onSeeked);
@@ -87,14 +86,11 @@ const VideoAnalyzer: React.FC = () => {
                 video.addEventListener('seeked', onSeeked);
             });
 
-            // Ensure video state is ready
-            if (video.readyState < 2) {
-                await new Promise(r => setTimeout(r, 100));
-            }
+            // Dar un tiempo extra para que el canvas se pinte
+            await new Promise(r => setTimeout(r, 50));
 
-            frameTimestamp += 100; // Step by 100ms synthetically to guarantee monotonicity
-            
-            const result = poseLandmarker.detectForVideo(video, frameTimestamp);
+            // Detectar como IMAGEN (no Video) para evitar problemas de timestamp
+            const result = poseLandmarker.detect(video);
             
             if(result?.landmarks?.[0]) {
                 const landmarks = result.landmarks[0];
@@ -102,7 +98,7 @@ const VideoAnalyzer: React.FC = () => {
                 const mechanics = physicsEngine.current.calculateSprintMechanics(landmarks);
                 const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, time * 1000, com);
                 
-                tempHistory.push({ landmarks, mechanics, advanced, com, timestamp: frameTimestamp });
+                tempHistory.push({ landmarks, mechanics, advanced, com, timestamp: time * 1000 });
                 
                 const canvas = document.createElement('canvas');
                 canvas.width = 160; canvas.height = 90;
@@ -113,7 +109,7 @@ const VideoAnalyzer: React.FC = () => {
         }
 
         if (tempHistory.length === 0) {
-            throw new Error("No se detectó el cuerpo del atleta. Asegúrate de que el video tenga buena luz y el atleta esté de cuerpo completo.");
+            throw new Error("No se detectó el cuerpo del atleta. Asegúrate de que sea visible de cuerpo completo.");
         }
 
         setCapturedFrames(frames);
@@ -163,12 +159,12 @@ const VideoAnalyzer: React.FC = () => {
        <div className="flex justify-between items-end border-b border-slate-800 pb-4">
           <div>
             <h2 className="text-xl font-black text-white uppercase tracking-tight">Laboratorio Bio</h2>
-            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Video Audit v2.1 Pro</p>
+            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Video Audit v2.2 Pro</p>
           </div>
           <div className="flex gap-2">
             {!hasKey && (
                 <button onClick={handleOpenKey} className="bg-red-500/10 border border-red-500/30 text-red-500 px-3 py-1.5 rounded-full text-[9px] font-black uppercase flex items-center gap-1 animate-pulse">
-                    <Key size={10}/> Requiere API
+                    <Key size={10}/> Activar API
                 </button>
             )}
             <button onClick={() => setViewHistory(!viewHistory)} className="text-[9px] font-black uppercase tracking-widest bg-slate-800 px-4 py-2 rounded-full border border-slate-700 text-slate-400 hover:text-white transition-all"><History size={12} className="inline mr-1"/> Historial</button>
@@ -180,14 +176,13 @@ const VideoAnalyzer: React.FC = () => {
                <input type="file" ref={fileInputRef} hidden onChange={(e) => setPreviewUrl(URL.createObjectURL(e.target.files![0]))} accept="video/*" />
                <UploadCloud size={36} className="text-slate-500 group-hover:text-cyan-400 mb-4" />
                <span className="font-black text-slate-300 uppercase tracking-widest text-xs">Cargar Sprint</span>
-               <p className="text-[9px] text-slate-600 mt-2 font-bold">MP4 / MOV / AVI</p>
            </div>
        ) : (
            <div className="space-y-6">
-                <div className="relative rounded-[2rem] overflow-hidden bg-black aspect-video border border-slate-800 shadow-2xl group">
+                <div className="relative rounded-[2rem] overflow-hidden bg-black aspect-video border border-slate-800 shadow-2xl">
                     <video ref={videoRef} src={previewUrl} className="w-full h-full object-contain" muted playsInline />
                     {capturedFrames.length > 0 && (
-                        <div className="absolute bottom-4 left-4 right-4 flex gap-1 overflow-x-auto p-2 bg-black/60 backdrop-blur-md rounded-xl border border-white/10 animate-in slide-in-from-bottom-2">
+                        <div className="absolute bottom-4 left-4 right-4 flex gap-1 overflow-x-auto p-2 bg-black/60 backdrop-blur-md rounded-xl border border-white/10">
                             {capturedFrames.map((f, i) => <img key={i} src={f} className="h-10 rounded border border-white/10 shrink-0" />)}
                         </div>
                     )}
@@ -197,19 +192,19 @@ const VideoAnalyzer: React.FC = () => {
                     <button onClick={() => setAnalysisMode('Personal')} className={`py-4 rounded-2xl flex flex-col items-center gap-1 transition-all ${analysisMode === 'Personal' ? 'bg-slate-800 border border-slate-700 text-white shadow-md' : 'text-slate-500'}`}>
                         <Info size={16}/>
                         <span className="text-[10px] font-black uppercase tracking-widest">Didáctico</span>
-                        <span className="text-[8px] opacity-40 font-bold">(Local Core)</span>
+                        <span className="text-[8px] opacity-40 font-bold">(Rápido)</span>
                     </button>
                     <button onClick={() => setAnalysisMode('External')} className={`py-4 rounded-2xl flex flex-col items-center gap-1 transition-all ${analysisMode === 'External' ? 'bg-indigo-900/40 border border-indigo-500/50 text-indigo-400 shadow-md' : 'text-slate-500'}`}>
                         <ShieldCheck size={16}/>
                         <span className="text-[10px] font-black uppercase tracking-widest">Auditoría Pro</span>
-                        <span className="text-[8px] opacity-40 font-bold">(Gemini Flash/Pro)</span>
+                        <span className="text-[8px] opacity-40 font-bold">(Historial)</span>
                     </button>
                 </div>
 
                 <div className="bg-slate-900/95 p-4 rounded-3xl border border-slate-800 flex gap-3 sticky bottom-20 z-10 backdrop-blur-xl shadow-2xl">
-                    <button onClick={handleAutoCapture} disabled={loading} className={`flex-1 ${analysisMode === 'External' ? 'bg-indigo-600' : 'bg-cyan-600'} text-white font-black py-5 rounded-2xl flex items-center justify-center gap-4 text-sm transition-all active:scale-95 shadow-xl disabled:opacity-50 uppercase tracking-widest`}>
+                    <button onClick={handleAutoCapture} disabled={loading} className={`flex-1 ${analysisMode === 'External' ? 'bg-indigo-600' : 'bg-cyan-600'} text-white font-black py-5 rounded-2xl flex items-center justify-center gap-4 text-sm transition-all shadow-xl disabled:opacity-50 uppercase tracking-widest`}>
                         {loading ? <Loader2 className="animate-spin" /> : <ScanLine />} 
-                        {loading ? statusMessage : 'Iniciar Escaneo Técnico'}
+                        {loading ? statusMessage : 'Analizar Técnica'}
                     </button>
                     <button onClick={() => setPreviewUrl(null)} className="p-5 bg-slate-800 rounded-2xl text-slate-400 hover:text-white border border-slate-700"><X size={20}/></button>
                 </div>
@@ -222,19 +217,19 @@ const VideoAnalyzer: React.FC = () => {
                                     <h3 className={`font-black text-2xl tracking-tighter uppercase ${analysis.category === 'External' ? 'text-indigo-400' : 'text-white'}`}>{analysis.phaseDetected}</h3>
                                     <div className="flex items-center gap-2 mt-1">
                                         <Microscope size={12} className="text-slate-500"/>
-                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Motor: {analysis.category === 'External' ? 'Cloud Gemini' : 'Local Heuristic'}</span>
+                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Motor: {analysis.category === 'External' ? 'Deep Pro' : 'Local'}</span>
                                     </div>
                                 </div>
                                 <div className="text-right">
                                     <div className="text-3xl font-black text-emerald-400 tracking-tighter">{analysis.score}</div>
-                                    <div className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Score Técnico</div>
+                                    <div className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Score</div>
                                 </div>
                             </div>
                             
                             <div className="grid grid-cols-3 gap-2">
                                  <MetricBox label="VEL (m/s)" value={analysis.kinetics?.comVelocity?.split(' ')[0] || '--'} />
                                  <MetricBox label="GCT (sec)" value={analysis.groundContactTimeEstimate || '--'} />
-                                 <MetricBox label="EFICIENCIA" value={`${analysis.kinetics?.forceApplicationIndex || '--'}%`} />
+                                 <MetricBox label="EFF" value={`${analysis.kinetics?.forceApplicationIndex || '--'}%`} />
                             </div>
 
                             <div className="space-y-3">
