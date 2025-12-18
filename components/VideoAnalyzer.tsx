@@ -4,9 +4,9 @@ import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { analyzeTechnique } from '../services/geminiService';
 import { LocalExpert } from '../services/localExpert';
-import { ElitePhysicsEngine, AdvancedMetrics } from '../utils/biomechanicsUtils';
+import { ElitePhysicsEngine } from '../utils/biomechanicsUtils';
 import { BiomechanicalAnalysis } from '../types';
-import { Loader2, ScanLine, UploadCloud, History, Key, Info, X, ShieldCheck, Microscope } from 'lucide-react';
+import { Loader2, ScanLine, UploadCloud, History, Key, Info, X, ShieldCheck, Microscope, Layers } from 'lucide-react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 
 const getAIStudio = () => (window as any).aistudio;
@@ -21,38 +21,31 @@ const VideoAnalyzer: React.FC = () => {
   const [poseLandmarker, setPoseLandmarker] = useState<PoseLandmarker | null>(null);
   const [analysisMode, setAnalysisMode] = useState<'Personal' | 'External'>('Personal');
   const [hasKey, setHasKey] = useState<boolean>(true);
+  const [capturedFrames, setCapturedFrames] = useState<string[]>([]);
 
   const physicsEngine = useRef<ElitePhysicsEngine>(new ElitePhysicsEngine());
-  const isMounted = useRef(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    isMounted.current = true;
     const initMediaPipe = async () => {
       try {
         const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/wasm");
-        if (!isMounted.current) return;
         const landmarker = await PoseLandmarker.createFromOptions(vision, {
           baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task`, delegate: "GPU" },
           runningMode: "VIDEO", numPoses: 1
         });
-        if (isMounted.current) setPoseLandmarker(landmarker);
+        setPoseLandmarker(landmarker);
       } catch (error) { console.error("MediaPipe Error:", error); }
     };
-    
-    const checkKey = async () => {
-      const aistudio = getAIStudio();
-      if (aistudio) {
-        const selected = await aistudio.hasSelectedApiKey();
-        setHasKey(selected);
-      }
-    };
-
     initMediaPipe();
     checkKey();
-    return () => { isMounted.current = false; };
   }, []);
+
+  const checkKey = async () => {
+    const aistudio = getAIStudio();
+    if (aistudio) setHasKey(await aistudio.hasSelectedApiKey());
+  };
 
   const handleOpenKey = async () => {
       const aistudio = getAIStudio();
@@ -65,18 +58,21 @@ const VideoAnalyzer: React.FC = () => {
   const handleAutoCapture = async () => {
     if(!previewUrl || !videoRef.current) return;
     setLoading(true);
-    setStatusMessage("Escaneando Biomecánica...");
+    setCapturedFrames([]);
+    setStatusMessage("Escanéo Biomecánico...");
     
     try {
         const video = videoRef.current;
         const duration = video.duration;
-        const scanSteps = 15; 
+        const scanSteps = 12; 
         const tempHistory: any[] = [];
+        const frames: string[] = [];
 
         for (let i = 0; i <= scanSteps; i++) {
             const time = (duration / scanSteps) * i;
             video.currentTime = time;
-            await new Promise(r => setTimeout(r, 150)); 
+            await new Promise(r => setTimeout(r, 200)); 
+            
             const result = poseLandmarker?.detectForVideo(video, time * 1000);
             if(result?.landmarks?.[0]) {
                 const landmarks = result.landmarks[0];
@@ -84,163 +80,164 @@ const VideoAnalyzer: React.FC = () => {
                 const mechanics = physicsEngine.current.calculateSprintMechanics(landmarks);
                 const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, time * 1000, com);
                 tempHistory.push({ landmarks, mechanics, advanced, com, timestamp: time * 1000 });
+                
+                // Generar thumbnail para el frame strip
+                const canvas = document.createElement('canvas');
+                canvas.width = 160; canvas.height = 90;
+                canvas.getContext('2d')?.drawImage(video, 0, 0, 160, 90);
+                frames.push(canvas.toDataURL('image/jpeg', 0.5));
             }
         }
+        setCapturedFrames(frames);
 
         const { maxExtensionFrame } = physicsEngine.current.detectSprintPhases(tempHistory);
         const bestFrame = maxExtensionFrame || tempHistory[Math.floor(tempHistory.length/2)];
-
         if (!bestFrame) throw new Error("No landmarks found");
 
         const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(video, 0, 0);
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        canvas.getContext('2d')?.drawImage(video, 0, 0);
         const capturedImageBase64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
 
-        setStatusMessage(analysisMode === 'External' ? "Auditoría Pro Nivel V..." : "Análisis Didáctico...");
+        setStatusMessage(analysisMode === 'External' ? "Auditoría Pro (Deep Thinking)..." : "Analizando...");
         
         let analysis: BiomechanicalAnalysis;
         try {
             const result = await analyzeTechnique([capturedImageBase64], bestFrame.mechanics, bestFrame.advanced, analysisMode);
-            if (!result) throw new Error("Null result");
+            if (!result) throw new Error("Null AI");
+            
             analysis = { 
-                ...result, 
-                id: Date.now().toString(), 
-                type: 'Single', 
-                category: analysisMode,
+                ...result, id: Date.now().toString(), type: 'Single', category: analysisMode,
                 thumbnail: `data:image/jpeg;base64,${capturedImageBase64}`, 
                 kinetics: { 
                     comVelocity: bestFrame.advanced.velocity, 
                     forceApplicationIndex: bestFrame.advanced.forceFactor, 
-                    verticalOscillation: bestFrame.advanced.verticalOscillation 
+                    verticalOscillation: bestFrame.advanced.verticalOscillation,
+                    groundContactTime: bestFrame.advanced.groundContactTime,
+                    airTime: bestFrame.advanced.airTime,
+                    strideFreq: bestFrame.advanced.frequency
                 }, 
                 timestamp: bestFrame.timestamp / 1000 
             };
         } catch (e: any) {
-            if (e.message === "KEY_REQUIRED") {
-                handleOpenKey();
-                throw e;
-            }
-            // Fallback to local expert if AI fails
+            if (e.message === "KEY_REQUIRED") { handleOpenKey(); throw e; }
             analysis = { ...LocalExpert.analyze(bestFrame.mechanics, bestFrame.advanced, { comVelocity: bestFrame.advanced.velocity, forceApplicationIndex: bestFrame.advanced.forceFactor, verticalOscillation: bestFrame.advanced.verticalOscillation }), thumbnail: `data:image/jpeg;base64,${capturedImageBase64}`, timestamp: bestFrame.timestamp / 1000, category: analysisMode };
         }
 
         setSessionAnalyses(prev => [analysis, ...prev]);
-        
-        // Solo guardar permanentemente si es modo Externo
-        if (analysisMode === 'External') {
-            saveAnalysis(analysis);
-        }
+        if (analysisMode === 'External') saveAnalysis(analysis);
 
     } catch(e) { 
-        console.error(e);
-        if (e !== "KEY_REQUIRED") alert("Error en captura técnica.");
+        if (e !== "KEY_REQUIRED") alert("Fallo en captura. Asegúrate de que el cuerpo sea visible.");
     } finally { setLoading(false); }
   };
 
-  const handleFile = (file: File) => {
-    if (file) {
-        setPreviewUrl(URL.createObjectURL(file));
-        setSessionAnalyses([]);
-    }
-  };
-
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-16">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-20">
        <div className="flex justify-between items-end border-b border-slate-800 pb-4">
           <div>
-            <h2 className="text-2xl font-bold">Laboratorio Bio</h2>
-            <p className="text-slate-400 text-sm">Análisis de Video Nivel V</p>
+            <h2 className="text-2xl font-black text-white uppercase tracking-tight">Laboratorio Bio</h2>
+            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Video Audit v2.0 Elite</p>
           </div>
           <div className="flex gap-2">
             {!hasKey && (
-                <button onClick={handleOpenKey} className="bg-red-900/20 border border-red-500/50 text-red-400 px-3 py-1.5 rounded-full text-[10px] font-black uppercase animate-pulse flex items-center gap-1">
-                    <Key size={12}/> Activar Pago
+                <button onClick={handleOpenKey} className="bg-red-500/10 border border-red-500/30 text-red-500 px-3 py-1.5 rounded-full text-[9px] font-black uppercase flex items-center gap-1 animate-pulse">
+                    <Key size={10}/> Requiere Pago
                 </button>
             )}
-            <button onClick={() => setViewHistory(!viewHistory)} className="text-xs bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700"><History size={12} className="inline mr-1"/> Historial</button>
+            <button onClick={() => setViewHistory(!viewHistory)} className="text-[10px] font-black uppercase tracking-widest bg-slate-800 px-4 py-2 rounded-full border border-slate-700 text-slate-400 hover:text-white transition-all"><History size={12} className="inline mr-1"/> Historial</button>
           </div>
        </div>
 
        {!previewUrl ? (
-           <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-700 rounded-2xl aspect-video flex flex-col items-center justify-center cursor-pointer hover:bg-slate-900/50 transition-all group">
-               <input type="file" ref={fileInputRef} hidden onChange={(e) => handleFile(e.target.files![0])} accept="video/*" />
-               <UploadCloud size={48} className="text-slate-500 mb-4 group-hover:text-cyan-400 transition-colors" />
-               <span className="font-bold text-slate-300">Cargar Video de Entrenamiento</span>
-               <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-widest">Formatos soportados: MP4, MOV</p>
+           <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-700 rounded-[2.5rem] aspect-video flex flex-col items-center justify-center cursor-pointer hover:bg-slate-900/50 transition-all group overflow-hidden relative">
+               <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/5 to-transparent"></div>
+               <input type="file" ref={fileInputRef} hidden onChange={(e) => setPreviewUrl(URL.createObjectURL(e.target.files![0]))} accept="video/*" />
+               <div className="p-6 bg-slate-900 rounded-3xl border border-slate-800 group-hover:scale-110 transition-transform duration-500 shadow-2xl">
+                 <UploadCloud size={40} className="text-slate-500 group-hover:text-cyan-400" />
+               </div>
+               <span className="font-black text-slate-300 uppercase tracking-widest text-xs mt-6">Cargar Sprint</span>
+               <p className="text-[9px] text-slate-600 mt-2 font-bold">PROCESADO LOCAL + NUBE</p>
            </div>
        ) : (
            <div className="space-y-6">
-                <div className="relative rounded-2xl overflow-hidden bg-black aspect-video border border-slate-800 shadow-2xl">
+                <div className="relative rounded-[2rem] overflow-hidden bg-black aspect-video border border-slate-800 shadow-2xl group">
                     <video ref={videoRef} src={previewUrl} className="w-full h-full object-contain" muted playsInline />
-                    <div className="absolute top-4 left-4 flex gap-2">
-                        <span className="bg-black/60 backdrop-blur px-2 py-1 rounded border border-white/10 text-[10px] font-mono text-white flex items-center gap-1">
-                            <Microscope size={10}/> SCAN_READY
-                        </span>
-                    </div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    {capturedFrames.length > 0 && (
+                        <div className="absolute bottom-4 left-4 right-4 flex gap-1 overflow-x-auto p-2 bg-black/60 backdrop-blur-md rounded-xl border border-white/10 scrollbar-hide animate-in slide-in-from-bottom-4">
+                            {capturedFrames.map((f, i) => (
+                                <img key={i} src={f} className="h-10 rounded border border-white/10 shrink-0" />
+                            ))}
+                        </div>
+                    )}
                 </div>
 
-                {/* SELECTOR DE MODO */}
-                <div className="grid grid-cols-2 gap-3 p-1 bg-slate-900 rounded-xl border border-slate-800">
-                    <button 
-                        onClick={() => setAnalysisMode('Personal')}
-                        className={`py-3 rounded-lg flex flex-col items-center justify-center gap-1 transition-all ${analysisMode === 'Personal' ? 'bg-slate-800 border border-slate-700 text-white shadow-lg' : 'text-slate-500 hover:text-slate-400'}`}
-                    >
+                <div className="grid grid-cols-2 gap-3 p-1.5 bg-slate-900 rounded-3xl border border-slate-800 shadow-xl">
+                    <button onClick={() => setAnalysisMode('Personal')} className={`py-4 rounded-2xl flex flex-col items-center gap-1 transition-all ${analysisMode === 'Personal' ? 'bg-slate-800 border border-slate-700 text-white shadow-lg' : 'text-slate-500 hover:text-slate-400'}`}>
                         <Info size={16}/>
                         <span className="text-[10px] font-black uppercase tracking-widest">Didáctico</span>
-                        <span className="text-[8px] opacity-50 font-medium">(Flash - No Guardar)</span>
+                        <span className="text-[8px] opacity-40 font-bold">(Rápido / Sin Historial)</span>
                     </button>
-                    <button 
-                        onClick={() => setAnalysisMode('External')}
-                        className={`py-3 rounded-lg flex flex-col items-center justify-center gap-1 transition-all ${analysisMode === 'External' ? 'bg-indigo-900/30 border border-indigo-500/50 text-indigo-400 shadow-lg' : 'text-slate-500 hover:text-slate-400'}`}
-                    >
+                    <button onClick={() => setAnalysisMode('External')} className={`py-4 rounded-2xl flex flex-col items-center gap-1 transition-all ${analysisMode === 'External' ? 'bg-indigo-900/40 border border-indigo-500/50 text-indigo-400 shadow-lg' : 'text-slate-500 hover:text-slate-400'}`}>
                         <ShieldCheck size={16}/>
-                        <span className="text-[10px] font-black uppercase tracking-widest">Externo Pro</span>
-                        <span className="text-[8px] opacity-50 font-medium">(Pro - Guardar Historial)</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Auditoría Pro</span>
+                        <span className="text-[8px] opacity-40 font-bold">(Deep Audit / Historial)</span>
                     </button>
                 </div>
 
-                <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 flex gap-3 sticky bottom-20 z-10 backdrop-blur-md">
-                    <button onClick={handleAutoCapture} disabled={loading} className={`flex-1 ${analysisMode === 'External' ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-cyan-600 hover:bg-cyan-500'} text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 text-sm shadow-xl active:scale-95 transition-all disabled:opacity-50`}>
+                <div className="bg-slate-900/95 p-4 rounded-3xl border border-slate-800 flex gap-3 sticky bottom-20 z-10 backdrop-blur-xl shadow-2xl">
+                    <button onClick={handleAutoCapture} disabled={loading} className={`flex-1 ${analysisMode === 'External' ? 'bg-indigo-600' : 'bg-cyan-600'} text-white font-black py-5 rounded-2xl flex items-center justify-center gap-4 text-sm transition-all active:scale-[0.98] shadow-xl disabled:opacity-50 uppercase tracking-widest`}>
                         {loading ? <Loader2 className="animate-spin" /> : <ScanLine />} 
-                        {loading ? statusMessage : analysisMode === 'External' ? 'Ejecutar Auditoría Pro' : 'Analizar Técnica'}
+                        {loading ? statusMessage : analysisMode === 'External' ? 'Iniciar Auditoría Pro' : 'Analizar Técnica'}
                     </button>
-                    <button onClick={() => setPreviewUrl(null)} className="p-3 bg-slate-800 rounded-lg text-slate-300 hover:text-white transition-colors"><X size={20}/></button>
+                    <button onClick={() => setPreviewUrl(null)} className="p-5 bg-slate-800 rounded-2xl text-slate-400 hover:text-white border border-slate-700"><X size={20}/></button>
                 </div>
 
                 <div className="space-y-4">
                     {sessionAnalyses.map(analysis => (
-                        <div key={analysis.id} className="bg-slate-900 border border-slate-700 p-5 rounded-2xl space-y-4 animate-in slide-in-from-bottom-4">
+                        <div key={analysis.id} className="bg-slate-900 border border-slate-700 p-6 rounded-[2rem] space-y-6 animate-in slide-in-from-bottom-4 shadow-2xl relative overflow-hidden">
+                            {analysis.category === 'External' && <div className="absolute top-0 right-0 p-3"><ShieldCheck size={14} className="text-indigo-500/50"/></div>}
+                            
                             <div className="flex justify-between items-start">
                                 <div>
-                                    <h3 className={`font-bold text-lg ${analysis.category === 'External' ? 'text-indigo-400' : 'text-white'}`}>{analysis.phaseDetected}</h3>
-                                    <div className="text-[10px] text-slate-500 uppercase font-black tracking-widest mt-1">
-                                        Motor: {analysis.category === 'External' ? 'Gemini 3 Pro' : 'Gemini 3 Flash'}
+                                    <h3 className={`font-black text-2xl tracking-tighter uppercase ${analysis.category === 'External' ? 'text-indigo-400' : 'text-white'}`}>{analysis.phaseDetected}</h3>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <Microscope size={12} className="text-slate-500"/>
+                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Motor: {analysis.category === 'External' ? 'Deep Pro (3.0)' : 'Flash Native'}</span>
                                     </div>
                                 </div>
-                                <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-lg font-bold text-sm border border-emerald-500/30">{analysis.score}</span>
+                                <div className="text-right">
+                                    <div className="text-3xl font-black text-emerald-400 tracking-tighter">{analysis.score}</div>
+                                    <div className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Score Técnico</div>
+                                </div>
                             </div>
                             
-                            <div className="grid grid-cols-3 gap-2">
-                                 <MetricBox label="VEL" value={analysis.kinetics?.comVelocity || '--'} />
-                                 <MetricBox label="GCT" value={analysis.groundContactTimeEstimate || '--'} />
-                                 <MetricBox label="EFF" value={`${analysis.kinetics?.forceApplicationIndex || '--'}%`} />
+                            <div className="grid grid-cols-3 gap-3">
+                                 <MetricBox label="VEL (m/s)" value={analysis.kinetics?.comVelocity?.split(' ')[0] || '--'} />
+                                 <MetricBox label="GCT (sec)" value={analysis.groundContactTimeEstimate || '--'} />
+                                 <MetricBox label="EFICIENCIA" value={`${analysis.kinetics?.forceApplicationIndex || '--'}%`} />
                             </div>
 
-                            <div className="space-y-2">
-                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Gritos del Coach</h4>
-                                <div className="flex flex-wrap gap-2">
+                            <div className="space-y-3">
+                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                                    <div className="h-px bg-slate-800 flex-1"></div>
+                                    Gritos del Coach
+                                    <div className="h-px bg-slate-800 flex-1"></div>
+                                </h4>
+                                <div className="flex flex-wrap gap-2 justify-center">
                                     {analysis.coachShouts.map((s, i) => (
-                                        <span key={i} className="text-xs bg-slate-800 px-3 py-1 rounded-full text-slate-300 font-medium">"{s}"</span>
+                                        <span key={i} className="text-[11px] bg-slate-950 border border-slate-800 px-5 py-2.5 rounded-full text-slate-200 font-black italic shadow-inner">"{s}"</span>
                                     ))}
                                 </div>
                             </div>
 
-                            {analysis.category === 'External' && (
-                                <div className="p-3 bg-indigo-900/10 border border-indigo-500/20 rounded-xl">
-                                    <p className="text-[11px] text-indigo-300 italic">Este análisis ha sido sincronizado con tu pasaporte de atleta.</p>
+                            {analysis.criticalErrors.length > 0 && (
+                                <div className="bg-red-500/5 border border-red-500/20 p-4 rounded-2xl">
+                                    <h5 className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-3 flex items-center gap-2"><AlertCircle size={12}/> Errores Críticos</h5>
+                                    <ul className="space-y-1.5">
+                                        {analysis.criticalErrors.map((e, i) => <li key={i} className="text-xs text-slate-300 font-medium flex items-center gap-2"><div className="w-1 h-1 rounded-full bg-red-500"></div> {e}</li>)}
+                                    </ul>
                                 </div>
                             )}
                         </div>
@@ -253,10 +250,14 @@ const VideoAnalyzer: React.FC = () => {
 };
 
 const MetricBox = ({ label, value }: { label: string, value: string }) => (
-    <div className="bg-slate-950 p-2 rounded border border-slate-800/50 text-center">
-        <div className="text-[9px] text-slate-500 uppercase font-bold tracking-tighter">{label}</div>
-        <div className="text-sm font-mono text-white font-bold">{value}</div>
+    <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800/50 text-center shadow-inner group hover:border-slate-700 transition-colors">
+        <div className="text-[9px] text-slate-600 uppercase font-black tracking-widest mb-1 group-hover:text-cyan-500 transition-colors">{label}</div>
+        <div className="text-xl font-mono text-white font-black">{value}</div>
     </div>
+);
+
+const AlertCircle = (props: any) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
 );
 
 export default VideoAnalyzer;
