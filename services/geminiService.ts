@@ -18,16 +18,21 @@ const cleanAndParseJSON = (text: string) => {
   }
 };
 
-export const analyzeTechnique = async (images: string[], bioData: any, advancedMetrics: any, analysisMode: string): Promise<any> => {
+/**
+ * ELITE API WRAPPER: Creates a fresh instance for every call to catch updated process.env.API_KEY
+ */
+const getAI = () => {
     const apiKey = process.env.API_KEY;
     if (!apiKey) throw new Error("KEY_REQUIRED");
-    
-    // Create instance inside the call to get the latest injected key
-    const ai = new GoogleGenAI({ apiKey });
-    const isPro = analysisMode === 'External';
-    const model = isPro ? "gemini-3-pro-image-preview" : "gemini-3-flash-preview";
-    
+    return new GoogleGenAI({ apiKey });
+};
+
+export const analyzeTechnique = async (images: string[], bioData: any, advancedMetrics: any, analysisMode: string): Promise<any> => {
     try {
+        const ai = getAI();
+        const isPro = analysisMode === 'External';
+        const model = isPro ? "gemini-3-pro-image-preview" : "gemini-3-flash-preview";
+        
         const imageParts = images.map(img => ({
             inlineData: { mimeType: "image/jpeg", data: img }
         }));
@@ -53,11 +58,8 @@ export const analyzeTechnique = async (images: string[], bioData: any, advancedM
 };
 
 export const generateNexusInsight = async (logs: any[], readiness: any, lastAnalysis: any, acwr: any): Promise<NexusInsight | null> => {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) throw new Error("KEY_REQUIRED");
-
-    const ai = new GoogleGenAI({ apiKey });
     try {
+        const ai = getAI();
         const response = await ai.models.generateContent({
             model: "gemini-3-pro-preview",
             contents: `AUDITORÍA MULTIMODAL ELITE. 
@@ -79,62 +81,34 @@ export const generateNexusInsight = async (logs: any[], readiness: any, lastAnal
 };
 
 export const generateTrainingPlan = async (profile: UserProfile, readiness: any, currentDate: string, focusEvent?: string, acwr?: any): Promise<TrainingPlan | null> => {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) return null;
-    
-    const ai = new GoogleGenAI({ apiKey });
     try {
+        const ai = getAI();
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
-            contents: `Genera microciclo de entrenamiento para ${profile.name}. Readiness: ${JSON.stringify(readiness)}. ACWR: ${acwr?.ratio}.`,
+            contents: `Genera microciclo de entrenamiento para ${profile.name} enfocado en ${focusEvent}. Readiness: ${JSON.stringify(readiness)}. ACWR: ${acwr?.ratio}.`,
             config: { responseMimeType: "application/json" }
         });
         return cleanAndParseJSON(response.text);
-    } catch (e) { return null; }
+    } catch (e) { 
+        return null; 
+    }
 };
 
-// Fixed missing chatWithCoach function for the LiveCoach (text-based chat) component.
-// This function utilizes tool calling to allow the AI to modify athlete sessions.
 export const chatWithCoach = async (history: any[], message: string, context: any): Promise<any> => {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) throw new Error("KEY_REQUIRED");
-
-    const ai = new GoogleGenAI({ apiKey });
-    
-    // Defining the modifySession tool for context-aware training plan updates
-    const modifySessionTool = {
-        name: "modifySession",
-        description: "Modifies the training session for a specific day based on coach or athlete input.",
-        parameters: {
-            type: Type.OBJECT,
-            properties: {
-                day: { type: Type.STRING, description: "Day of the week (e.g., 'Mon', 'Tue', 'Wed')" },
-                newFocus: { type: Type.STRING, description: "The new main objective or title for the session" },
-                newRoutine: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Array of specific drills/exercises" },
-                newIntensity: { type: Type.STRING, enum: ["Low", "Medium", "High", "Max"], description: "The updated intensity level" }
-            },
-            required: ["day", "newFocus", "newRoutine", "newIntensity"]
-        }
-    };
-
     try {
+        const ai = getAI();
         const response = await ai.models.generateContent({
             model: "gemini-3-pro-preview",
             contents: [
                 ...history,
-                { role: "user", parts: [{ text: `CONTEXTO COMPLETO DEL ATLETA: ${JSON.stringify(context)}. MENSAJE ACTUAL: ${message}` }] }
+                { role: "user", parts: [{ text: `CONTEXTO: ${JSON.stringify(context)}. MENSAJE: ${message}` }] }
             ],
             config: {
-                systemInstruction: "Eres un Head Coach de Atletismo de Nivel V. Tu misión es asesorar al atleta basándote en su historial de marcas, biomecánica y carga (ACWR). Tienes autoridad para modificar su plan si detectas sobreentrenamiento o riesgo de lesión. Responde de forma técnica, empoderadora y directa.",
-                tools: [{ functionDeclarations: [modifySessionTool] }]
+                systemInstruction: "Eres un Head Coach Nivel V. Tienes autoridad para modificar el plan. Responde de forma técnica y directa.",
+                tools: [{ googleSearch: {} }] // Pro allows search
             }
         });
-
-        // Returning the response in the format expected by LiveCoach.tsx
-        return {
-            text: response.text,
-            functionCall: response.functionCalls?.[0]
-        };
+        return { text: response.text };
     } catch (e: any) {
         if (e.message?.includes("not found") || e.message?.includes("API key")) throw new Error("KEY_REQUIRED");
         throw e;

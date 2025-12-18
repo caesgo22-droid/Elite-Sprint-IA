@@ -18,16 +18,21 @@ export const AthletePassport: React.FC = () => {
     const [activeSlide, setActiveSlide] = useState(0);
     const [showInfo, setShowInfo] = useState<string | null>(null);
 
-    const activeEvents = (userProfile.events && userProfile.events.length > 0) ? userProfile.events : ['Sprint'];
+    // Ensure all main sprints are available for viewing
+    const availableEvents = ['100m', '200m', '400m'];
 
     const scores = useMemo(() => {
-        return activeEvents.map(evt => {
+        return availableEvents.map(evt => {
             const pbTime = parseFloat(userProfile.pbs[evt as '100m' | '200m' | '400m']?.time || '0');
+            
+            // PAC Score logic based on event
             let pac = 50;
             if (pbTime > 0) {
                 if (evt === '100m') pac = Math.max(50, Math.min(99, 100 - (pbTime - 9.5) * 12));
-                else pac = 75;
+                else if (evt === '200m') pac = Math.max(50, Math.min(99, 100 - (pbTime - 19.3) * 6));
+                else pac = Math.max(50, Math.min(99, 100 - (pbTime - 43.0) * 3));
             }
+            
             const lastTech = analysisHistory[0]?.score || 60;
             let form = 60;
             if (acwrStats) {
@@ -49,6 +54,16 @@ export const AthletePassport: React.FC = () => {
         });
     }, [userProfile, analysisHistory, acwrStats]);
 
+    const nextSlide = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setActiveSlide((prev) => (prev + 1) % availableEvents.length);
+    };
+
+    const prevSlide = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setActiveSlide((prev) => (prev - 1 + availableEvents.length) % availableEvents.length);
+    };
+
     return (
         <div className="relative w-full max-w-[280px] mx-auto">
             <div className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-2 border-yellow-500/40 rounded-[2rem] p-5 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500">
@@ -56,11 +71,12 @@ export const AthletePassport: React.FC = () => {
                 
                 <div className="flex justify-between items-start mb-4 relative z-10">
                     <div className="cursor-pointer group" onClick={() => setShowInfo('OVR')}>
-                        <div className="text-5xl font-black text-yellow-500 tracking-tighter drop-shadow-2xl">
+                        <div className="text-5xl font-black text-yellow-500 tracking-tighter drop-shadow-2xl flex items-baseline gap-1">
                             {scores[activeSlide]?.ovr}
+                            <span className="text-[10px] text-yellow-500/50 uppercase font-black tracking-widest">OVR</span>
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
-                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">{activeEvents[activeSlide]}</span>
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">{availableEvents[activeSlide]} Sprint</span>
                         </div>
                     </div>
                     <div className="p-2 bg-yellow-500/10 rounded-xl border border-yellow-500/20">
@@ -68,8 +84,17 @@ export const AthletePassport: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="relative w-20 h-20 mx-auto mb-4">
+                <div className="relative w-20 h-20 mx-auto mb-4 group">
                     <div className="absolute inset-0 bg-yellow-500/10 blur-xl rounded-full"></div>
+                    
+                    {/* Event Navigation Arrows */}
+                    <button onClick={prevSlide} className="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 text-slate-600 hover:text-yellow-500 transition-colors">
+                        <ChevronLeft size={24} />
+                    </button>
+                    <button onClick={nextSlide} className="absolute -right-8 top-1/2 -translate-y-1/2 p-1.5 text-slate-600 hover:text-yellow-500 transition-colors">
+                        <ChevronRight size={24} />
+                    </button>
+
                     <div className="relative w-full h-full rounded-full bg-slate-800 border-2 border-slate-700 shadow-xl flex items-center justify-center overflow-hidden">
                         <span className="text-3xl font-black text-slate-500">
                             {userProfile.name?.charAt(0).toUpperCase() || "I"}
@@ -81,6 +106,11 @@ export const AthletePassport: React.FC = () => {
                     <h3 className="text-base font-black text-white uppercase tracking-tight truncate">
                         {userProfile.name || "INVITADO"}
                     </h3>
+                    <div className="flex justify-center gap-1 mt-1.5">
+                        {availableEvents.map((_, i) => (
+                            <div key={i} className={`h-1 rounded-full transition-all ${activeSlide === i ? 'w-4 bg-yellow-500' : 'w-1 bg-slate-700'}`}></div>
+                        ))}
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-y-2 gap-x-4 relative z-10 border-t border-white/5 pt-3">

@@ -1,7 +1,8 @@
+
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { BrainCircuit, Activity, RefreshCw, Key, ShieldCheck, ArrowRight, CalendarCheck, AlertTriangle, Zap, Stethoscope, Plus } from 'lucide-react';
+import { BrainCircuit, Activity, RefreshCw, Key, ShieldCheck, ArrowRight, CalendarCheck, AlertTriangle, Zap, Stethoscope, Plus, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { generateNexusInsight } from '../services/geminiService';
 import { AthletePassport } from './AthletePassport';
@@ -35,11 +36,7 @@ export const HomeDashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    if (process.env.API_KEY) {
-      fetchNexus();
-    } else {
-      setErrorStatus('key_missing');
-    }
+    fetchNexus();
   }, [logs.length, lastAnalysis]);
 
   const handleOpenKey = async () => {
@@ -47,7 +44,6 @@ export const HomeDashboard: React.FC = () => {
       if (aistudio) {
           await aistudio.openSelectKey();
           setErrorStatus('none');
-          // Give it a moment for the env variable to be refreshed by the platform
           setTimeout(() => fetchNexus(true), 500);
       }
   };
@@ -60,18 +56,36 @@ export const HomeDashboard: React.FC = () => {
           type: 'Recovery' as any,
           location: 'Clínica / Fisioterapia',
           time: 0,
-          notes: 'Bitácora de Terapia: Sesión de descarga para optimizar recuperación.'
+          notes: 'Bitácora de Terapia: Sesión de descarga registrada.'
       };
       addLog(therapyLog);
       setShowTherapyModal(false);
-      alert("✅ Sesión de Terapia registrada. Tu índice de carga se actualizará.");
+      alert("✅ Sesión de Terapia registrada.");
   };
 
+  /**
+   * FIX: Robust day matching to ensure training is always visible regardless of AI language
+   */
   const todaysSession = (() => {
-      if (!currentPlan) return null;
-      const days = ['dom', 'lun', 'mar', 'mie', 'jue', 'vie', 'sab'];
-      const dayName = days[new Date().getDay()];
-      return currentPlan.sessions.find(s => s.day.toLowerCase().includes(dayName));
+      if (!currentPlan?.sessions) return null;
+      const dayIndex = new Date().getDay();
+      
+      // Mapping JS Day Index to multiple possible search strings
+      const daySearchTerms: Record<number, string[]> = {
+          0: ['dom', 'sun'],
+          1: ['lun', 'mon'],
+          2: ['mar', 'tue'],
+          3: ['mie', 'wed'],
+          4: ['jue', 'thu'],
+          5: ['vie', 'fri'],
+          6: ['sab', 'sat']
+      };
+
+      const terms = daySearchTerms[dayIndex];
+      return currentPlan.sessions.find(s => {
+          const dayVal = s.day.toLowerCase();
+          return terms.some(term => dayVal.includes(term));
+      });
   })();
 
   const getStatusColor = (status: string) => {
@@ -87,7 +101,6 @@ export const HomeDashboard: React.FC = () => {
     <div className="space-y-4 animate-in fade-in duration-500 pb-10 px-2">
       <div className="mb-2"><AthletePassport /></div>
 
-      {/* QUICK ACTIONS */}
       <div className="grid grid-cols-2 gap-3">
           <button onClick={() => setShowTherapyModal(true)} className="bg-slate-900 border border-slate-800 p-3 rounded-2xl flex items-center gap-3 hover:bg-slate-800 transition-all shadow-md group">
               <div className="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20 group-hover:bg-blue-500/20 transition-colors">
@@ -114,7 +127,7 @@ export const HomeDashboard: React.FC = () => {
           <div className="absolute top-0 right-0 p-4">
               <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10">
                   <div className={`h-1.5 w-1.5 rounded-full animate-pulse ${nexusInsight?.status === 'Peak' ? 'bg-emerald-400' : 'bg-purple-400'}`}></div>
-                  <span className="text-[8px] font-black uppercase tracking-widest text-white/80">Nexus Pro Intelligence</span>
+                  <span className="text-[8px] font-black uppercase tracking-widest text-white/80">Nexus Intelligence</span>
               </div>
           </div>
 
@@ -135,13 +148,13 @@ export const HomeDashboard: React.FC = () => {
           {errorStatus === 'key_missing' ? (
               <div className="py-6 text-center space-y-3 bg-black/20 rounded-2xl border border-white/5">
                   <Key size={24} className="mx-auto text-red-400 opacity-50"/>
-                  <p className="text-[10px] text-white/80 font-bold px-8 uppercase tracking-wider">Vincular API de Pago para Nexus Elite</p>
+                  <p className="text-[10px] text-white/80 font-bold px-8 uppercase tracking-wider">Requiere Clave de Pago para Nexus</p>
                   <button onClick={handleOpenKey} className="bg-white text-slate-950 text-[10px] font-black px-6 py-2.5 rounded-xl uppercase tracking-widest hover:bg-slate-200 shadow-xl transition-all">Configurar Key</button>
               </div>
           ) : loadingNexus ? (
               <div className="h-32 flex flex-col items-center justify-center gap-3">
                 <Activity className="animate-pulse text-purple-400" size={32} />
-                <p className="text-[9px] text-white/60 uppercase font-black tracking-[0.2em] animate-pulse">Analizando Datos Multimodales...</p>
+                <p className="text-[9px] text-white/60 uppercase font-black tracking-[0.2em] animate-pulse">Auditando Datos...</p>
               </div>
           ) : nexusInsight ? (
               <div className="relative z-10 space-y-3 animate-in slide-in-from-bottom-4">
@@ -162,8 +175,8 @@ export const HomeDashboard: React.FC = () => {
           )}
       </div>
 
-      {/* TRAINING PREVIEW */}
-      <div className="bg-slate-900 border border-slate-800 rounded-[2rem] p-5 shadow-xl overflow-hidden">
+      {/* TRAINING PREVIEW - FIXED VISIBILITY */}
+      <div className="bg-slate-900 border border-slate-800 rounded-[2rem] p-5 shadow-xl relative z-10 overflow-hidden">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
               <div className="p-2 bg-cyan-500/10 rounded-xl border border-cyan-500/20">
@@ -182,14 +195,14 @@ export const HomeDashboard: React.FC = () => {
                     <span className="px-2 py-0.5 rounded bg-slate-800 text-[8px] font-bold text-slate-400 uppercase border border-slate-700">{todaysSession.intensity} Intensity</span>
                 </div>
             </div>
-            <button onClick={() => navigate('/plan')} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-2xl text-xs font-black border border-slate-700 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg">
-              Detalles del Plan <ArrowRight size={14}/>
+            <button onClick={() => navigate('/plan')} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-3.5 rounded-2xl text-xs font-black border border-slate-700 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg">
+              Ver Detalles del Plan <ArrowRight size={14}/>
             </button>
           </div>
         ) : (
           <div className="text-center py-6 space-y-3">
             <p className="text-xs text-slate-500 font-medium italic">Sin sesión programada para hoy.</p>
-            <button onClick={() => navigate('/plan')} className="bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-cyan-900/30">Ir al Planificador</button>
+            <button onClick={() => navigate('/plan')} className="bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-cyan-900/30">Abrir Planificador</button>
           </div>
         )}
       </div>
@@ -202,9 +215,9 @@ export const HomeDashboard: React.FC = () => {
                       <Stethoscope size={32} className="text-blue-400" />
                   </div>
                   <h4 className="text-xl font-black text-white mb-2 uppercase tracking-tight">Bitácora de Terapia</h4>
-                  <p className="text-xs text-slate-400 leading-relaxed mb-6">¿Has realizado una sesión de descarga o fisioterapia hoy? Registrarlo informará a la IA que estás en fase de recuperación, ajustando el índice ACWR.</p>
+                  <p className="text-xs text-slate-400 leading-relaxed mb-6">Registra tu descarga para informar al Nexus que estás en fase de recuperación.</p>
                   <div className="flex flex-col gap-3">
-                      <button onClick={handleTherapyLog} className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl uppercase tracking-widest text-[10px] hover:bg-blue-500 transition-all shadow-xl shadow-blue-900/40">Registrar Recuperación</button>
+                      <button onClick={handleTherapyLog} className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl uppercase tracking-widest text-[10px] hover:bg-blue-500 transition-all">Registrar Ahora</button>
                       <button onClick={() => setShowTherapyModal(false)} className="w-full bg-slate-800 text-slate-400 font-bold py-3 rounded-2xl uppercase tracking-widest text-[10px]">Cancelar</button>
                   </div>
               </div>
