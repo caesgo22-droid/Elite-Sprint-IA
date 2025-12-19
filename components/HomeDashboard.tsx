@@ -149,12 +149,12 @@ const HomeDashboard: React.FC = () => {
         ) : nexusInsight ? (
           <div className="relative z-10 space-y-3 animate-in slide-in-from-bottom-4">
             <div className="flex items-center gap-2">
-              <span className="text-xl font-black text-white tracking-tighter uppercase">{nexusInsight.status}</span>
+              <span className="text-xl font-black text-white tracking-tighter uppercase">{typeof nexusInsight.status === 'string' ? nexusInsight.status : 'Peak'}</span>
               <div className="h-px bg-white/10 flex-1"></div>
             </div>
-            <h3 className="text-xs font-bold text-white leading-tight italic">"{nexusInsight.headline}"</h3>
+            <h3 className="text-xs font-bold text-white leading-tight italic">"{typeof nexusInsight.headline === 'string' ? nexusInsight.headline : 'Analizando microciclo...'}"</h3>
             <div className="p-3 bg-black/20 rounded-2xl border border-white/5">
-              <p className="text-[10px] text-white/80 leading-relaxed font-medium line-clamp-3">{nexusInsight.analysis}</p>
+              <p className="text-[10px] text-white/80 leading-relaxed font-medium line-clamp-3">{typeof nexusInsight.analysis === 'string' ? nexusInsight.analysis : JSON.stringify(nexusInsight.analysis)}</p>
             </div>
           </div>
         ) : (
