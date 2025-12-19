@@ -74,7 +74,14 @@ export const generateNexusInsight = async (logs: any[], readiness: any, analysis
             Carga (ACWR): ${acwr?.ratio}.
             
             INSTRUCCIÓN CRÍTICA: Detecta "Fatiga Técnica Silenciosa". 
-            Si la Velocidad del Centro de Masas (VCoM) ha bajado sistemáticamente o el Tiempo de Contacto (GCT) ha subido en los últimos 3 videos, marca status: "Warning" y alerta sobre riesgo de lesión.`;
+            Si la Velocidad del Centro de Masas (VCoM) ha bajado sistemáticamente o el Tiempo de Contacto (GCT) ha subido en los últimos 3 videos, marca status: "Warning" y alerta sobre riesgo de lesión.
+            
+            FORMATO DE RESPUESTA JSON OBLIGATORIO:
+            {
+              "status": "Peak" | "Fatigue" | "Warning" | "Recovery",
+              "headline": "Título corto y contundente (ej: RIESGO DE SOBRECARGA)",
+              "analysis": "Análisis detallado de 2-3 frases explicando el porqué en español."
+            }`;
 
     try {
         const result = await model.generateContent({

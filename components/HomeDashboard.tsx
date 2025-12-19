@@ -188,7 +188,7 @@ const HomeDashboard: React.FC = () => {
               </div>
             </div>
 
-            <div className="space-y-3 bg-black/20 rounded-2xl p-4 border border-slate-800/50">
+            <div className="space-y-3 bg-black/20 rounded-2xl p-4 border border-slate-800/50 max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-slate-700">
               {todaysSession.warmup && todaysSession.warmup.length > 0 && (
                 <div className="space-y-1">
                   <div className="flex gap-2 items-center text-[8px] font-black text-emerald-400 uppercase tracking-widest">
