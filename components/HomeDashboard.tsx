@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { BrainCircuit, Activity, RefreshCw, Key, ShieldCheck, ArrowRight, CalendarCheck, AlertTriangle, Zap, Stethoscope, Plus, ChevronRight, History, X } from 'lucide-react';
+import { BrainCircuit, Activity, RefreshCw, Key, ShieldCheck, ArrowRight, CalendarCheck, AlertTriangle, Zap, Stethoscope, Plus, ChevronRight, History, X, Trophy, Dumbbell } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { generateNexusInsight } from '../services/geminiService';
 import { AthletePassport } from './AthletePassport';
@@ -25,7 +25,7 @@ const HomeDashboard: React.FC = () => {
     setErrorStatus('none');
     try {
       const readiness = {
-        fatigue: 5, // Fallback if no recent daily readiness
+        fatigue: 5,
         sleep: 7,
         restingHR: userProfile.restingHR,
         hrv: userProfile.hrv,
@@ -137,14 +137,14 @@ const HomeDashboard: React.FC = () => {
             </div>
           </div>
           <button onClick={() => fetchNexus(true)} disabled={loadingNexus} className="p-1 bg-black/20 rounded-full text-white/50 hover:text-white transition-colors">
-            <RefreshCw size={12} className={loadingNexus ? 'animate-spin' : ''} />
+            <RefreshCw size={14} className={loadingNexus ? 'animate-spin' : ''} />
           </button>
         </div>
 
         {loadingNexus ? (
-          <div className="h-32 flex flex-col items-center justify-center gap-3">
-            <Activity className="animate-pulse text-purple-400" size={32} />
-            <p className="text-[9px] text-white/60 uppercase font-black tracking-[0.2em] animate-pulse">Analizando Microciclo...</p>
+          <div className="py-10 flex flex-col items-center justify-center space-y-3 relative z-10">
+            <div className="w-10 h-10 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin"></div>
+            <p className="text-[10px] text-purple-300 font-bold uppercase tracking-widest animate-pulse">Sincronizando Nexus...</p>
           </div>
         ) : nexusInsight ? (
           <div className="relative z-10 space-y-3 animate-in slide-in-from-bottom-4">
@@ -152,9 +152,13 @@ const HomeDashboard: React.FC = () => {
               <span className="text-xl font-black text-white tracking-tighter uppercase">{typeof nexusInsight.status === 'string' ? nexusInsight.status : 'Peak'}</span>
               <div className="h-px bg-white/10 flex-1"></div>
             </div>
-            <h3 className="text-xs font-bold text-white leading-tight italic">"{typeof nexusInsight.headline === 'string' ? nexusInsight.headline : 'Analizando microciclo...'}"</h3>
-            <div className="p-3 bg-black/20 rounded-2xl border border-white/5">
-              <p className="text-[10px] text-white/80 leading-relaxed font-medium line-clamp-3">{typeof nexusInsight.analysis === 'string' ? nexusInsight.analysis : JSON.stringify(nexusInsight.analysis)}</p>
+            <h3 className="text-[10px] font-black text-white leading-tight uppercase tracking-tight">
+              {typeof nexusInsight.headline === 'string' ? nexusInsight.headline : 'Estado del Microciclo'}
+            </h3>
+            <div className="p-3 bg-black/30 rounded-2xl border border-white/5 shadow-inner">
+              <p className="text-[10px] text-white/90 leading-relaxed font-medium line-clamp-4">
+                {typeof nexusInsight.analysis === 'string' ? nexusInsight.analysis : 'Analizando tendencias biomecánicas y carga de entrenamiento...'}
+              </p>
             </div>
           </div>
         ) : (
@@ -171,30 +175,78 @@ const HomeDashboard: React.FC = () => {
             <div className="p-2 bg-cyan-500/10 rounded-xl border border-cyan-500/20">
               <CalendarCheck size={18} className="text-cyan-400" />
             </div>
-            <h3 className="font-bold text-base text-white">Entrenamiento de Hoy</h3>
+            <h3 className="font-bold text-[13px] text-white uppercase tracking-tight leading-none">Hoy</h3>
           </div>
         </div>
 
         {todaysSession ? (
           <div className="space-y-4">
             <div>
-              <p className="text-base font-black text-white leading-tight tracking-tight line-clamp-2 uppercase">{todaysSession.focus}</p>
+              <p className="text-[14px] font-black text-white leading-tight tracking-tighter line-clamp-2 uppercase">{todaysSession.focus}</p>
               <div className="flex gap-2 mt-2">
                 <span className="px-2 py-0.5 rounded bg-slate-800 text-[8px] font-bold text-slate-400 uppercase border border-slate-700">{todaysSession.intensity} Intensity</span>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-2 bg-black/20 rounded-2xl p-3 border border-slate-800/50">
+            <div className="space-y-3 bg-black/20 rounded-2xl p-4 border border-slate-800/50">
               {todaysSession.warmup && todaysSession.warmup.length > 0 && (
-                <div className="flex gap-2 items-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-500"></div>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase truncate">Warmup: {todaysSession.warmup[0]}...</span>
+                <div className="space-y-1">
+                  <div className="flex gap-2 items-center text-[8px] font-black text-emerald-400 uppercase tracking-widest">
+                    <Zap size={10} /> Calentamiento
+                  </div>
+                  {todaysSession.warmup.map((item: string, i: number) => (
+                    <div key={i} className="pl-4 border-l border-emerald-500/30">
+                      <span className="text-[10px] text-slate-300 font-medium">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {todaysSession.drills && todaysSession.drills.length > 0 && (
+                <div className="space-y-1">
+                  <div className="flex gap-2 items-center text-[8px] font-black text-cyan-400 uppercase tracking-widest">
+                    <Activity size={10} /> Técnica
+                  </div>
+                  {todaysSession.drills.map((item: string, i: number) => (
+                    <div key={i} className="pl-4 border-l border-cyan-500/30">
+                      <span className="text-[10px] text-slate-300 font-medium">{item}</span>
+                    </div>
+                  ))}
                 </div>
               )}
               {todaysSession.mainSet && todaysSession.mainSet.length > 0 && (
-                <div className="flex gap-2 items-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
-                  <span className="text-[10px] text-slate-200 font-bold uppercase truncate">Main: {todaysSession.mainSet[0]}</span>
+                <div className="space-y-1">
+                  <div className="flex gap-2 items-center text-[8px] font-black text-orange-400 uppercase tracking-widest">
+                    <Trophy size={10} /> Principal
+                  </div>
+                  {todaysSession.mainSet.map((item: string, i: number) => (
+                    <div key={i} className="pl-4 border-l border-orange-500/30">
+                      <span className="text-[10px] text-white font-bold">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {todaysSession.gymRoutine && todaysSession.gymRoutine.length > 0 && (
+                <div className="space-y-1">
+                  <div className="flex gap-2 items-center text-[8px] font-black text-purple-400 uppercase tracking-widest">
+                    <Dumbbell size={10} /> Gym / Fuerza
+                  </div>
+                  {todaysSession.gymRoutine.map((item: string, i: number) => (
+                    <div key={i} className="pl-4 border-l border-purple-500/30">
+                      <span className="text-[10px] text-slate-300 font-medium">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {todaysSession.cooldown && todaysSession.cooldown.length > 0 && (
+                <div className="space-y-1">
+                  <div className="flex gap-2 items-center text-[8px] font-black text-blue-400 uppercase tracking-widest">
+                    <History size={10} /> Vuelta a la Calma
+                  </div>
+                  {todaysSession.cooldown.map((item: string, i: number) => (
+                    <div key={i} className="pl-4 border-l border-blue-500/30">
+                      <span className="text-[10px] text-slate-300 font-medium">{item}</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

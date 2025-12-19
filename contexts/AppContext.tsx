@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import { UserProfile, TrainingPlan, PerformanceLog, ChatMessage, BiomechanicalAnalysis, NexusInsight, LoadStats } from '../types';
-import { auth, saveUserProfile, saveTrainingPlan, addPerformanceLog, updatePerformanceLog, deletePerformanceLog, fetchUserData, saveAnalysisToHistory, getAnalysisHistory, isInitialized, archivePlan, getPlanHistory } from '../services/firebase';
+import { auth, saveUserProfile, saveTrainingPlan, addPerformanceLog, updatePerformanceLog, deletePerformanceLog, fetchUserData, saveAnalysisToHistory, getAnalysisHistory, isInitialized, archivePlan, getPlanHistory, deleteAnalysisFromHistory } from '../services/firebase';
 import * as firebaseAuth from 'firebase/auth';
 import { calculateACWR } from '../utils/loadCalculator';
 import { Language, TRANSLATIONS } from '../utils/translations';
@@ -41,6 +41,7 @@ interface AppContextType {
   planHistory: TrainingPlan[];
   nexusInsight: NexusInsight | null;
   setNexusInsight: (insight: NexusInsight | null) => void;
+  deleteAnalysis: (id: string) => void;
 
   viewingAthleteId: string | null;
   switchAthlete: (uid: string | null) => void;
@@ -297,6 +298,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  const deleteAnalysis = (id: string) => {
+    setAnalysisHistory(prev => prev.filter(a => a.id !== id));
+    if (targetId && isInitialized) deleteAnalysisFromHistory(targetId, id);
+  };
+
   const contextValue = useMemo(() => ({
     user,
     loadingAuth,
@@ -329,7 +335,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     switchAthlete,
     refreshUserData,
     updateRoster,
-    loginAsGuest
+    loginAsGuest,
+    deleteAnalysis
   }), [
     user,
     loadingAuth,

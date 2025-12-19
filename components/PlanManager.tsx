@@ -642,21 +642,38 @@ const PlanManager: React.FC = () => {
                             <button onClick={() => setViewingRecovery(null)} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
                         </div>
                         <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
-                            <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Score de Recuperación</div>
-                            <div className="text-3xl font-black text-white">{viewingRecovery.score}%</div>
+                            <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Tipo de Estresor</div>
+                            <div className="text-3xl font-black text-white uppercase">{viewingRecovery.sessionType}</div>
                         </div>
                         <div className="space-y-4">
                             <div>
-                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Recomendación</h4>
-                                <p className="text-sm text-slate-200 font-medium leading-relaxed italic">"{viewingRecovery.recommendation}"</p>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                {viewingRecovery.actions?.map((act: string, i: number) => (
-                                    <div key={i} className="bg-slate-800/50 border border-slate-700 p-3 rounded-xl text-[10px] font-bold text-white uppercase flex items-center gap-2">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                                        {act}
+                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Nutrición & Hidratación</h4>
+                                <div className="grid grid-cols-3 gap-2 mb-3">
+                                    <div className="bg-slate-800 p-2 rounded-xl text-center">
+                                        <div className="text-[8px] text-slate-400 uppercase font-bold">Carbos</div>
+                                        <div className="text-xs font-black text-white">{viewingRecovery.nutrition.carbs}</div>
                                     </div>
-                                ))}
+                                    <div className="bg-slate-800 p-2 rounded-xl text-center">
+                                        <div className="text-[8px] text-slate-400 uppercase font-bold">Prot</div>
+                                        <div className="text-xs font-black text-white">{viewingRecovery.nutrition.protein}</div>
+                                    </div>
+                                    <div className="bg-slate-800 p-2 rounded-xl text-center">
+                                        <div className="text-[8px] text-slate-400 uppercase font-bold">H2O</div>
+                                        <div className="text-xs font-black text-white">{viewingRecovery.nutrition.hydration}</div>
+                                    </div>
+                                </div>
+                                <p className="text-[11px] text-slate-300 italic mb-4 leading-snug">"{viewingRecovery.nutrition.notes}"</p>
+                            </div>
+                            <div>
+                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Protocolos Recomendados</h4>
+                                <div className="grid grid-cols-1 gap-2">
+                                    {viewingRecovery.protocols?.map((protocol: string, i: number) => (
+                                        <div key={i} className="bg-slate-800/50 border border-slate-700 p-3 rounded-xl text-[10px] font-bold text-white uppercase flex items-center gap-2">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                            {protocol}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                         <button onClick={() => setViewingRecovery(null)} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-4 rounded-2xl uppercase tracking-widest text-xs transition-all">Entendido</button>

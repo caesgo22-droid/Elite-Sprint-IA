@@ -40,18 +40,18 @@ try {
   // Check if config is valid to prevent crash
   // IF keys are missing, we don't throw, we just log and stay uninitialized.
   if (firebaseConfig.apiKey) {
-      if (!getApps().length) {
-        app = initializeApp(firebaseConfig);
-      } else {
-        app = getApp();
-      }
+    if (!getApps().length) {
+      app = initializeApp(firebaseConfig);
+    } else {
+      app = getApp();
+    }
 
-      auth = getAuth(app);
-      db = getFirestore(app);
-      googleProvider = new GoogleAuthProvider();
-      isInitialized = true;
+    auth = getAuth(app);
+    db = getFirestore(app);
+    googleProvider = new GoogleAuthProvider();
+    isInitialized = true;
   } else {
-      console.warn("🔥 Firebase config missing. App will run in offline mode (UI Only).");
+    console.warn("🔥 Firebase config missing. App will run in offline mode (UI Only).");
   }
 
 } catch (error) {
@@ -64,20 +64,20 @@ export { auth, db, googleProvider, isInitialized };
 
 export const saveUserProfile = async (uid: string, profile: any) => {
   if (!db || !isInitialized) return;
-  try { await setDoc(doc(db, "users", uid), { profile }, { merge: true }); } catch(e) { console.error(e); }
+  try { await setDoc(doc(db, "users", uid), { profile }, { merge: true }); } catch (e) { console.error(e); }
 };
 
 export const saveTrainingPlan = async (uid: string, plan: any) => {
   if (!db || !isInitialized) return;
-  try { await setDoc(doc(db, "users", uid), { currentPlan: plan }, { merge: true }); } catch(e) { console.error(e); }
+  try { await setDoc(doc(db, "users", uid), { currentPlan: plan }, { merge: true }); } catch (e) { console.error(e); }
 };
 
 export const archivePlan = async (uid: string, plan: any) => {
   if (!db || !isInitialized) return;
-  try { 
-      const planPayload = { ...plan, archivedAt: new Date().toISOString() };
-      await addDoc(collection(db, "users", uid, "planHistory"), planPayload); 
-  } catch(e) { console.error(e); }
+  try {
+    const planPayload = { ...plan, archivedAt: new Date().toISOString() };
+    await addDoc(collection(db, "users", uid, "planHistory"), planPayload);
+  } catch (e) { console.error(e); }
 };
 
 export const getPlanHistory = async (uid: string) => {
@@ -86,22 +86,22 @@ export const getPlanHistory = async (uid: string) => {
     const q = query(collection(db, "users", uid, "planHistory"), orderBy("createdAt", "desc"));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  } catch(e) { console.error(e); return []; }
+  } catch (e) { console.error(e); return []; }
 };
 
 export const addPerformanceLog = async (uid: string, log: any) => {
   if (!db || !isInitialized) return;
-  try { await setDoc(doc(db, "users", uid, "logs", log.id), log); } catch(e) { console.error(e); }
+  try { await setDoc(doc(db, "users", uid, "logs", log.id), log); } catch (e) { console.error(e); }
 };
 
 export const updatePerformanceLog = async (uid: string, log: any) => {
   if (!db || !isInitialized) return;
-  try { await setDoc(doc(db, "users", uid, "logs", log.id), log, { merge: true }); } catch(e) { console.error(e); }
+  try { await setDoc(doc(db, "users", uid, "logs", log.id), log, { merge: true }); } catch (e) { console.error(e); }
 };
 
 export const deletePerformanceLog = async (uid: string, logId: string) => {
   if (!db || !isInitialized) return;
-  try { await deleteDoc(doc(db, "users", uid, "logs", logId)); } catch(e) { console.error(e); }
+  try { await deleteDoc(doc(db, "users", uid, "logs", logId)); } catch (e) { console.error(e); }
 };
 
 export const saveAnalysisToHistory = async (uid: string, analysis: any) => {
@@ -109,7 +109,12 @@ export const saveAnalysisToHistory = async (uid: string, analysis: any) => {
   try {
     const analysisPayload = { ...analysis, savedAt: new Date().toISOString() };
     await addDoc(collection(db, "users", uid, "analysisHistory"), analysisPayload);
-  } catch(e) { console.error(e); }
+  } catch (e) { console.error(e); }
+};
+
+export const deleteAnalysisFromHistory = async (uid: string, analysisId: string) => {
+  if (!db || !isInitialized) return;
+  try { await deleteDoc(doc(db, "users", uid, "analysisHistory", analysisId)); } catch (e) { console.error(e); }
 };
 
 export const getAnalysisHistory = async (uid: string) => {
@@ -118,7 +123,7 @@ export const getAnalysisHistory = async (uid: string) => {
     const q = query(collection(db, "users", uid, "analysisHistory"), orderBy("savedAt", "desc"));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  } catch(e) { console.error(e); return []; }
+  } catch (e) { console.error(e); return []; }
 };
 
 export const fetchUserData = async (uid: string) => {
@@ -127,7 +132,7 @@ export const fetchUserData = async (uid: string) => {
     const userDoc = await getDoc(doc(db, "users", uid));
     const logsQuery = query(collection(db, "users", uid, "logs"));
     const logsSnapshot = await getDocs(logsQuery);
-    
+
     const logs = logsSnapshot.docs.map(d => d.data());
     const userData = userDoc.exists() ? userDoc.data() : {};
 
@@ -136,7 +141,7 @@ export const fetchUserData = async (uid: string) => {
       currentPlan: userData.currentPlan || null,
       logs: logs || []
     };
-  } catch(e) { console.error(e); return { profile: null, currentPlan: null, logs: [] }; }
+  } catch (e) { console.error(e); return { profile: null, currentPlan: null, logs: [] }; }
 };
 
 // --- STAFF / COACH FEATURES ---
@@ -148,24 +153,24 @@ export const findAthleteByEmail = async (email: string) => {
     const usersRef = collection(db, "users");
     const q = query(usersRef, where("profile.email", "==", email.toLowerCase()), limit(1));
     const querySnapshot = await getDocs(q);
-    
+
     if (!querySnapshot.empty) {
-        const doc = querySnapshot.docs[0];
-        return { uid: doc.id, ...doc.data() as any };
+      const doc = querySnapshot.docs[0];
+      return { uid: doc.id, ...doc.data() as any };
     }
 
     // 2. Fallback: Try with original casing if provided (Edge case for old accounts)
     if (email !== email.toLowerCase()) {
-        const q2 = query(usersRef, where("profile.email", "==", email), limit(1));
-        const s2 = await getDocs(q2);
-        if (!s2.empty) {
-            const doc = s2.docs[0];
-            return { uid: doc.id, ...doc.data() as any };
-        }
+      const q2 = query(usersRef, where("profile.email", "==", email), limit(1));
+      const s2 = await getDocs(q2);
+      if (!s2.empty) {
+        const doc = s2.docs[0];
+        return { uid: doc.id, ...doc.data() as any };
+      }
     }
-    
+
     return null;
-  } catch(e) {
+  } catch (e) {
     console.error("Error searching athlete:", e);
     return null;
   }

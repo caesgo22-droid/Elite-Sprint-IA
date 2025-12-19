@@ -5,13 +5,13 @@ import { analyzeTechnique } from '../services/geminiService';
 import { LocalExpert } from '../services/localExpert';
 import { ElitePhysicsEngine } from '../utils/biomechanicsUtils';
 import { TrainingSession, UserProfile, Injury, BiomechanicalAnalysis } from '../types';
-import { Loader2, ScanLine, UploadCloud, History, Key, Info, X, ShieldCheck, Microscope, AlertCircle, Zap, Play, Edit3, CheckCheck } from 'lucide-react';
+import { Loader2, ScanLine, UploadCloud, History, Key, Info, X, ShieldCheck, Microscope, AlertCircle, Zap, Play, Edit3, CheckCheck, Trash2 } from 'lucide-react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 
 const getAIStudio = () => (window as any).aistudio;
 
 const VideoAnalyzer: React.FC = () => {
-    const { saveAnalysis, userProfile, updateAnalysis, analysisHistory } = useApp();
+    const { saveAnalysis, userProfile, updateAnalysis, analysisHistory, deleteAnalysis } = useApp();
     const [sessionAnalyses, setSessionAnalyses] = useState<BiomechanicalAnalysis[]>([]);
     const [loading, setLoading] = useState(false);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -109,7 +109,6 @@ const VideoAnalyzer: React.FC = () => {
                 if (result?.landmarks?.[0]) {
                     let landmarks = result.landmarks[0];
 
-                    // SIMPLE KEYPOINT SMOOTHING (Anti-Jitter)
                     if (tempHistory.length > 0) {
                         const prev = tempHistory[tempHistory.length - 1].landmarks;
                         landmarks = landmarks.map((curr: any, idx: number) => ({
@@ -137,31 +136,25 @@ const VideoAnalyzer: React.FC = () => {
             if (tempHistory.length === 0) throw new Error("Atleta no detectado.");
             setCapturedFrames(frames);
 
-            // 1. Detect 3 Key Phases
             const { touchdownFrame, maxFlexionFrame, toeOffFrame } = physicsEngine.current.detectSprintPhases(tempHistory);
 
-            // Default to middle frame if detection fails usually never happens if tempHistory > 0
             const phases = [
                 touchdownFrame || tempHistory[0],
                 maxFlexionFrame || tempHistory[Math.floor(tempHistory.length / 2)],
                 toeOffFrame || tempHistory[tempHistory.length - 1]
             ];
 
-            // 2. Generate Filmstrip (Stitch 3 frames)
             const filmstripCanvas = document.createElement('canvas');
             filmstripCanvas.width = video.videoWidth * 3;
             filmstripCanvas.height = video.videoHeight;
             const ctx = filmstripCanvas.getContext('2d');
 
             if (ctx) {
-                // Draw phases side-by-side
                 for (let k = 0; k < 3; k++) {
-                    // Seek video to exact phase time to get high-res frame
                     video.currentTime = phases[k].timestamp / 1000;
-                    await new Promise(r => setTimeout(r, 150)); // Wait for seek
+                    await new Promise(r => setTimeout(r, 150));
                     ctx.drawImage(video, k * video.videoWidth, 0, video.videoWidth, video.videoHeight);
 
-                    // Add label overlay
                     ctx.fillStyle = "rgba(0,0,0,0.5)";
                     ctx.fillRect(k * video.videoWidth, 0, 150, 40);
                     ctx.fillStyle = "white";
@@ -173,10 +166,8 @@ const VideoAnalyzer: React.FC = () => {
             const isMaster = analysisMode === 'External';
             const filmstripBase64 = filmstripCanvas.toDataURL('image/jpeg', 0.8).split(',')[1];
 
-            // For MASTER AUDIT, we send a sequence of frames to analyze temporal flow
             let payload: string[] = [filmstripBase64];
             if (isMaster && ctx) {
-                // Collect 5 key frames: TD, Intermediate, MF, Intermediate, TO
                 const masterP = [
                     phases[0],
                     tempHistory[Math.floor((tempHistory.indexOf(phases[0]) + tempHistory.indexOf(phases[1])) / 2)] || phases[0],
@@ -195,13 +186,12 @@ const VideoAnalyzer: React.FC = () => {
                 payload = masterFrames;
             }
 
-            const primaryFrame = phases[2]; // Use Toe-Off data for metrics
+            const primaryFrame = phases[2];
 
             setStatusMessage(isMaster ? "Auditoría Master Professional..." : "Analizando Técnica...");
 
             let analysis: BiomechanicalAnalysis | null = null;
             try {
-                // Send SEQUENCE (Master) or FILMSTRIP (Flash)
                 const aiResult = await analyzeTechnique(payload, primaryFrame.mechanics, primaryFrame.advanced, analysisMode);
                 if (!aiResult) throw new Error("IA offline o requiere configuración.");
 
@@ -225,13 +215,8 @@ const VideoAnalyzer: React.FC = () => {
             } catch (e: any) {
                 console.warn("Fallo en IA remota:", e.message);
                 setDegradedMode(true);
+                if (e.message?.includes("not found")) handleOpenKey();
 
-                // Si el error es de "no encontrado", abrir selector
-                if (e.message?.includes("not found")) {
-                    handleOpenKey();
-                }
-
-                // OFFLINE FALLBACK: Use Local Expert logic
                 const offlinePhases = {
                     touchdown: phases[0],
                     flexion: phases[1],
@@ -277,8 +262,6 @@ const VideoAnalyzer: React.FC = () => {
 
         const video = videoRef.current;
         const canvas = overlayRef.current;
-
-        // Match canvas to video's visual size
         const displayWidth = video.clientWidth;
         const displayHeight = video.clientHeight;
 
@@ -289,12 +272,11 @@ const VideoAnalyzer: React.FC = () => {
 
         ctx.clearRect(0, 0, displayWidth, displayHeight);
 
-        // MediaPipe Pose Connections
         const connections = [
-            [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // Upper
-            [11, 23], [12, 24], [23, 24], // Torso
-            [23, 25], [25, 27], [24, 26], [26, 28], // Legs
-            [27, 31], [28, 32], [27, 29], [28, 30] // Feet
+            [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
+            [11, 23], [12, 24], [23, 24],
+            [23, 25], [25, 27], [24, 26], [26, 28],
+            [27, 31], [28, 32], [27, 29], [28, 30]
         ];
 
         ctx.strokeStyle = '#22d3ee';
@@ -313,7 +295,7 @@ const VideoAnalyzer: React.FC = () => {
         });
 
         ctx.fillStyle = '#ff0000';
-        landmarks.forEach((p, i) => {
+        landmarks.forEach((p) => {
             if (p.visibility > 0.5) {
                 ctx.beginPath();
                 ctx.arc(p.x * displayWidth, p.y * displayHeight, 4, 0, 2 * Math.PI);
@@ -352,7 +334,7 @@ const VideoAnalyzer: React.FC = () => {
                             <Key size={10} /> Configurar Key
                         </button>
                     )}
-                    <button onClick={() => setViewHistory(!viewHistory)} className={`text-[9px] font-black uppercase tracking-widest px-4 py-2 rounded-full border transition-all \${viewHistory ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}>
+                    <button onClick={() => setViewHistory(!viewHistory)} className={`text-[9px] font-black uppercase tracking-widest px-4 py-2 rounded-full border transition-all ${viewHistory ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}>
                         <History size={12} className="inline mr-1" /> {viewHistory ? 'Cerrar Historial' : 'Historial'}
                     </button>
                     {viewHistory && selectedIds.length === 2 && (
@@ -547,11 +529,10 @@ const VideoAnalyzer: React.FC = () => {
                                         />
                                         <button
                                             onClick={() => updateAnalysis(analysis.id, { reviewStatus: 'Reviewed' })}
-                                            className={`w-full mt-3 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all \${
-                                                analysis.reviewStatus === 'Reviewed' 
-                                                ? 'bg-slate-800 text-slate-400 cursor-default' 
-                                                : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
-                                            }`}
+                                            className={`w-full mt-3 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${analysis.reviewStatus === 'Reviewed'
+                                                    ? 'bg-slate-800 text-slate-400 cursor-default'
+                                                    : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
+                                                }`}
                                         >
                                             {analysis.reviewStatus === 'Reviewed' ? 'Review Guardada' : 'Marcar como Revisado'}
                                         </button>
@@ -621,9 +602,8 @@ const VideoAnalyzer: React.FC = () => {
                             <div
                                 key={item.id}
                                 onClick={() => toggleSelection(item.id)}
-                                className={`group bg-slate-900 border transition-all rounded-3xl p-4 flex items-center justify-between cursor-pointer \${
-                                selectedIds.includes(item.id) ? 'border-indigo-500 bg-indigo-900/10' : 'border-slate-800 hover:border-slate-700'
-                              }`}
+                                className={`group bg-slate-900 border transition-all rounded-3xl p-4 flex items-center justify-between cursor-pointer ${selectedIds.includes(item.id) ? 'border-indigo-500 bg-indigo-900/10' : 'border-slate-800 hover:border-slate-700'
+                                    }`}
                             >
                                 <div className="flex items-center gap-4">
                                     <div className="relative">
@@ -639,9 +619,17 @@ const VideoAnalyzer: React.FC = () => {
                                         <div className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{new Date(item.id).toLocaleDateString()}</div>
                                     </div>
                                 </div>
-                                <div className="text-right">
-                                    <div className="text-lg font-black text-emerald-400">{item.score}</div>
-                                    <div className="text-[8px] text-slate-600 font-bold uppercase">SCORE</div>
+                                <div className="flex items-center gap-3">
+                                    <div className="text-right">
+                                        <div className="text-lg font-black text-emerald-400">{item.score}</div>
+                                        <div className="text-[8px] text-slate-600 font-bold uppercase">SCORE</div>
+                                    </div>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); if (confirm('¿Eliminar del historial?')) deleteAnalysis(item.id); }}
+                                        className="p-2 text-slate-700 hover:text-red-500 transition-colors"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
                                 </div>
                             </div>
                         ))}
