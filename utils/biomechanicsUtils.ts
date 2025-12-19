@@ -85,7 +85,7 @@ export class ElitePhysicsEngine {
 
     public calculateSprintMechanics(landmarks: any): { knee: MetricResult, hip: MetricResult, torso: MetricResult, shin: MetricResult } | null {
         const leftHip = landmarks[23]; const leftKnee = landmarks[25]; const leftAnkle = landmarks[27]; const leftShoulder = landmarks[11];
-        if(!leftHip || !leftKnee || !leftAnkle) return null;
+        if (!leftHip || !leftKnee || !leftAnkle) return null;
         const kneeRaw = calculateAngle(leftHip, leftKnee, leftAnkle);
         const hipRaw = calculateAngle(leftShoulder, leftHip, leftKnee);
         const verticalRef = { x: leftHip.x, y: leftHip.y - 0.5 };
@@ -132,22 +132,31 @@ export class ElitePhysicsEngine {
             forceFactor: 75,
             groundContactTime: `${gct.toFixed(3)}s`,
             airTime: `${air.toFixed(3)}s`,
-            frequency: `${(1/(gct+air)).toFixed(1)} Hz`
+            frequency: `${(1 / (gct + air)).toFixed(1)} Hz`
         };
     }
 
-    public detectSprintPhases(frameHistory: any[]): { maxFlexionFrame: any, maxExtensionFrame: any } {
-        if (frameHistory.length < 3) return { maxFlexionFrame: null, maxExtensionFrame: null };
-        let maxFlexionFrame = frameHistory[0]; let minKneeAngle = 180;
-        let maxExtensionFrame = frameHistory[0]; let maxHipAngle = 0;
+    public detectSprintPhases(frameHistory: any[]): { touchdownFrame: any, maxFlexionFrame: any, toeOffFrame: any } {
+        if (frameHistory.length < 5) return { touchdownFrame: null, maxFlexionFrame: null, toeOffFrame: null };
+
+        let maxFlexionFrame = frameHistory[0]; let minKneeAngle = 180; // Loading response
+        let maxExtensionFrame = frameHistory[0]; let maxHipAngle = 0;   // Toe-off
+        // Touchdown heuristic: Lowest Ankle Y (ground contact) before max flexion
+        let touchdownFrame = frameHistory[0]; let maxAnkleY = 0;
 
         frameHistory.forEach(frame => {
             const knee = calculateAngle(frame.landmarks[23], frame.landmarks[25], frame.landmarks[27]);
-            if (knee < minKneeAngle) { minKneeAngle = knee; maxFlexionFrame = frame; }
             const hip = calculateAngle(frame.landmarks[11], frame.landmarks[23], frame.landmarks[25]);
+            const ankleY = frame.landmarks[27].y; // higher val = lower on screen
+
+            if (knee < minKneeAngle) { minKneeAngle = knee; maxFlexionFrame = frame; }
             if (hip > maxHipAngle) { maxHipAngle = hip; maxExtensionFrame = frame; }
+            if (ankleY > maxAnkleY) { maxAnkleY = ankleY; touchdownFrame = frame; }
         });
-        return { maxFlexionFrame, maxExtensionFrame };
+
+        // Ensure logical order: TD -> Flexion -> Extension. 
+        // If sorting isn't possible due to short clip, we stick to the detected bests.
+        return { touchdownFrame, maxFlexionFrame, toeOffFrame: maxExtensionFrame };
     }
 }
 

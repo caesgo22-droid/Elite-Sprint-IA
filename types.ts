@@ -19,10 +19,10 @@ export interface UserProfile {
   email?: string; // Critical for Staff lookup
   role: 'athlete' | 'staff'; // NEW: Role definition
   roster?: string[]; // NEW: For staff, list of athlete UIDs they manage
-  
+
   age: number;
   height: number;
-  weight: number; 
+  weight: number;
   restingHR?: number;
   hrv?: number;
   events: string[];
@@ -51,13 +51,19 @@ export interface SessionFeedback {
 export interface TrainingSession {
   day: string;
   focus: string;
-  trackRoutine: string[];
+  trackRoutine?: string[];
   gymRoutine?: string[];
+  warmup?: string[];
+  drills?: string[];
+  mainSet?: string[];
+  cooldown?: string[];
   biomechanicsKpi: string;
   videoKeywords: string[];
   intensity: 'Low' | 'Medium' | 'High' | 'Max';
+  footwear?: 'Spikes' | 'Flats' | 'Other'; // NEW: Context for stiffness
+  wind?: 'Tail' | 'Head' | 'Neutral'; // NEW: Context for velocity
   feedback?: SessionFeedback;
-  coachNotes?: string; // NEW: Direct instruction from Staff/AI to Athlete specific for this day
+  coachNotes?: string;
 }
 
 export interface TrainingPlan {
@@ -83,8 +89,8 @@ export interface KineticMetrics {
 
 export interface BiomechanicalAnalysis {
   id: string;
-  type: 'Single' | 'Sequence';
-  category: 'Personal' | 'External'; 
+  type: 'Single' | 'Sequence' | 'Filmstrip' | 'MasterAudit';
+  category: 'Personal' | 'External';
   phaseDetected: string;
   jointAngles: { knee?: string; hip?: string; torso?: string; shin?: string; };
   kinetics?: KineticMetrics; // NEW: Advanced Physics Data
@@ -97,6 +103,7 @@ export interface BiomechanicalAnalysis {
   savedAt?: string;
   timestamp?: number; // Exact video timestamp for verification
   coachNotes?: string; // NEW: Staff feedback on video
+  reviewStatus?: 'Pending' | 'Reviewed'; // NEW: For remote coaching queue
 }
 
 export interface PerformanceLog {
@@ -126,10 +133,10 @@ export interface NexusInsight {
 }
 
 export interface LoadStats {
-    acuteLoad: number;   // 7-day average
-    chronicLoad: number; // 28-day average
-    ratio: number;       // ACWR
-    status: 'Óptimo' | 'Alto Riesgo' | 'Carga Baja';
+  acuteLoad: number;   // 7-day average
+  chronicLoad: number; // 28-day average
+  ratio: number;       // ACWR
+  status: 'Óptimo' | 'Alto Riesgo' | 'Carga Baja';
 }
 
 export interface Drill { name: string; category: 'Accel' | 'MaxV' | 'Plyo' | 'Strength' | 'Recovery'; intensity: number; videoKeyword: string; }

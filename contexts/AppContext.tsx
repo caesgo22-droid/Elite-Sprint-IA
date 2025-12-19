@@ -14,18 +14,18 @@ interface AppContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
   t: any;
-  
+
   // IDENTITY (The Logged In User - e.g., The Coach)
-  adminProfile: UserProfile; 
-  
+  adminProfile: UserProfile;
+
   // DATA CONTEXT (The Profile being viewed - e.g., The Athlete)
-  userProfile: UserProfile; 
-  
+  userProfile: UserProfile;
+
   updateProfile: (profile: UserProfile) => void;
   updateCompetitions: (competitions: { id: string; name: string; date: string }[]) => void;
   currentPlan: TrainingPlan | null;
   setPlan: (plan: TrainingPlan) => void;
-  updateSession: (dayName: string, updates: Partial<any>) => void; 
+  updateSession: (dayName: string, updates: Partial<any>) => void;
   logs: PerformanceLog[];
   addLog: (log: PerformanceLog) => void;
   editLog: (log: PerformanceLog) => void;
@@ -41,11 +41,12 @@ interface AppContextType {
   planHistory: TrainingPlan[];
   nexusInsight: NexusInsight | null;
   setNexusInsight: (insight: NexusInsight | null) => void;
-  
+
   viewingAthleteId: string | null;
   switchAthlete: (uid: string | null) => void;
   refreshUserData: () => void;
   updateRoster: (newRoster: string[]) => void;
+  loginAsGuest: () => void;
 }
 
 const defaultProfile: UserProfile = {
@@ -86,7 +87,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [adminProfile, setAdminProfile] = useState<UserProfile>(defaultProfile);
   // userProfile = The Effective Profile (Data Context) - Can be Admin or Athlete
   const [userProfile, setUserProfile] = useState<UserProfile>(defaultProfile);
-  
+
   const [currentPlan, setCurrentPlan] = useState<TrainingPlan | null>(null);
   const [planHistory, setPlanHistory] = useState<TrainingPlan[]>([]);
   const [logs, setLogs] = useState<PerformanceLog[]>([]);
@@ -100,43 +101,43 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Helper to process raw firebase data into clean state
   const processProfileData = (data: any) => {
-      const p = data.profile || {};
-      if (p.event && !p.events) p.events = [p.event];
-      if (!p.coaches) p.coaches = [];
-      if (!p.role) p.role = 'athlete';
-      return { ...defaultProfile, ...p };
+    const p = data.profile || {};
+    if (p.event && !p.events) p.events = [p.event];
+    if (!p.coaches) p.coaches = [];
+    if (!p.role) p.role = 'athlete';
+    return { ...defaultProfile, ...p };
   };
 
   const loadDataForId = async (uid: string, isIdentityLoad: boolean = false) => {
-      try {
-          const data = await fetchUserData(uid);
-          const profile = processProfileData(data);
+    try {
+      const data = await fetchUserData(uid);
+      const profile = processProfileData(data);
 
-          if (isIdentityLoad) {
-              setAdminProfile(profile);
-              // If we are not viewing anyone else, Admin is also the UserProfile
-              if (!viewingAthleteId) {
-                  setUserProfile(profile);
-              }
-          } else {
-              // We are loading a specific target (Athlete view)
-              setUserProfile(profile);
-          }
-
-          // Only load deep data (plans, logs) if it's the Active Context
-          if ((isIdentityLoad && !viewingAthleteId) || (!isIdentityLoad && viewingAthleteId === uid)) {
-              setCurrentPlan(data.currentPlan);
-              setLogs(data.logs || []);
-              const analysisHist = await getAnalysisHistory(uid);
-              setAnalysisHistory(analysisHist as BiomechanicalAnalysis[]);
-              const pHist = await getPlanHistory(uid);
-              setPlanHistory(pHist as TrainingPlan[]);
-              setNexusInsight(null);
-          }
-
-      } catch (error) {
-          console.error("Error fetching user data:", error);
+      if (isIdentityLoad) {
+        setAdminProfile(profile);
+        // If we are not viewing anyone else, Admin is also the UserProfile
+        if (!viewingAthleteId) {
+          setUserProfile(profile);
+        }
+      } else {
+        // We are loading a specific target (Athlete view)
+        setUserProfile(profile);
       }
+
+      // Only load deep data (plans, logs) if it's the Active Context
+      if ((isIdentityLoad && !viewingAthleteId) || (!isIdentityLoad && viewingAthleteId === uid)) {
+        setCurrentPlan(data.currentPlan);
+        setLogs(data.logs || []);
+        const analysisHist = await getAnalysisHistory(uid);
+        setAnalysisHistory(analysisHist as BiomechanicalAnalysis[]);
+        const pHist = await getPlanHistory(uid);
+        setPlanHistory(pHist as TrainingPlan[]);
+        setNexusInsight(null);
+      }
+
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+    }
   };
 
   useEffect(() => {
@@ -149,13 +150,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser: User) => {
       setUser(currentUser);
       if (currentUser) {
-          // 1. Always load the Identity (Admin/Self)
-          await loadDataForId(currentUser.uid, true);
-          
-          // 2. If we were viewing someone, reload that data too
-          if (viewingAthleteId) {
-              await loadDataForId(viewingAthleteId, false);
-          }
+        // 1. Always load the Identity (Admin/Self)
+        await loadDataForId(currentUser.uid, true);
+
+        // 2. If we were viewing someone, reload that data too
+        if (viewingAthleteId) {
+          await loadDataForId(viewingAthleteId, false);
+        }
       } else {
         setAdminProfile(defaultProfile);
         setUserProfile(defaultProfile);
@@ -169,30 +170,49 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [viewingAthleteId]);
 
   useEffect(() => {
-      if (currentPlan || planHistory.length > 0) {
-          const allPlans = currentPlan ? [currentPlan, ...planHistory] : planHistory;
-          const stats = calculateACWR(allPlans);
-          setAcwrStats(stats);
-      }
+    if (currentPlan || planHistory.length > 0) {
+      const allPlans = currentPlan ? [currentPlan, ...planHistory] : planHistory;
+      const stats = calculateACWR(allPlans);
+      setAcwrStats(stats);
+    }
   }, [currentPlan, planHistory]);
 
   const switchAthlete = (uid: string | null) => {
-      setViewingAthleteId(uid);
-      setLoadingAuth(true); // Artificial delay for smooth UX
-      // When switching to null (exit), we revert userProfile to adminProfile immediately
-      if (!uid && user) {
-          loadDataForId(user.uid, true).then(() => setLoadingAuth(false));
-      } else {
-          // React Effect will catch the ID change and load data
-          setTimeout(() => setLoadingAuth(false), 500);
-      }
+    setViewingAthleteId(uid);
+    setLoadingAuth(true); // Artificial delay for smooth UX
+    // When switching to null (exit), we revert userProfile to adminProfile immediately
+    if (!uid && user) {
+      loadDataForId(user.uid, true).then(() => setLoadingAuth(false));
+    } else {
+      // React Effect will catch the ID change and load data
+      setTimeout(() => setLoadingAuth(false), 500);
+    }
   };
-  
+
   const refreshUserData = () => {
-      if(user) {
-          loadDataForId(user.uid, true); // Refresh Identity
-          if (viewingAthleteId) loadDataForId(viewingAthleteId, false); // Refresh View
-      }
+    if (user) {
+      loadDataForId(user.uid, true); // Refresh Identity
+      if (viewingAthleteId) loadDataForId(viewingAthleteId, false); // Refresh View
+    }
+  };
+
+  const loginAsGuest = () => {
+    setUser({
+      uid: 'guest-123',
+      email: 'guest@elitesprint.ai',
+      displayName: 'Atleta Invitado',
+      isGuest: true
+    });
+    setAdminProfile({
+      ...defaultProfile,
+      name: 'Invitado',
+      email: 'guest@elitesprint.ai'
+    });
+    setUserProfile({
+      ...defaultProfile,
+      name: 'Invitado',
+      email: 'guest@elitesprint.ai'
+    });
   };
 
   const targetId = viewingAthleteId || user?.uid;
@@ -203,12 +223,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!viewingAthleteId) setAdminProfile(profile);
     if (targetId && isInitialized) saveUserProfile(targetId, profile);
   };
-  
+
   // SPECIAL: Update Roster (Only happens on Admin Profile)
   const updateRoster = (newRoster: string[]) => {
-      const newAdmin = { ...adminProfile, roster: newRoster };
-      setAdminProfile(newAdmin);
-      if (user?.uid && isInitialized) saveUserProfile(user.uid, newAdmin);
+    const newAdmin = { ...adminProfile, roster: newRoster };
+    setAdminProfile(newAdmin);
+    if (user?.uid && isInitialized) saveUserProfile(user.uid, newAdmin);
   };
 
   const updateCompetitions = (competitions: { id: string; name: string; date: string }[]) => {
@@ -220,8 +240,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // ... (Plan, Logs, etc functions remain same, they use targetId which is correct) ... 
   const setPlan = (plan: TrainingPlan) => {
     if (currentPlan && targetId && isInitialized) {
-        archivePlan(targetId, currentPlan);
-        setPlanHistory(prev => [currentPlan, ...prev]);
+      archivePlan(targetId, currentPlan);
+      setPlanHistory(prev => [currentPlan, ...prev]);
     }
     setCurrentPlan(plan);
     if (targetId && isInitialized) saveTrainingPlan(targetId, plan);
@@ -230,14 +250,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateSession = (dayName: string, updates: Partial<any>) => {
     if (!currentPlan) return;
     const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    
+
     const updatedSessions = currentPlan.sessions.map(s => {
       if (normalize(s.day).includes(normalize(dayName)) || normalize(dayName).includes(normalize(s.day))) {
         return { ...s, ...updates };
       }
       return s;
     });
-    
+
     const newPlan = { ...currentPlan, sessions: updatedSessions };
     setCurrentPlan(newPlan);
     if (targetId && isInitialized) saveTrainingPlan(targetId, newPlan);
@@ -247,7 +267,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setLogs(prev => [...prev, log]);
     if (targetId && isInitialized) addPerformanceLog(targetId, log);
   };
-  
+
   const editLog = (updatedLog: PerformanceLog) => {
     setLogs(prev => prev.map(log => log.id === updatedLog.id ? updatedLog : log));
     if (targetId && isInitialized) updatePerformanceLog(targetId, updatedLog);
@@ -267,7 +287,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const updateAnalysis = (id: string, updates: Partial<BiomechanicalAnalysis>) => {
-      setAnalysisHistory(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+    setAnalysisHistory(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+    // Persist to Firebase
+    if (targetId && isInitialized) {
+      const existing = analysisHistory.find(a => a.id === id);
+      if (existing) {
+        saveAnalysisToHistory(targetId, { ...existing, ...updates });
+      }
+    }
   };
 
   const contextValue = useMemo(() => ({
@@ -301,7 +328,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     viewingAthleteId,
     switchAthlete,
     refreshUserData,
-    updateRoster // Export this helper
+    updateRoster,
+    loginAsGuest
   }), [
     user,
     loadingAuth,
