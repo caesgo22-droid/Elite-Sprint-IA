@@ -5,9 +5,11 @@ import { findAthleteByEmail, fetchUserData, getPlanHistory, getAnalysisHistory }
 import { Users, Plus, Search, UserCircle2, Briefcase, Eye, LogOut, Activity, ArrowRight } from 'lucide-react';
 import { UserProfile } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
+import { useNavigate } from 'react-router-dom';
 
 const CoachDashboard: React.FC = () => {
     const { adminProfile, user, updateRoster, viewingAthleteId, switchAthlete, t } = useApp();
+    const navigate = useNavigate(); // Hook for navigation
     const [emailQuery, setEmailQuery] = useState('');
     const [searching, setSearching] = useState(false);
     const [rosterData, setRosterData] = useState<{ uid: string, profile: UserProfile, risk: 'High' | 'Low' | 'Optimal', pendingReviews: number, lastActive: string }[]>([]);
@@ -83,17 +85,17 @@ const CoachDashboard: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 mt-8 relative z-10">
-                        <button onClick={() => window.location.href = '/'} className="bg-white/10 hover:bg-white/20 border border-white/10 p-4 rounded-2xl text-left transition-all hover:scale-[1.02] group">
+                        <button onClick={() => navigate('/')} className="bg-white/10 hover:bg-white/20 border border-white/10 p-4 rounded-2xl text-left transition-all hover:scale-[1.02] group">
                             <Briefcase className="text-indigo-400 mb-2 group-hover:text-white transition-colors" size={24} />
                             <div className="text-xs font-bold text-indigo-200 uppercase">Dashboard</div>
                             <div className="text-sm font-black text-white">Ver Perfil Completo</div>
                         </button>
-                        <button onClick={() => window.location.href = '/analysis'} className="bg-white/10 hover:bg-white/20 border border-white/10 p-4 rounded-2xl text-left transition-all hover:scale-[1.02] group">
+                        <button onClick={() => navigate('/analysis')} className="bg-white/10 hover:bg-white/20 border border-white/10 p-4 rounded-2xl text-left transition-all hover:scale-[1.02] group">
                             <Eye className="text-purple-400 mb-2 group-hover:text-white transition-colors" size={24} />
                             <div className="text-xs font-bold text-purple-200 uppercase">Análisis</div>
                             <div className="text-sm font-black text-white">Revisar Videos</div>
                         </button>
-                        <button onClick={() => window.location.href = '/plan'} className="bg-white/10 hover:bg-white/20 border border-white/10 p-4 rounded-2xl text-left transition-all hover:scale-[1.02] group col-span-2">
+                        <button onClick={() => navigate('/plan')} className="bg-white/10 hover:bg-white/20 border border-white/10 p-4 rounded-2xl text-left transition-all hover:scale-[1.02] group col-span-2">
                             <Activity className="text-emerald-400 mb-2 group-hover:text-white transition-colors" size={24} />
                             <div className="flex justify-between items-end">
                                 <div>
@@ -109,7 +111,7 @@ const CoachDashboard: React.FC = () => {
                 <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Acciones Pendientes</h3>
                     {rosterData.find(r => r.uid === viewingAthleteId)?.pendingReviews ? (
-                        <div onClick={() => window.location.href = '/analysis'} className="bg-red-500/10 border border-red-500/30 p-4 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-red-500/20 transition-colors">
+                        <div onClick={() => navigate('/analysis')} className="bg-red-500/10 border border-red-500/30 p-4 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-red-500/20 transition-colors">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-red-500/20 rounded-lg text-red-400"><Eye size={20} /></div>
                                 <div>
