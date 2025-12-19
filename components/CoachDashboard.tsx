@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { findAthleteByEmail, fetchUserData, getPlanHistory, getAnalysisHistory } from '../services/firebase';
+import { findAthleteByEmail, fetchUserData, getPlanHistory, getAnalysisHistory, getStaffBriefings, addStaffBriefing, addBriefingReply } from '../services/firebase';
 import { Users, Plus, Search, UserCircle2, Briefcase, Eye, LogOut, Activity, ArrowRight } from 'lucide-react';
-import { UserProfile } from '../types';
+import { UserProfile, StaffBriefing, StaffReply } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,6 +14,58 @@ const CoachDashboard: React.FC = () => {
     const [searching, setSearching] = useState(false);
     const [rosterData, setRosterData] = useState<{ uid: string, profile: UserProfile, risk: 'High' | 'Low' | 'Optimal', pendingReviews: number, lastActive: string }[]>([]);
     const [loadingRoster, setLoadingRoster] = useState(false);
+
+    // Staff Round Table State
+    const [briefings, setBriefings] = useState<StaffBriefing[]>([]);
+    const [newBriefing, setNewBriefing] = useState('');
+    const [showBriefingForm, setShowBriefingForm] = useState(false);
+    const [selectedType, setSelectedType] = useState<'Strategy' | 'Physical' | 'Psychology' | 'Technique' | 'General'>('Strategy');
+    const [replyContent, setReplyContent] = useState<{ [key: string]: string }>({});
+
+    useEffect(() => {
+        if (viewingAthleteId) {
+            getStaffBriefings(viewingAthleteId).then((data: any[]) => setBriefings(data));
+        }
+    }, [viewingAthleteId]);
+
+    const handlePostBriefing = async () => {
+        if (!newBriefing.trim()) return;
+        const brief: StaffBriefing = {
+            id: Date.now().toString(),
+            athleteId: viewingAthleteId!,
+            authorId: adminProfile.uid || 'admin',
+            authorName: adminProfile.name || 'Staff',
+            role: adminProfile.role || 'Coach', // Fallback
+            content: newBriefing,
+            type: selectedType,
+            timestamp: new Date().toISOString(),
+            replies: []
+        };
+        await addStaffBriefing(viewingAthleteId!, brief);
+        setBriefings([brief, ...briefings]);
+        setNewBriefing('');
+        setShowBriefingForm(false);
+    };
+
+    const handleReply = async (briefingId: string) => {
+        const content = replyContent[briefingId];
+        if (!content?.trim()) return;
+
+        const reply: StaffReply = {
+            id: Date.now().toString(),
+            authorName: adminProfile.name || 'Staff',
+            role: adminProfile.role || 'Coach',
+            content: content,
+            timestamp: new Date().toISOString()
+        };
+
+        await addBriefingReply(viewingAthleteId!, briefingId, reply);
+
+        // Optimistic update
+        const updated = briefings.map(b => b.id === briefingId ? { ...b, replies: [...(b.replies || []), reply] } : b);
+        setBriefings(updated);
+        setReplyContent({ ...replyContent, [briefingId]: '' });
+    };
 
     useEffect(() => {
         const loadRoster = async () => {
@@ -124,6 +176,101 @@ const CoachDashboard: React.FC = () => {
                     ) : (
                         <div className="text-center py-6 text-slate-600 text-xs italic">No hay acciones pendientes para este atleta.</div>
                     )}
+                </div>
+
+                {/* STAFF ROUND TABLE SECTION */}
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 relative overflow-hidden">
+                    <div className="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 className="text-lg font-black text-white flex items-center gap-2 uppercase tracking-tighter">
+                                <Users className="text-cyan-400" size={20} /> Mesa Redonda
+                            </h3>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Sincronización de Staff</p>
+                        </div>
+                        <button onClick={() => setShowBriefingForm(!showBriefingForm)} className="bg-cyan-600 hover:bg-cyan-500 text-white p-2 rounded-xl transition-colors">
+                            <Plus size={20} />
+                        </button>
+                    </div>
+
+                    {showBriefingForm && (
+                        <div className="bg-slate-800 p-4 rounded-2xl mb-6 animate-in slide-in-from-top-4">
+                            <div className="flex gap-2 mb-3 overflow-x-auto pb-2">
+                                {['Strategy', 'Physical', 'Technique', 'Psychology'].map(type => (
+                                    <button
+                                        key={type}
+                                        onClick={() => setSelectedType(type as any)}
+                                        className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase border transition-all ${selectedType === type ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300' : 'border-slate-700 text-slate-500 hover:border-slate-600'}`}
+                                    >
+                                        {type}
+                                    </button>
+                                ))}
+                            </div>
+                            <textarea
+                                value={newBriefing}
+                                onChange={e => setNewBriefing(e.target.value)}
+                                placeholder="Comparte estrategia, objetivos o adjunta links..."
+                                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white placeholder-slate-600 focus:border-cyan-500 focus:outline-none h-24 resize-none mb-3"
+                            />
+                            <div className="flex justify-end">
+                                <button onClick={handlePostBriefing} className="bg-cyan-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-cyan-500">
+                                    Publicar Briefing
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="space-y-4 max-h-[500px] overflow-y-auto scrollbar-hide">
+                        {briefings.length === 0 ? (
+                            <div className="text-center py-8 text-slate-600 text-xs italic">
+                                No hay briefings de staff aún. Inicia la conversación.
+                            </div>
+                        ) : briefings.map(brief => (
+                            <div key={brief.id} className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4">
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-900 to-slate-900 border border-cyan-500/30 flex items-center justify-center text-xs font-bold text-cyan-400">
+                                            {brief.authorName.charAt(0)}
+                                        </div>
+                                        <div>
+                                            <div className="text-sm font-bold text-white">{brief.authorName}</div>
+                                            <div className="text-[10px] text-cyan-400 uppercase font-black tracking-wider">{brief.role} • {brief.type}</div>
+                                        </div>
+                                    </div>
+                                    <div className="text-[10px] text-slate-500">{new Date(brief.timestamp).toLocaleDateString()}</div>
+                                </div>
+
+                                <p className="text-sm text-slate-300 leading-relaxed mb-4 whitespace-pre-wrap">{brief.content}</p>
+
+                                {brief.replies && brief.replies.length > 0 && (
+                                    <div className="space-y-3 pl-4 border-l-2 border-slate-700 mb-4">
+                                        {brief.replies.map(reply => (
+                                            <div key={reply.id} className="text-xs">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="font-bold text-slate-200">{reply.authorName}</span>
+                                                    <span className="text-[9px] text-slate-500 uppercase">{reply.role}</span>
+                                                </div>
+                                                <p className="text-slate-400">{reply.content}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Complementar estrategia..."
+                                        value={replyContent[brief.id] || ''}
+                                        onChange={e => setReplyContent({ ...replyContent, [brief.id]: e.target.value })}
+                                        onKeyDown={e => e.key === 'Enter' && handleReply(brief.id)}
+                                        className="flex-1 bg-slate-900 rounded-lg border border-slate-700 px-3 py-2 text-xs text-white placeholder-slate-600 focus:border-slate-500 outline-none"
+                                    />
+                                    <button onClick={() => handleReply(brief.id)} className="p-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">
+                                        <ArrowRight size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
         );

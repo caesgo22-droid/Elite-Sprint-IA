@@ -175,3 +175,32 @@ export const findAthleteByEmail = async (email: string) => {
     return null;
   }
 }
+
+export const getStaffBriefings = async (athleteId: string) => {
+  if (!db || !isInitialized) return [];
+  try {
+    const q = query(collection(db, "users", athleteId, "staffBriefings"), orderBy("timestamp", "desc"));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (e) { console.error(e); return []; }
+};
+
+export const addStaffBriefing = async (athleteId: string, briefing: any) => {
+  if (!db || !isInitialized) return;
+  try {
+    await setDoc(doc(db, "users", athleteId, "staffBriefings", briefing.id), briefing);
+  } catch (e) { console.error(e); }
+};
+
+export const addBriefingReply = async (athleteId: string, briefingId: string, reply: any) => {
+  if (!db || !isInitialized) return;
+  try {
+    const briefingRef = doc(db, "users", athleteId, "staffBriefings", briefingId);
+    const briefingSnap = await getDoc(briefingRef);
+    if (briefingSnap.exists()) {
+      const current = briefingSnap.data();
+      const updatedReplies = [...(current.replies || []), reply];
+      await setDoc(briefingRef, { replies: updatedReplies }, { merge: true });
+    }
+  } catch (e) { console.error(e); }
+};

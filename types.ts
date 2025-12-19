@@ -142,3 +142,24 @@ export interface LoadStats {
 export interface Drill { name: string; category: 'Accel' | 'MaxV' | 'Plyo' | 'Strength' | 'Recovery'; intensity: number; videoKeyword: string; }
 export interface PhaseTemplate { name: string; focusPoints: string[]; weeklyStructure: { [day: string]: string }; }
 export interface Vector2D { x: number; y: number; }
+
+export interface StaffReply {
+  id: string;
+  authorName: string;
+  role: string;
+  content: string;
+  timestamp: string;
+}
+
+export interface StaffBriefing {
+  id: string;
+  athleteId: string;
+  authorId: string;
+  authorName: string;
+  role: string;
+  content: string;
+  attachments?: string[];
+  timestamp: string;
+  type: 'Strategy' | 'Physical' | 'Psychology' | 'Technique' | 'General';
+  replies?: StaffReply[];
+}
