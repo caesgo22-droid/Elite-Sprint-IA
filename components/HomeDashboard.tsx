@@ -17,9 +17,23 @@ const HomeDashboard: React.FC = () => {
   const [showTherapyHistory, setShowTherapyHistory] = useState(false);
 
   const fetchNexus = async (force: boolean = false) => {
+    const CACHE_KEY = 'nexus_cache_v1';
+    const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
+
     const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
     if (!apiKey && !force) return;
-    if (nexusInsight && !force) return;
+
+    // 1. Try to load from cache first if not forced
+    if (!force) {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const { timestamp, data } = JSON.parse(cached);
+        if (Date.now() - timestamp < CACHE_DURATION) {
+          setNexusInsight(data);
+          return; // Use valid cache
+        }
+      }
+    }
 
     setLoadingNexus(true);
     setErrorStatus('none');
@@ -31,11 +45,25 @@ const HomeDashboard: React.FC = () => {
         hrv: userProfile.hrv,
         recoveryLogs: logs.filter(l => l.type === 'Recovery').slice(-3)
       };
+
       const insight = await generateNexusInsight(logs, readiness, analysisHistory, acwrStats);
-      if (insight) setNexusInsight(insight);
+
+      if (insight) {
+        setNexusInsight(insight);
+        // Save to cache
+        localStorage.setItem(CACHE_KEY, JSON.stringify({
+          timestamp: Date.now(),
+          data: insight
+        }));
+      }
     } catch (error: any) {
       console.error("Nexus Insight Error:", error);
       setErrorStatus('error');
+      // If error (like 429), try to show old cache even if expired
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        setNexusInsight(JSON.parse(cached).data);
+      }
     } finally { setLoadingNexus(false); }
   };
 
