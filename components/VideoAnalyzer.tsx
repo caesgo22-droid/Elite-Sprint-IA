@@ -530,8 +530,8 @@ const VideoAnalyzer: React.FC = () => {
                                         <button
                                             onClick={() => updateAnalysis(analysis.id, { reviewStatus: 'Reviewed' })}
                                             className={`w-full mt-3 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${analysis.reviewStatus === 'Reviewed'
-                                                    ? 'bg-slate-800 text-slate-400 cursor-default'
-                                                    : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
+                                                ? 'bg-slate-800 text-slate-400 cursor-default'
+                                                : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
                                                 }`}
                                         >
                                             {analysis.reviewStatus === 'Reviewed' ? 'Review Guardada' : 'Marcar como Revisado'}
@@ -596,13 +596,53 @@ const VideoAnalyzer: React.FC = () => {
                             <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Historial Bio</h2>
                             <button onClick={() => setViewHistory(false)} className="p-2 bg-slate-800 rounded-full text-white"><X size={18} /></button>
                         </div>
+
+                        {/* Actions Toolbar */}
+                        {selectedIds.length > 0 && (
+                            <div className="sticky top-0 z-10 bg-indigo-600 text-white p-4 rounded-xl shadow-xl flex justify-between items-center animate-in slide-in-from-top-2">
+                                <span className="font-bold text-xs uppercase">{selectedIds.length} Seleccionados</span>
+                                <div className="flex gap-2">
+                                    {selectedIds.length === 1 && (
+                                        <button
+                                            onClick={() => {
+                                                const selected = analysisHistory.find(a => a.id === selectedIds[0]);
+                                                if (selected) {
+                                                    setActiveAnalysis(selected);
+                                                    setViewHistory(false);
+                                                }
+                                            }}
+                                            className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-xs font-black uppercase"
+                                        >
+                                            Ver Análisis
+                                        </button>
+                                    )}
+                                    {selectedIds.length === 2 && (
+                                        <button
+                                            onClick={() => {
+                                                setComparisonMode(true);
+                                                setViewHistory(false);
+                                            }}
+                                            className="bg-white text-indigo-600 px-4 py-2 rounded-lg text-xs font-black uppercase hover:bg-indigo-50"
+                                        >
+                                            Comparar
+                                        </button>
+                                    )}
+                                    <button onClick={() => setSelectedIds([])} className="p-2 hover:bg-white/10 rounded-lg"><X size={14} /></button>
+                                </div>
+                            </div>
+                        )}
+
                         {analysisHistory.length === 0 ? (
                             <div className="text-center py-20 text-slate-500 uppercase text-[10px] font-bold">No hay registros previos.</div>
                         ) : analysisHistory.map(item => (
                             <div
                                 key={item.id}
                                 onClick={() => toggleSelection(item.id)}
-                                className={`group bg-slate-900 border transition-all rounded-3xl p-4 flex items-center justify-between cursor-pointer ${selectedIds.includes(item.id) ? 'border-indigo-500 bg-indigo-900/10' : 'border-slate-800 hover:border-slate-700'
+                                className={`group bg-slate-900 border transition-all rounded-3xl p-4 flex items-center justify-between cursor-pointer ${selectedIds.includes(item.id)
+                                        ? 'border-indigo-500 bg-indigo-900/10'
+                                        : item.reviewStatus === 'Pending'
+                                            ? 'border-indigo-500/50 hover:border-indigo-400'
+                                            : 'border-slate-800 hover:border-slate-700'
                                     }`}
                             >
                                 <div className="flex items-center gap-4">
@@ -610,13 +650,18 @@ const VideoAnalyzer: React.FC = () => {
                                         <img src={item.thumbnail} className="w-16 h-10 object-cover rounded-lg border border-slate-800" />
                                         {selectedIds.includes(item.id) && (
                                             <div className="absolute -top-2 -right-2 bg-indigo-500 text-white rounded-full p-1 border-2 border-slate-950">
-                                                <ShieldCheck size={10} />
+                                                <CheckCheck size={10} />
                                             </div>
+                                        )}
+                                        {item.reviewStatus === 'Pending' && !selectedIds.includes(item.id) && (
+                                            <div className="absolute -top-2 -right-2 bg-red-500 rounded-full w-3 h-3 border-2 border-slate-950 animate-pulse" title="Pendiente de revisión" />
                                         )}
                                     </div>
                                     <div className="text-left">
-                                        <div className="text-xs font-black text-white uppercase">{item.phaseDetected}</div>
-                                        <div className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{new Date(item.id).toLocaleDateString()}</div>
+                                        <div className="text-xs font-black text-white uppercase">{item.phaseDetected || 'Análisis General'}</div>
+                                        <div className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">
+                                            {item.savedAt ? new Date(item.savedAt).toLocaleDateString() : (item.timestamp ? new Date(item.timestamp * 1000).toLocaleDateString() : 'Fecha Desconocida')}
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
