@@ -5,7 +5,7 @@ import { analyzeTechnique } from '../services/geminiService';
 import { LocalExpert } from '../services/localExpert';
 import { ElitePhysicsEngine } from '../utils/biomechanicsUtils';
 import { TrainingSession, UserProfile, Injury, BiomechanicalAnalysis } from '../types';
-import { Loader2, ScanLine, UploadCloud, History, Key, Info, X, ShieldCheck, Microscope, AlertCircle, Zap, Play, Edit3, CheckCheck, Trash2 } from 'lucide-react';
+import { Loader2, ScanLine, UploadCloud, History, Key, Info, X, ShieldCheck, Microscope, AlertCircle, Zap, Play, Edit3, CheckCheck, Trash2, Maximize2, Columns, RotateCcw } from 'lucide-react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 
 const getAIStudio = () => (window as any).aistudio;
@@ -26,6 +26,7 @@ const VideoAnalyzer: React.FC = () => {
     const [activeAnalysis, setActiveAnalysis] = useState<BiomechanicalAnalysis | null>(null);
     const [comparisonMode, setComparisonMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [playbackRate, setPlaybackRate] = useState(1);
 
     const toggleSelection = (id: string) => {
         setSelectedIds(prev =>
@@ -43,6 +44,8 @@ const VideoAnalyzer: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
     const overlayRef = useRef<HTMLCanvasElement>(null);
+    const compareVideoRef1 = useRef<HTMLVideoElement>(null);
+    const compareVideoRef2 = useRef<HTMLVideoElement>(null);
 
     useEffect(() => {
         const initMediaPipe = async () => {
@@ -397,192 +400,260 @@ const VideoAnalyzer: React.FC = () => {
                             {loading ? <Loader2 className="animate-spin" /> : <ScanLine />}
                             {loading ? statusMessage : 'Analizar Técnica'}
                         </button>
-                        <button onClick={() => setPreviewUrl(null)} className="p-5 bg-slate-800 rounded-2xl text-slate-400 hover:text-white border border-slate-700"><X size={20} /></button>
+                        <button onClick={() => { setPreviewUrl(null); setActiveAnalysis(null); }} className="p-5 bg-slate-800 rounded-2xl text-slate-400 hover:text-white border border-slate-700"><X size={20} /></button>
                     </div>
 
-                    <div className="space-y-4">
-                        {sessionAnalyses.map(analysis => (
-                            <div key={analysis.id} className="bg-slate-900 border border-slate-700 p-6 rounded-[2rem] space-y-6 animate-in slide-in-from-bottom-4 shadow-2xl overflow-hidden">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <h3 className={`font-black text-2xl tracking-tighter uppercase ${analysis.category === 'External' ? 'text-indigo-400' : 'text-white'}`}>{analysis.phaseDetected}</h3>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <Microscope size={12} className="text-slate-500" />
-                                            <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Motor: {analysis.coachNotes?.includes("OFFLINE") ? 'Local' : (analysis.category === 'External' ? 'Deep Pro' : 'Flash')}</span>
+                    {[...(activeAnalysis ? [activeAnalysis] : []), ...sessionAnalyses].map(analysis => (
+                        <div key={analysis.id} className="bg-slate-900 border border-slate-700 p-6 rounded-[2rem] space-y-6 animate-in slide-in-from-bottom-4 shadow-2xl overflow-hidden relative">
+                            {activeAnalysis?.id === analysis.id && (
+                                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-indigo-500 text-white text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-widest z-10">Vista de Historial</div>
+                            )}
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h3 className={`font-black text-2xl tracking-tighter uppercase ${analysis.category === 'External' ? 'text-indigo-400' : 'text-white'}`}>{analysis.phaseDetected}</h3>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <Microscope size={12} className="text-slate-500" />
+                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Motor: {analysis.coachNotes?.includes("OFFLINE") ? 'Local' : (analysis.category === 'External' ? 'Deep Pro' : 'Flash')}</span>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-3xl font-black text-emerald-400 tracking-tighter">{analysis.score}</div>
+                                    <div className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Score</div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2">
+                                <MetricBox label="VEL (m/s)" value={analysis.kinetics?.comVelocity?.toString().split(' ')[0] || '--'} />
+                                <MetricBox label="GCT (sec)" value={analysis.groundContactTimeEstimate || '--'} />
+                                <MetricBox label="EFF" value={`${analysis.kinetics?.forceApplicationIndex || '--'}%`} />
+                            </div>
+
+                            {(analysis as any).jointAngles && (
+                                <div className="bg-black/40 rounded-2xl p-4 border border-slate-800/50 space-y-3">
+                                    <h4 className="text-[10px] font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2"><ScanLine size={12} /> Biomecánica de Élite</h4>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="flex justify-between items-center border-b border-slate-800/50 pb-1">
+                                            <span className="text-[10px] text-slate-500 uppercase font-bold">Rodilla (Ext)</span>
+                                            <span className="text-xs font-black text-white">{(analysis as any).jointAngles.kneeExtension || '--'}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center border-b border-slate-800/50 pb-1">
+                                            <span className="text-[10px] text-slate-500 uppercase font-bold">Cadera (Flex)</span>
+                                            <span className="text-xs font-black text-white">{(analysis as any).jointAngles.hipFlexion || '--'}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center border-b border-slate-800/50 pb-1">
+                                            <span className="text-[10px] text-slate-500 uppercase font-bold">Shin Angle</span>
+                                            <span className="text-xs font-black text-white">{(analysis as any).jointAngles.shinAngle || '--'}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center border-b border-slate-800/50 pb-1">
+                                            <span className="text-[10px] text-slate-500 uppercase font-bold">Osc. Vertical</span>
+                                            <span className="text-xs font-black text-white">{analysis.kinetics?.verticalOscillation || '--'}</span>
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        <div className="text-3xl font-black text-emerald-400 tracking-tighter">{analysis.score}</div>
-                                        <div className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Score</div>
-                                    </div>
                                 </div>
+                            )}
 
-                                <div className="grid grid-cols-3 gap-2">
-                                    <MetricBox label="VEL (m/s)" value={analysis.kinetics?.comVelocity?.toString().split(' ')[0] || '--'} />
-                                    <MetricBox label="GCT (sec)" value={analysis.groundContactTimeEstimate || '--'} />
-                                    <MetricBox label="EFF" value={`${analysis.kinetics?.forceApplicationIndex || '--'}%`} />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2"><ShieldCheck size={12} /> Successes</h4>
+                                    <ul className="space-y-1">
+                                        {(analysis as any).successes?.map((s: string, i: number) => (
+                                            <li key={i} className="text-[11px] text-slate-300 flex items-start gap-2">
+                                                <div className="w-1 h-1 bg-emerald-500 rounded-full mt-1.5 shrink-0" />
+                                                {s}
+                                            </li>
+                                        )) || <li className="text-[11px] text-slate-600 italic">No detectado.</li>}
+                                    </ul>
                                 </div>
-
-                                {(analysis as any).jointAngles && (
-                                    <div className="bg-black/40 rounded-2xl p-4 border border-slate-800/50 space-y-3">
-                                        <h4 className="text-[10px] font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2"><ScanLine size={12} /> Biomecánica de Élite</h4>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="flex justify-between items-center border-b border-slate-800/50 pb-1">
-                                                <span className="text-[10px] text-slate-500 uppercase font-bold">Rodilla (Ext)</span>
-                                                <span className="text-xs font-black text-white">{(analysis as any).jointAngles.kneeExtension || '--'}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center border-b border-slate-800/50 pb-1">
-                                                <span className="text-[10px] text-slate-500 uppercase font-bold">Cadera (Flex)</span>
-                                                <span className="text-xs font-black text-white">{(analysis as any).jointAngles.hipFlexion || '--'}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center border-b border-slate-800/50 pb-1">
-                                                <span className="text-[10px] text-slate-500 uppercase font-bold">Shin Angle</span>
-                                                <span className="text-xs font-black text-white">{(analysis as any).jointAngles.shinAngle || '--'}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center border-b border-slate-800/50 pb-1">
-                                                <span className="text-[10px] text-slate-500 uppercase font-bold">Osc. Vertical</span>
-                                                <span className="text-xs font-black text-white">{analysis.kinetics?.verticalOscillation || '--'}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2"><ShieldCheck size={12} /> Successes</h4>
-                                        <ul className="space-y-1">
-                                            {(analysis as any).successes?.map((s: string, i: number) => (
-                                                <li key={i} className="text-[11px] text-slate-300 flex items-start gap-2">
-                                                    <div className="w-1 h-1 bg-emerald-500 rounded-full mt-1.5 shrink-0" />
-                                                    {s}
-                                                </li>
-                                            )) || <li className="text-[11px] text-slate-600 italic">No detectado.</li>}
-                                        </ul>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <h4 className="text-[10px] font-black text-red-400 uppercase tracking-widest flex items-center gap-2"><AlertCircle size={12} /> Weaknesses</h4>
-                                        <ul className="space-y-1">
-                                            {(analysis as any).weaknesses?.map((w: string, i: number) => (
-                                                <li key={i} className="text-[11px] text-slate-300 flex items-start gap-2">
-                                                    <div className="w-1 h-1 bg-red-500 rounded-full mt-1.5 shrink-0" />
-                                                    {w}
-                                                </li>
-                                            )) || (analysis as any).criticalErrors?.map((w: string, i: number) => (
-                                                <li key={i} className="text-[11px] text-slate-300 flex items-start gap-2">
-                                                    <div className="w-1 h-1 bg-red-500 rounded-full mt-1.5 shrink-0" />
-                                                    {w}
-                                                </li>
-                                            )) || <li className="text-[11px] text-slate-600 italic">No detectado.</li>}
-                                        </ul>
-                                    </div>
+                                <div className="space-y-2">
+                                    <h4 className="text-[10px] font-black text-red-400 uppercase tracking-widest flex items-center gap-2"><AlertCircle size={12} /> Weaknesses</h4>
+                                    <ul className="space-y-1">
+                                        {(analysis as any).weaknesses?.map((w: string, i: number) => (
+                                            <li key={i} className="text-[11px] text-slate-300 flex items-start gap-2">
+                                                <div className="w-1 h-1 bg-red-500 rounded-full mt-1.5 shrink-0" />
+                                                {w}
+                                            </li>
+                                        )) || (analysis as any).criticalErrors?.map((w: string, i: number) => (
+                                            <li key={i} className="text-[11px] text-slate-300 flex items-start gap-2">
+                                                <div className="w-1 h-1 bg-red-500 rounded-full mt-1.5 shrink-0" />
+                                                {w}
+                                            </li>
+                                        )) || <li className="text-[11px] text-slate-600 italic">No detectado.</li>}
+                                    </ul>
                                 </div>
+                            </div>
 
-                                {(analysis as any).correctiveDrills && (analysis as any).correctiveDrills.length > 0 && (
-                                    <div className="space-y-3 pt-4 border-t border-slate-800">
-                                        <h4 className="text-[10px] font-black text-purple-400 uppercase tracking-widest flex items-center gap-2"><Microscope size={12} /> Plan de Corrección</h4>
-                                        <div className="grid gap-2">
-                                            {(analysis as any).correctiveDrills.map((drill: any, idx: number) => (
-                                                <div key={idx} className="bg-slate-950 p-3 rounded-2xl border border-slate-800/50 flex justify-between items-center group/drill">
-                                                    <div className="flex-1">
-                                                        <div className="text-xs font-bold text-white uppercase tracking-tight">{typeof drill === 'string' ? drill : drill.name}</div>
-                                                        {drill.reason && <p className="text-[10px] text-slate-500 leading-tight mt-0.5 line-clamp-1 group-hover/drill:line-clamp-none transition-all">{drill.reason}</p>}
-                                                    </div>
-                                                    <a
-                                                        href={`https://www.youtube.com/results?search_query=track+and+field+drill+${(drill.videoKeywords || (typeof drill === 'string' ? drill : drill.name)).replace(/\s/g, '+')}`}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="p-2 bg-slate-800 rounded-full text-slate-500 hover:text-red-500 transition-colors"
-                                                    >
-                                                        <Play size={12} fill="currentColor" />
-                                                    </a>
+                            {(analysis as any).correctiveDrills && (analysis as any).correctiveDrills.length > 0 && (
+                                <div className="space-y-3 pt-4 border-t border-slate-800">
+                                    <h4 className="text-[10px] font-black text-purple-400 uppercase tracking-widest flex items-center gap-2"><Microscope size={12} /> Plan de Corrección</h4>
+                                    <div className="grid gap-2">
+                                        {(analysis as any).correctiveDrills.map((drill: any, idx: number) => (
+                                            <div key={idx} className="bg-slate-950 p-3 rounded-2xl border border-slate-800/50 flex justify-between items-center group/drill">
+                                                <div className="flex-1">
+                                                    <div className="text-xs font-bold text-white uppercase tracking-tight">{typeof drill === 'string' ? drill : drill.name}</div>
+                                                    {drill.reason && <p className="text-[10px] text-slate-500 leading-tight mt-0.5 line-clamp-1 group-hover/drill:line-clamp-none transition-all">{drill.reason}</p>}
                                                 </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="space-y-3">
-                                    <div className="flex flex-wrap gap-2 justify-center">
-                                        {analysis.coachShouts.map((s, i) => (
-                                            <span key={i} className="text-[10px] bg-slate-950 border border-slate-800 px-4 py-2 rounded-full text-slate-200 font-black italic shadow-inner">"{s}"</span>
+                                                <a
+                                                    href={`https://www.youtube.com/results?search_query=track+and+field+drill+${(drill.videoKeywords || (typeof drill === 'string' ? drill : drill.name)).replace(/\s/g, '+')}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="p-2 bg-slate-800 rounded-full text-slate-500 hover:text-red-500 transition-colors"
+                                                >
+                                                    <Play size={12} fill="currentColor" />
+                                                </a>
+                                            </div>
                                         ))}
                                     </div>
                                 </div>
+                            )}
 
-                                {userProfile.role === 'staff' && (
-                                    <div className="mt-6 pt-6 border-t border-indigo-500/30 bg-indigo-900/10 -mx-4 px-4 pb-4 rounded-b-3xl">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
-                                                <Edit3 size={12} /> Zona de Feedback Staff
-                                            </h4>
-                                            {analysis.reviewStatus === 'Reviewed' && (
-                                                <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-bold border border-emerald-500/30 flex items-center gap-1">
-                                                    <CheckCheck size={10} /> REVISADO
-                                                </span>
-                                            )}
-                                        </div>
-                                        <textarea
-                                            placeholder="Añade notas técnicas para el atleta..."
-                                            value={analysis.coachNotes || ""}
-                                            onChange={(e) => updateAnalysis(analysis.id, { coachNotes: e.target.value })}
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-600 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all h-20"
-                                        />
-                                        <button
-                                            onClick={() => updateAnalysis(analysis.id, { reviewStatus: 'Reviewed' })}
-                                            className={`w-full mt-3 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${analysis.reviewStatus === 'Reviewed'
-                                                ? 'bg-slate-800 text-slate-400 cursor-default'
-                                                : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
-                                                }`}
-                                        >
-                                            {analysis.reviewStatus === 'Reviewed' ? 'Review Guardada' : 'Marcar como Revisado'}
-                                        </button>
-                                    </div>
-                                )}
+                            <div className="space-y-3">
+                                <div className="flex flex-wrap gap-2 justify-center">
+                                    {analysis.coachShouts.map((s, i) => (
+                                        <span key={i} className="text-[10px] bg-slate-950 border border-slate-800 px-4 py-2 rounded-full text-slate-200 font-black italic shadow-inner">"{s}"</span>
+                                    ))}
+                                </div>
                             </div>
-                        ))}
-                    </div>
+
+                            {userProfile.role === 'staff' && (
+                                <div className="mt-6 pt-6 border-t border-indigo-500/30 bg-indigo-900/10 -mx-4 px-4 pb-4 rounded-b-3xl">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                                            <Edit3 size={12} /> Zona de Feedback Staff
+                                        </h4>
+                                        {analysis.reviewStatus === 'Reviewed' && (
+                                            <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-bold border border-emerald-500/30 flex items-center gap-1">
+                                                <CheckCheck size={10} /> REVISADO
+                                            </span>
+                                        )}
+                                    </div>
+                                    <textarea
+                                        placeholder="Añade notas técnicas para el atleta..."
+                                        value={analysis.coachNotes || ""}
+                                        onChange={(e) => updateAnalysis(analysis.id, { coachNotes: e.target.value })}
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-600 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all h-20"
+                                    />
+                                    <button
+                                        onClick={() => updateAnalysis(analysis.id, { reviewStatus: 'Reviewed' })}
+                                        className={`w-full mt-3 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${analysis.reviewStatus === 'Reviewed'
+                                            ? 'bg-slate-800 text-slate-400 cursor-default'
+                                            : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
+                                            }`}
+                                    >
+                                        {analysis.reviewStatus === 'Reviewed' ? 'Review Guardada' : 'Marcar como Revisado'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    ))}
                 </div>
             )}
 
             {/* COMPARISON MODAL */}
             {comparisonMode && comparedAnalyses.length === 2 && (
-                <div className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-xl p-4 overflow-y-auto">
-                    <div className="max-w-4xl mx-auto space-y-6 pt-10 pb-20">
-                        <div className="flex justify-between items-center bg-slate-900 p-6 rounded-3xl border border-slate-800">
+                <div className="fixed inset-0 z-[100] bg-slate-950/98 backdrop-blur-2xl overflow-y-auto">
+                    <div className="max-w-5xl mx-auto min-h-screen flex flex-col pt-10 pb-24 px-4">
+                        <div className="flex justify-between items-center bg-slate-900/50 p-6 rounded-[2.5rem] border border-slate-800 mb-6 backdrop-blur-md">
                             <div>
-                                <h2 className="text-xl font-black text-white uppercase tracking-tighter">Comparativa Técnica</h2>
-                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Evolución Biomecánica</p>
+                                <h2 className="text-xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
+                                    <Columns className="text-emerald-400" /> Comparativa Pro
+                                </h2>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Sincronización Biomecánica</p>
                             </div>
-                            <button onClick={() => setComparisonMode(false)} className="p-3 bg-slate-800 rounded-2xl text-white"><X size={20} /></button>
+                            <div className="flex items-center gap-4">
+                                <div className="hidden md:flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+                                    {[0.25, 0.5, 1].map(rate => (
+                                        <button key={rate} onClick={() => setPlaybackRate(rate)} className={`px-3 py-1 rounded-lg text-[10px] font-black transition-all ${playbackRate === rate ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:text-white'}`}>
+                                            {rate}x
+                                        </button>
+                                    ))}
+                                </div>
+                                <button onClick={() => setComparisonMode(false)} className="p-3 bg-slate-800 hover:bg-slate-700 rounded-2xl text-white transition-all"><X size={20} /></button>
+                            </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
                             {comparedAnalyses.map((item, idx) => (
-                                <div key={item.id} className="bg-slate-900 rounded-3xl border border-slate-800 p-4 space-y-4">
-                                    <div className="text-[10px] font-black uppercase tracking-widest text-indigo-400 bg-indigo-500/10 self-start px-3 py-1 rounded-full border border-indigo-500/20 mb-2">
-                                        {idx === 0 ? 'Fase Inicial' : 'Fase Final'}
-                                    </div>
-                                    <img src={item.thumbnail} className="w-full aspect-video object-cover rounded-2xl border border-slate-800" />
+                                <div key={item.id} className={`bg-slate-900/40 rounded-[2.5rem] border border-slate-800 p-4 space-y-4 flex flex-col ${idx === 0 ? 'border-l-indigo-500/50' : 'border-l-emerald-500/50'}`}>
                                     <div className="flex justify-between items-center">
-                                        <span className="text-xs font-black text-white uppercase">{item.phaseDetected}</span>
-                                        <span className="text-2xl font-black text-emerald-400">{item.score}</span>
+                                        <div className={`text-[9px] font-black uppercase tracking-widest self-start px-3 py-1 rounded-full border ${idx === 0 ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
+                                            {idx === 0 ? 'Anterior' : 'Reciente'} • {new Date(item.savedAt || 0).toLocaleDateString()}
+                                        </div>
+                                        <span className="text-2xl font-black text-white tracking-tighter">{item.score}</span>
                                     </div>
-                                    <div className="space-y-2 border-t border-slate-800 pt-4">
-                                        <div className="flex justify-between items-center text-[10px]">
-                                            <span className="text-slate-500 uppercase font-bold">Velocidad</span>
-                                            <span className="text-white font-black">{item.kinetics?.comVelocity || '--'}</span>
+
+                                    <div className="relative rounded-3xl overflow-hidden bg-black aspect-video border border-slate-800 shadow-inner group">
+                                        <video
+                                            ref={idx === 0 ? compareVideoRef1 : compareVideoRef2}
+                                            src={previewUrl || ''}
+                                            className="w-full h-full object-contain"
+                                            muted
+                                            playsInline
+                                            onPlay={() => {
+                                                if (idx === 0 && compareVideoRef2.current) compareVideoRef2.current.play();
+                                            }}
+                                            onPause={() => {
+                                                if (idx === 0 && compareVideoRef2.current) compareVideoRef2.current.pause();
+                                            }}
+                                        />
+                                        {!previewUrl && (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80 p-6 text-center">
+                                                <p className="text-[10px] text-slate-400 font-bold uppercase leading-relaxed">
+                                                    Video original necesario. <br /> Re-selecciona el archivo para comparar.
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <div className="bg-black/20 p-3 rounded-2xl border border-slate-800/50 text-center">
+                                            <div className="text-[8px] text-slate-600 uppercase font-black mb-1">VEL (m/s)</div>
+                                            <div className="text-xs font-mono text-white font-black">{item.kinetics?.comVelocity || '--'}</div>
                                         </div>
-                                        <div className="flex justify-between items-center text-[10px]">
-                                            <span className="text-slate-500 uppercase font-bold">GCT</span>
-                                            <span className="text-white font-black">{item.groundContactTimeEstimate || '--'}</span>
+                                        <div className="bg-black/20 p-3 rounded-2xl border border-slate-800/50 text-center">
+                                            <div className="text-[8px] text-slate-600 uppercase font-black mb-1">GCT (s)</div>
+                                            <div className="text-xs font-mono text-white font-black">{item.groundContactTimeEstimate || '--'}</div>
                                         </div>
-                                        <div className="flex justify-between items-center text-[10px]">
-                                            <span className="text-slate-500 uppercase font-bold">Eficiencia</span>
-                                            <span className="text-white font-black">{item.kinetics?.forceApplicationIndex || '--'}%</span>
+                                        <div className="bg-black/20 p-3 rounded-2xl border border-slate-800/50 text-center">
+                                            <div className="text-[8px] text-slate-600 uppercase font-black mb-1">EFF %</div>
+                                            <div className="text-xs font-mono text-white font-black">{item.kinetics?.forceApplicationIndex || '--'}</div>
                                         </div>
+                                    </div>
+
+                                    <div className="flex-1 space-y-2">
+                                        <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3">Puntos Críticos</h4>
+                                        {item.criticalErrors.map((err, i) => (
+                                            <div key={i} className="text-[10px] text-slate-300 flex items-start gap-2 bg-black/10 p-2 rounded-lg border border-slate-800/30">
+                                                <AlertCircle size={10} className="text-red-500 mt-0.5 shrink-0" /> {err}
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             ))}
+                        </div>
+
+                        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex gap-4 bg-slate-900/90 backdrop-blur-xl border border-slate-700 p-3 rounded-[2rem] shadow-2xl z-50">
+                            <button onClick={() => {
+                                if (compareVideoRef1.current) compareVideoRef1.current.currentTime = 0;
+                                if (compareVideoRef2.current) compareVideoRef2.current.currentTime = 0;
+                            }} className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-white hover:bg-slate-700 transition-all">
+                                <RotateCcw size={20} />
+                            </button>
+                            <button onClick={() => {
+                                const v1 = compareVideoRef1.current;
+                                const v2 = compareVideoRef2.current;
+                                if (v1 && v2) {
+                                    if (v1.paused) { v1.play(); v2.play(); } else { v1.pause(); v2.pause(); }
+                                }
+                            }} className="h-12 px-8 rounded-2xl bg-emerald-600 text-white font-black uppercase tracking-widest text-xs flex items-center gap-2 shadow-lg shadow-emerald-900/50">
+                                Play / Pause
+                            </button>
+                            <button onClick={() => {
+                                if (compareVideoRef1.current) compareVideoRef1.current.playbackRate = playbackRate === 1 ? 0.25 : 1;
+                                if (compareVideoRef2.current) compareVideoRef2.current.playbackRate = playbackRate === 1 ? 0.25 : 1;
+                                setPlaybackRate(playbackRate === 1 ? 0.25 : 1);
+                            }} className="h-12 px-5 rounded-2xl bg-slate-800 text-white font-black text-xs">
+                                {playbackRate}x
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -639,10 +710,10 @@ const VideoAnalyzer: React.FC = () => {
                                 key={item.id}
                                 onClick={() => toggleSelection(item.id)}
                                 className={`group bg-slate-900 border transition-all rounded-3xl p-4 flex items-center justify-between cursor-pointer ${selectedIds.includes(item.id)
-                                        ? 'border-indigo-500 bg-indigo-900/10'
-                                        : item.reviewStatus === 'Pending'
-                                            ? 'border-indigo-500/50 hover:border-indigo-400'
-                                            : 'border-slate-800 hover:border-slate-700'
+                                    ? 'border-indigo-500 bg-indigo-900/10'
+                                    : item.reviewStatus === 'Pending'
+                                        ? 'border-indigo-500/50 hover:border-indigo-400'
+                                        : 'border-slate-800 hover:border-slate-700'
                                     }`}
                             >
                                 <div className="flex items-center gap-4">

@@ -15,6 +15,7 @@ const CoachDashboard: React.FC = () => {
     const [searching, setSearching] = useState(false);
     const [rosterData, setRosterData] = useState<{ uid: string, profile: UserProfile, risk: 'High' | 'Low' | 'Optimal', pendingReviews: number, lastActive: string }[]>([]);
     const [loadingRoster, setLoadingRoster] = useState(false);
+    const photoInputRef = React.useRef<HTMLInputElement>(null);
 
     // Staff Round Table State
     const [briefings, setBriefings] = useState<StaffBriefing[]>([]);
@@ -168,16 +169,27 @@ const CoachDashboard: React.FC = () => {
                                 )}
                             </div>
                             <button
-                                onClick={() => {
-                                    const url = prompt("Introduce URL de la foto de perfil:");
-                                    if (url && profile) {
-                                        updateProfile({ ...profile, photoURL: url });
-                                    }
-                                }}
+                                onClick={() => photoInputRef.current?.click()}
                                 className="absolute -bottom-1 -right-1 bg-slate-900 border border-slate-700 p-1.5 rounded-xl text-indigo-400 hover:text-white transition-all shadow-lg md:hidden group-hover/avatar:block"
                             >
                                 <Plus size={14} />
                             </button>
+                            <input
+                                type="file"
+                                ref={photoInputRef}
+                                className="hidden"
+                                accept="image/*"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file && profile) {
+                                        const reader = new FileReader();
+                                        reader.onloadend = () => {
+                                            updateProfile({ ...profile, photoURL: reader.result as string });
+                                        };
+                                        reader.readAsDataURL(file);
+                                    }
+                                }}
+                            />
                         </div>
                         <div className="text-center md:text-left">
                             <div className="flex items-center justify-center md:justify-start gap-2 mb-1">
@@ -213,7 +225,7 @@ const CoachDashboard: React.FC = () => {
                                 {profile?.injuries?.filter(i => i.status === 'Activa').length || 0} Activas
                             </div>
                             <div className="text-[10px] text-slate-500 font-bold mt-1 truncate">
-                                {profile?.injuries?.filter(i => i.status === 'Activa').map(i => i.location).join(', ') || 'Sin Reportes'}
+                                {profile?.injuries?.filter(i => i.status === 'Activa').map(i => safeStr(i.location)).join(', ') || 'Sin Reportes'}
                             </div>
                         </div>
                         <div className="bg-slate-900/50 border border-slate-700/50 p-4 rounded-2xl">
@@ -243,15 +255,22 @@ const CoachDashboard: React.FC = () => {
                         <div className="h-48 w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={pbData} layout="vertical" margin={{ left: -20, right: 30 }}>
+                                    <defs>
+                                        <linearGradient id="colorPB" x1="0" y1="0" x2="1" y2="0">
+                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
+                                            <stop offset="95%" stopColor="#10b981" stopOpacity={0.2} />
+                                        </linearGradient>
+                                    </defs>
                                     <XAxis type="number" hide domain={[0, 'auto']} />
-                                    <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={12} fontWeight="bold" width={60} />
+                                    <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={12} fontWeight="bold" width={60} axisLine={false} tickLine={false} />
                                     <Tooltip
-                                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '12px' }}
-                                        itemStyle={{ color: '#fff', fontSize: '12px' }}
+                                        cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '12px', fontSize: '10px' }}
+                                        itemStyle={{ color: '#fff' }}
                                     />
-                                    <Bar dataKey="time" radius={[0, 10, 10, 0]} barSize={20}>
+                                    <Bar dataKey="time" radius={[0, 10, 10, 0]} barSize={20} fill="url(#colorPB)">
                                         {pbData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={index === 0 ? '#10b981' : index === 1 ? '#06b6d4' : '#8b5cf6'} />
+                                            <Cell key={`cell-${index}`} fillOpacity={1 - (index * 0.2)} />
                                         ))}
                                     </Bar>
                                 </BarChart>
@@ -272,15 +291,24 @@ const CoachDashboard: React.FC = () => {
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={macroData}>
                                     <defs>
-                                        <linearGradient id="colorIn" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                        <linearGradient id="colorInt" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.3} />
+                                            <stop offset="95%" stopColor="#22d3ee" stopOpacity={0} />
+                                        </linearGradient>
+                                        <linearGradient id="colorFat" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
+                                            <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
                                         </linearGradient>
                                     </defs>
-                                    <XAxis dataKey="week" stroke="#94a3b8" fontSize={10} fontWeight="bold" />
-                                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '12px' }} />
-                                    <Area type="monotone" dataKey="intensity" stroke="#6366f1" fillOpacity={1} fill="url(#colorIn)" strokeWidth={3} />
-                                    <Area type="monotone" dataKey="fatigue" stroke="#ef4444" fill="transparent" strokeDasharray="5 5" />
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                                    <XAxis dataKey="week" stroke="#475569" fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} />
+                                    <YAxis hide domain={[0, 110]} />
+                                    <Tooltip
+                                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '12px' }}
+                                        labelStyle={{ color: '#94a3b8', fontSize: '10px', marginBottom: '4px' }}
+                                    />
+                                    <Area type="monotone" dataKey="intensity" name="Intensidad" stroke="#22d3ee" fillOpacity={1} fill="url(#colorInt)" strokeWidth={3} />
+                                    <Area type="monotone" dataKey="fatigue" name="Fatiga" stroke="#ef4444" fillOpacity={1} fill="url(#colorFat)" strokeWidth={2} strokeDasharray="5 5" />
                                 </AreaChart>
                             </ResponsiveContainer>
                         </div>
@@ -380,7 +408,9 @@ const CoachDashboard: React.FC = () => {
                                             <div className="text-[10px] text-cyan-400 uppercase font-black tracking-wider">{safeStr(brief.role)} • {safeStr(brief.type)}</div>
                                         </div>
                                     </div>
-                                    <div className="text-[10px] text-slate-500">{new Date(brief.timestamp).toLocaleDateString()}</div>
+                                    <div className="text-[10px] text-slate-500">
+                                        {brief.timestamp ? new Date(brief.timestamp).toLocaleDateString() : '--/--/--'}
+                                    </div>
                                 </div>
 
                                 <p className="text-sm text-slate-300 leading-relaxed mb-4 whitespace-pre-wrap">{safeStr(brief.content)}</p>
