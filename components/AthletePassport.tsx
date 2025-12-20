@@ -24,7 +24,7 @@ export const AthletePassport: React.FC = () => {
     const scores = useMemo(() => {
         return availableEvents.map(evt => {
             const pbTime = parseFloat(userProfile.pbs[evt as '100m' | '200m' | '400m']?.time || '0');
-            
+
             // PAC Score logic based on event
             let pac = 50;
             if (pbTime > 0) {
@@ -32,7 +32,7 @@ export const AthletePassport: React.FC = () => {
                 else if (evt === '200m') pac = Math.max(50, Math.min(99, 100 - (pbTime - 19.3) * 6));
                 else pac = Math.max(50, Math.min(99, 100 - (pbTime - 43.0) * 3));
             }
-            
+
             const lastTech = analysisHistory[0]?.score || 60;
             let form = 60;
             if (acwrStats) {
@@ -43,13 +43,13 @@ export const AthletePassport: React.FC = () => {
             const iq = Math.min(99, 50 + (userProfile.yearsExperience * 5));
             const ovr = Math.round((pac * 0.4) + (lastTech * 0.3) + (form * 0.2) + (iq * 0.1));
 
-            return { 
-                event: evt, 
-                pac: Math.round(pac), 
-                tec: Math.round(lastTech), 
-                form: Math.round(form), 
-                iq: Math.round(iq), 
-                ovr: Math.round(ovr) 
+            return {
+                event: evt,
+                pac: Math.round(pac),
+                tec: Math.round(lastTech),
+                form: Math.round(form),
+                iq: Math.round(iq),
+                ovr: Math.round(ovr)
             };
         });
     }, [userProfile, analysisHistory, acwrStats]);
@@ -68,7 +68,7 @@ export const AthletePassport: React.FC = () => {
         <div className="relative w-full max-w-[280px] mx-auto">
             <div className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-2 border-yellow-500/40 rounded-[2rem] p-5 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,_rgba(234,179,8,0.1),transparent)] pointer-events-none"></div>
-                
+
                 <div className="flex justify-between items-start mb-4 relative z-10">
                     <div className="cursor-pointer group" onClick={() => setShowInfo('OVR')}>
                         <div className="text-5xl font-black text-yellow-500 tracking-tighter drop-shadow-2xl flex items-baseline gap-1">
@@ -86,7 +86,7 @@ export const AthletePassport: React.FC = () => {
 
                 <div className="relative w-20 h-20 mx-auto mb-4 group">
                     <div className="absolute inset-0 bg-yellow-500/10 blur-xl rounded-full"></div>
-                    
+
                     {/* Event Navigation Arrows */}
                     <button onClick={prevSlide} className="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 text-slate-600 hover:text-yellow-500 transition-colors">
                         <ChevronLeft size={24} />
@@ -96,9 +96,13 @@ export const AthletePassport: React.FC = () => {
                     </button>
 
                     <div className="relative w-full h-full rounded-full bg-slate-800 border-2 border-slate-700 shadow-xl flex items-center justify-center overflow-hidden">
-                        <span className="text-3xl font-black text-slate-500">
-                            {userProfile.name?.charAt(0).toUpperCase() || "I"}
-                        </span>
+                        {userProfile.photoURL ? (
+                            <img src={userProfile.photoURL} alt="Avatar" className="w-full h-full object-cover" />
+                        ) : (
+                            <span className="text-3xl font-black text-slate-500">
+                                {userProfile.name?.charAt(0).toUpperCase() || "I"}
+                            </span>
+                        )}
                     </div>
                 </div>
 

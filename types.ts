@@ -17,6 +17,7 @@ export interface Coach {
 export interface UserProfile {
   name: string;
   email?: string; // Critical for Staff lookup
+  photoURL?: string; // Profile photo
   role: 'athlete' | 'staff'; // NEW: Role definition
   roster?: string[]; // NEW: For staff, list of athlete UIDs they manage
 

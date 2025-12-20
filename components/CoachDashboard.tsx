@@ -2,13 +2,14 @@ import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { findAthleteByEmail, fetchUserData, getPlanHistory, getAnalysisHistory, getStaffBriefings, addStaffBriefing, addBriefingReply } from '../services/firebase';
-import { Users, Plus, Search, UserCircle2, Briefcase, Eye, LogOut, Activity, ArrowRight, AlertCircle, Microscope } from 'lucide-react';
+import { Users, Plus, Search, UserCircle2, Briefcase, Eye, LogOut, Activity, ArrowRight, AlertCircle, Microscope, Zap, Trophy } from 'lucide-react';
 import { UserProfile, StaffBriefing, StaffReply } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { useNavigate } from 'react-router-dom';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, Cell } from 'recharts';
 
 const CoachDashboard: React.FC = () => {
-    const { adminProfile, user, updateRoster, viewingAthleteId, switchAthlete, t } = useApp();
+    const { adminProfile, user, updateRoster, viewingAthleteId, switchAthlete, t, updateProfile } = useApp();
     const navigate = useNavigate(); // Hook for navigation
     const [emailQuery, setEmailQuery] = useState('');
     const [searching, setSearching] = useState(false);
@@ -102,6 +103,7 @@ const CoachDashboard: React.FC = () => {
 
     const handleAddAthlete = async () => {
         if (!emailQuery.trim()) return;
+        setSearching(false); // Reset search state
         setSearching(true);
         const athlete = await findAthleteByEmail(emailQuery.trim().toLowerCase());
         if (athlete) {
@@ -112,11 +114,38 @@ const CoachDashboard: React.FC = () => {
         setSearching(false);
     };
 
+    // Helper for safe string rendering
+    const safeStr = (val: any, fallback: string = '--'): string => {
+        if (typeof val === 'string') return val;
+        if (typeof val === 'number') return String(val);
+        if (val && typeof val === 'object') return 'Data Error';
+        return fallback;
+    };
+
     if (viewingAthleteId) {
 
         const currentAthlete = rosterData.find(r => r.uid === viewingAthleteId);
         const profile = currentAthlete?.profile;
         const nextComp = profile?.competitions && profile.competitions.length > 0 ? profile.competitions[0] : null;
+
+        // PB Data for Chart
+        const pbData = [
+            { name: '100m', time: parseFloat(profile?.pbs?.['100m']?.time || '0') },
+            { name: '200m', time: parseFloat(profile?.pbs?.['200m']?.time || '0') },
+            { name: '400m', time: parseFloat(profile?.pbs?.['400m']?.time || '0') },
+        ].filter(d => d.time > 0);
+
+        // Macrocycle Simulation (8 weeks)
+        const macroData = [
+            { week: 'W1', intensity: 70, fatigue: 40 },
+            { week: 'W2', intensity: 80, fatigue: 55 },
+            { week: 'W3', intensity: 90, fatigue: 75 },
+            { week: 'W4', intensity: 60, fatigue: 30 }, // Recovery
+            { week: 'W5', intensity: 85, fatigue: 60 },
+            { week: 'W6', intensity: 95, fatigue: 80 },
+            { week: 'W7', intensity: 100, fatigue: 90 }, // Peak
+            { week: 'W8', intensity: 50, fatigue: 20 }, // Tap
+        ];
 
         return (
             <div className="space-y-6 animate-in fade-in duration-300">
@@ -130,19 +159,36 @@ const CoachDashboard: React.FC = () => {
                     </button>
 
                     <div className="mt-8 relative z-10 flex flex-col md:flex-row items-center gap-6">
-                        <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg flex items-center justify-center border-4 border-slate-900 shrink-0">
-                            <UserCircle2 className="text-white" size={48} />
+                        <div className="relative group/avatar">
+                            <div className="w-24 h-24 rounded-[2rem] bg-gradient-to-br from-indigo-500 via-purple-600 to-indigo-900 shadow-xl flex items-center justify-center border-4 border-slate-900 shrink-0 overflow-hidden">
+                                {profile?.photoURL ? (
+                                    <img src={profile.photoURL} alt="Avatar" className="w-full h-full object-cover" />
+                                ) : (
+                                    <UserCircle2 className="text-white" size={48} />
+                                )}
+                            </div>
+                            <button
+                                onClick={() => {
+                                    const url = prompt("Introduce URL de la foto de perfil:");
+                                    if (url && profile) {
+                                        updateProfile({ ...profile, photoURL: url });
+                                    }
+                                }}
+                                className="absolute -bottom-1 -right-1 bg-slate-900 border border-slate-700 p-1.5 rounded-xl text-indigo-400 hover:text-white transition-all shadow-lg md:hidden group-hover/avatar:block"
+                            >
+                                <Plus size={14} />
+                            </button>
                         </div>
                         <div className="text-center md:text-left">
                             <div className="flex items-center justify-center md:justify-start gap-2 mb-1">
                                 <h2 className="text-3xl font-black text-white uppercase tracking-tighter">
-                                    {profile?.name || 'Atleta'}
+                                    {safeStr(profile?.name || 'Atleta')}
                                 </h2>
                                 {currentAthlete?.risk === 'High' && <AlertCircle className="text-red-500 animate-pulse" size={24} />}
                             </div>
                             <div className="flex flex-wrap justify-center md:justify-start gap-2">
                                 <span className="px-3 py-1 bg-indigo-500/20 rounded-lg text-indigo-200 text-xs font-bold uppercase border border-indigo-500/30">
-                                    {profile?.events?.[0] || 'Sprint'}
+                                    {safeStr(profile?.events?.[0] || 'Sprint')}
                                 </span>
                                 <span className={`px-3 py-1 rounded-lg text-xs font-bold uppercase border ${currentAthlete?.risk === 'High' ? 'bg-red-500/20 text-red-200 border-red-500/30' :
                                     currentAthlete?.risk === 'Low' ? 'bg-blue-500/20 text-blue-200 border-blue-500/30' :
@@ -158,15 +204,15 @@ const CoachDashboard: React.FC = () => {
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-8 relative z-10">
                         <div className="bg-slate-900/50 border border-slate-700/50 p-4 rounded-2xl">
                             <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">Próxima Competencia</div>
-                            <div className="text-sm font-black text-white truncate">{nextComp ? nextComp.name : 'No Asignada'}</div>
-                            <div className="text-[10px] text-indigo-400 font-bold mt-1">{nextComp ? nextComp.date : '--'}</div>
+                            <div className="text-sm font-black text-white truncate">{nextComp ? safeStr(nextComp.name) : 'No Asignada'}</div>
+                            <div className="text-[10px] text-indigo-400 font-bold mt-1">{nextComp ? safeStr(nextComp.date) : '--'}</div>
                         </div>
                         <div className="bg-slate-900/50 border border-slate-700/50 p-4 rounded-2xl">
                             <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">Lesiones Activas</div>
                             <div className={`text-sm font-black ${profile?.injuries?.some(i => i.status === 'Activa') ? 'text-red-400' : 'text-emerald-400'}`}>
                                 {profile?.injuries?.filter(i => i.status === 'Activa').length || 0} Activas
                             </div>
-                            <div className="text-[10px] text-slate-500 font-bold mt-1">
+                            <div className="text-[10px] text-slate-500 font-bold mt-1 truncate">
                                 {profile?.injuries?.filter(i => i.status === 'Activa').map(i => i.location).join(', ') || 'Sin Reportes'}
                             </div>
                         </div>
@@ -177,8 +223,66 @@ const CoachDashboard: React.FC = () => {
                         </div>
                         <div className="bg-slate-900/50 border border-slate-700/50 p-4 rounded-2xl">
                             <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">Última Actividad</div>
-                            <div className="text-sm font-black text-white">{currentAthlete?.lastActive ? String(currentAthlete.lastActive) : 'Inactivo'}</div>
+                            <div className="text-sm font-black text-white">{safeStr(currentAthlete?.lastActive, 'Inactivo')}</div>
                             <div className="text-[10px] text-slate-500 font-bold mt-1">{currentAthlete?.lastActive !== 'Inactivo' ? 'Reciente' : 'Sin data'}</div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* VISUAL ANALYTICS SECTION */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* PB CHART */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                        <div className="flex justify-between items-center mb-6">
+                            <div>
+                                <h3 className="text-lg font-black text-white uppercase tracking-tighter">Récords Personales</h3>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Mejores Tiempos (s)</p>
+                            </div>
+                            <Activity className="text-yellow-500" size={24} />
+                        </div>
+                        <div className="h-48 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={pbData} layout="vertical" margin={{ left: -20, right: 30 }}>
+                                    <XAxis type="number" hide domain={[0, 'auto']} />
+                                    <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={12} fontWeight="bold" width={60} />
+                                    <Tooltip
+                                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '12px' }}
+                                        itemStyle={{ color: '#fff', fontSize: '12px' }}
+                                    />
+                                    <Bar dataKey="time" radius={[0, 10, 10, 0]} barSize={20}>
+                                        {pbData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={index === 0 ? '#10b981' : index === 1 ? '#06b6d4' : '#8b5cf6'} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    {/* MACROCYCLE CHART */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                        <div className="flex justify-between items-center mb-6">
+                            <div>
+                                <h3 className="text-lg font-black text-white uppercase tracking-tighter">Macrociclo (8 Semanas)</h3>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Carga & Fatiga Estimada</p>
+                            </div>
+                            <Zap className="text-indigo-400" size={24} />
+                        </div>
+                        <div className="h-48 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={macroData}>
+                                    <defs>
+                                        <linearGradient id="colorIn" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <XAxis dataKey="week" stroke="#94a3b8" fontSize={10} fontWeight="bold" />
+                                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '12px' }} />
+                                    <Area type="monotone" dataKey="intensity" stroke="#6366f1" fillOpacity={1} fill="url(#colorIn)" strokeWidth={3} />
+                                    <Area type="monotone" dataKey="fatigue" stroke="#ef4444" fill="transparent" strokeDasharray="5 5" />
+                                </AreaChart>
+                            </ResponsiveContainer>
                         </div>
                     </div>
                 </div>
@@ -189,7 +293,7 @@ const CoachDashboard: React.FC = () => {
                         <Activity className="text-emerald-400 group-hover:scale-110 transition-transform" />
                         <span className="text-[10px] font-black text-emerald-100 uppercase">Gestionar Plan</span>
                     </button>
-                    <button onClick={() => navigate('/analysis')} className="bg-purple-900/20 hover:bg-purple-900/40 border border-purple-500/30 p-4 rounded-2xl flex flex-col items-center gap-2 group transition-all relative">
+                    <button onClick={() => navigate('/video')} className="bg-purple-900/20 hover:bg-purple-900/40 border border-purple-500/30 p-4 rounded-2xl flex flex-col items-center gap-2 group transition-all relative">
                         <Microscope className="text-purple-400 group-hover:scale-110 transition-transform" />
                         <span className="text-[10px] font-black text-purple-100 uppercase">Biomecánica</span>
                         {currentAthlete?.pendingReviews ? (
@@ -206,7 +310,7 @@ const CoachDashboard: React.FC = () => {
 
                 {/* PENDING NOTIFICATION */}
                 {currentAthlete?.pendingReviews ? (
-                    <div onClick={() => navigate('/analysis')} className="bg-red-500/10 border border-red-500/30 p-4 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-red-500/20 transition-colors mt-6">
+                    <div onClick={() => navigate('/video')} className="bg-red-500/10 border border-red-500/30 p-4 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-red-500/20 transition-colors mt-6">
                         <div className="flex items-center gap-3">
                             <div className="p-2 bg-red-500/20 rounded-lg text-red-400"><Eye size={20} /></div>
                             <div>
@@ -269,27 +373,27 @@ const CoachDashboard: React.FC = () => {
                                 <div className="flex justify-between items-start mb-2">
                                     <div className="flex items-center gap-2">
                                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-900 to-slate-900 border border-cyan-500/30 flex items-center justify-center text-xs font-bold text-cyan-400">
-                                            {brief.authorName.charAt(0)}
+                                            {safeStr(brief.authorName).charAt(0)}
                                         </div>
                                         <div>
-                                            <div className="text-sm font-bold text-white">{brief.authorName}</div>
-                                            <div className="text-[10px] text-cyan-400 uppercase font-black tracking-wider">{brief.role} • {brief.type}</div>
+                                            <div className="text-sm font-bold text-white">{safeStr(brief.authorName)}</div>
+                                            <div className="text-[10px] text-cyan-400 uppercase font-black tracking-wider">{safeStr(brief.role)} • {safeStr(brief.type)}</div>
                                         </div>
                                     </div>
                                     <div className="text-[10px] text-slate-500">{new Date(brief.timestamp).toLocaleDateString()}</div>
                                 </div>
 
-                                <p className="text-sm text-slate-300 leading-relaxed mb-4 whitespace-pre-wrap">{brief.content}</p>
+                                <p className="text-sm text-slate-300 leading-relaxed mb-4 whitespace-pre-wrap">{safeStr(brief.content)}</p>
 
                                 {brief.replies && brief.replies.length > 0 && (
                                     <div className="space-y-3 pl-4 border-l-2 border-slate-700 mb-4">
                                         {brief.replies.map(reply => (
                                             <div key={reply.id} className="text-xs">
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <span className="font-bold text-slate-200">{reply.authorName}</span>
-                                                    <span className="text-[9px] text-slate-500 uppercase">{reply.role}</span>
+                                                    <span className="font-bold text-slate-200">{safeStr(reply.authorName)}</span>
+                                                    <span className="text-[9px] text-slate-500 uppercase">{safeStr(reply.role)}</span>
                                                 </div>
-                                                <p className="text-slate-400">{reply.content}</p>
+                                                <p className="text-slate-400">{safeStr(reply.content)}</p>
                                             </div>
                                         ))}
                                     </div>
@@ -379,7 +483,7 @@ const CoachDashboard: React.FC = () => {
                                     }`} title={`Riesgo: ${data.risk}`}></div>
                             </div>
                             <div>
-                                <div className="font-bold text-white text-sm group-hover:text-indigo-300 transition-colors">{data.profile?.name}</div>
+                                <div className="font-bold text-white text-sm group-hover:text-indigo-300 transition-colors">{safeStr(data.profile?.name)}</div>
                                 <div className="flex items-center gap-2 mt-0.5">
                                     <span className="text-[10px] text-slate-500 uppercase font-black">{data.profile?.events?.[0] || 'SPRINT'}</span>
                                     <span className="w-1 h-1 bg-slate-700 rounded-full"></span>
