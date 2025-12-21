@@ -158,18 +158,7 @@ export const GeminiLive: React.FC = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 w-full">
-          <div className="bg-slate-900/50 p-3 rounded-2xl border border-slate-800 text-center">
-            <Zap size={16} className="text-cyan-400 mx-auto mb-1" />
-            <div className="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">Latencia</div>
-            <div className="text-xs text-white font-bold">&lt; 100ms</div>
-          </div>
-          <div className="bg-slate-900/50 p-3 rounded-2xl border border-slate-800 text-center">
-            <Activity size={16} className="text-purple-400 mx-auto mb-1" />
-            <div className="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">Motor</div>
-            <div className="text-xs text-white font-bold">Native Audio</div>
-          </div>
-        </div>
+        {/* Removed Latency/Motor boxes for a cleaner look */}
       </div>
     </div>
   );

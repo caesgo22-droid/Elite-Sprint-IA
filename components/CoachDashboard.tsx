@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, Cell } from 'recharts';
 
 const CoachDashboard: React.FC = () => {
-    const { adminProfile, user, updateRoster, viewingAthleteId, switchAthlete, t, updateProfile } = useApp();
+    const { adminProfile, user, userProfile, updateRoster, viewingAthleteId, switchAthlete, t, updateProfile } = useApp();
     const navigate = useNavigate(); // Hook for navigation
     const [emailQuery, setEmailQuery] = useState('');
     const [searching, setSearching] = useState(false);
@@ -127,14 +127,14 @@ const CoachDashboard: React.FC = () => {
     if (viewingAthleteId) {
 
         const currentAthlete = rosterData.find(r => r.uid === viewingAthleteId);
-        const profile = currentAthlete?.profile;
+        const profile = currentAthlete?.profile || userProfile; // Fallback to userProfile if not found in roster
 
-        // Safety check: if profile not loaded yet, show loading state
+        // Safety check: if profile not loaded yet AND we don't have a fallback, show loading state
         if (!profile || !currentAthlete) {
             return (
                 <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 flex items-center justify-center">
                     <div className="text-center">
-                        <div className="text-slate-500 text-sm uppercase tracking-widest mb-4">Cargando Perfil...</div>
+                        <div className="text-slate-500 text-sm uppercase tracking-widest mb-4">Sincronizando Atleta...</div>
                         <div className="animate-spin h-8 w-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto"></div>
                     </div>
                 </div>
@@ -332,9 +332,9 @@ const CoachDashboard: React.FC = () => {
                         <Activity className="text-emerald-400 group-hover:scale-110 transition-transform" />
                         <span className="text-[10px] font-black text-emerald-100 uppercase">Gestionar Plan</span>
                     </button>
-                    <button onClick={() => navigate('/video')} className="bg-purple-900/20 hover:bg-purple-900/40 border border-purple-500/30 p-4 rounded-2xl flex flex-col items-center gap-2 group transition-all relative">
-                        <Microscope className="text-purple-400 group-hover:scale-110 transition-transform" />
-                        <span className="text-[10px] font-black text-purple-100 uppercase">Biomecánica</span>
+                    <button onClick={() => navigate('/video?history=true')} className="bg-purple-900/20 hover:bg-purple-900/40 border border-purple-500/30 p-4 rounded-2xl flex flex-col items-center gap-2 group transition-all relative">
+                        <History className="text-purple-400 group-hover:scale-110 transition-transform" />
+                        <span className="text-[10px] font-black text-purple-100 uppercase">Historial Bio</span>
                         {currentAthlete?.pendingReviews ? (
                             <span className="absolute top-2 right-2 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full animate-bounce">
                                 {currentAthlete.pendingReviews}
@@ -349,7 +349,7 @@ const CoachDashboard: React.FC = () => {
 
                 {/* PENDING NOTIFICATION */}
                 {currentAthlete?.pendingReviews ? (
-                    <div onClick={() => navigate('/video')} className="bg-red-500/10 border border-red-500/30 p-4 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-red-500/20 transition-colors mt-6">
+                    <div onClick={() => navigate('/video?history=true&filter=pending')} className="bg-red-500/10 border border-red-500/30 p-4 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-red-500/20 transition-colors mt-6">
                         <div className="flex items-center gap-3">
                             <div className="p-2 bg-red-500/20 rounded-lg text-red-400"><Eye size={20} /></div>
                             <div>

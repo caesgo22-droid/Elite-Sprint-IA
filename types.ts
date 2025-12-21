@@ -105,6 +105,7 @@ export interface BiomechanicalAnalysis {
   timestamp?: number; // Exact video timestamp for verification
   coachNotes?: string; // NEW: Staff feedback on video
   reviewStatus?: 'Pending' | 'Reviewed'; // NEW: For remote coaching queue
+  videoFingerprint?: string; // NEW: To avoid duplicate analysis
 }
 
 export interface PerformanceLog {

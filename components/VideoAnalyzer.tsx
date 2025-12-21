@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { analyzeTechnique } from '../services/geminiService';
 import { LocalExpert } from '../services/localExpert';
@@ -27,6 +28,12 @@ const VideoAnalyzer: React.FC = () => {
     const [comparisonMode, setComparisonMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [playbackRate, setPlaybackRate] = useState(1);
+    const [videoFingerprint, setVideoFingerprint] = useState<string | null>(null);
+
+    const existingAnalysis = useMemo(() => {
+        if (!videoFingerprint) return null;
+        return analysisHistory.find(a => a.videoFingerprint === videoFingerprint);
+    }, [analysisHistory, videoFingerprint]);
 
     const toggleSelection = (id: string) => {
         setSelectedIds(prev =>
@@ -46,6 +53,18 @@ const VideoAnalyzer: React.FC = () => {
     const overlayRef = useRef<HTMLCanvasElement>(null);
     const compareVideoRef1 = useRef<HTMLVideoElement>(null);
     const compareVideoRef2 = useRef<HTMLVideoElement>(null);
+
+    const location = useLocation();
+
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        if (params.get('history') === 'true') {
+            setViewHistory(true);
+        }
+        if (params.get('filter') === 'pending') {
+            // We'll handle filtering in the render
+        }
+    }, [location]);
 
     useEffect(() => {
         const initMediaPipe = async () => {
@@ -69,6 +88,14 @@ const VideoAnalyzer: React.FC = () => {
     const checkKey = async () => {
         const aistudio = getAIStudio();
         if (aistudio) setHasKey(await aistudio.hasSelectedApiKey());
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setPreviewUrl(URL.createObjectURL(file));
+            setVideoFingerprint(`${file.name}-${file.size}-${file.lastModified}`);
+        }
     };
 
     const handleOpenKey = async () => {
@@ -213,7 +240,8 @@ const VideoAnalyzer: React.FC = () => {
                         strideFreq: primaryFrame.advanced.frequency
                     },
                     timestamp: primaryFrame.timestamp / 1000,
-                    reviewStatus: userProfile.role === 'athlete' ? 'Pending' : 'Reviewed'
+                    reviewStatus: userProfile.role === 'athlete' ? 'Pending' : 'Reviewed',
+                    videoFingerprint: videoFingerprint || undefined
                 };
             } catch (e: any) {
                 console.warn("Fallo en IA remota:", e.message);
@@ -242,7 +270,8 @@ const VideoAnalyzer: React.FC = () => {
                     thumbnail: `data:image/jpeg;base64,${filmstripBase64}`,
                     timestamp: primaryFrame.timestamp / 1000,
                     category: analysisMode,
-                    reviewStatus: userProfile.role === 'athlete' ? 'Pending' : 'Reviewed'
+                    reviewStatus: userProfile.role === 'athlete' ? 'Pending' : 'Reviewed',
+                    videoFingerprint: videoFingerprint || undefined
                 };
             }
             if (analysis) {
@@ -308,7 +337,14 @@ const VideoAnalyzer: React.FC = () => {
     };
 
     useEffect(() => {
-        if (!videoRef.current || !showSkeleton || !poseLandmarker) return;
+        if (!videoRef.current || !poseLandmarker) return;
+
+        // Clear canvas if skeleton is hidden
+        if (!showSkeleton) {
+            const ctx = overlayRef.current?.getContext('2d');
+            if (ctx) ctx.clearRect(0, 0, overlayRef.current!.width, overlayRef.current!.height);
+            return;
+        }
 
         let frameId: number;
         const process = () => {
@@ -359,12 +395,29 @@ const VideoAnalyzer: React.FC = () => {
 
             {!previewUrl ? (
                 <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-700 rounded-[2.5rem] aspect-video flex flex-col items-center justify-center cursor-pointer hover:bg-slate-900/50 transition-all group overflow-hidden relative">
-                    <input type="file" ref={fileInputRef} hidden onChange={(e) => setPreviewUrl(URL.createObjectURL(e.target.files![0]))} accept="video/*" />
+                    <input type="file" ref={fileInputRef} hidden onChange={handleFileChange} accept="video/*" />
                     <UploadCloud size={36} className="text-slate-500 group-hover:text-cyan-400 mb-4" />
                     <span className="font-black text-slate-300 uppercase tracking-widest text-xs">Cargar Sprint</span>
                 </div>
             ) : (
                 <div className="space-y-6">
+                    {existingAnalysis && !activeAnalysis && (
+                        <div className="bg-emerald-900/20 border border-emerald-500/30 p-4 rounded-2xl flex items-center justify-between mb-4 animate-in slide-in-from-top-2">
+                            <div className="flex items-center gap-3">
+                                <CheckCheck className="text-emerald-400" size={20} />
+                                <div>
+                                    <div className="text-xs font-black text-white uppercase">Video ya analizado</div>
+                                    <div className="text-[10px] text-emerald-300 font-bold uppercase tracking-tight">Detectamos un análisis previo en tu historial.</div>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setActiveAnalysis(existingAnalysis)}
+                                className="bg-emerald-600 text-white text-[10px] font-black uppercase px-4 py-2 rounded-lg"
+                            >
+                                Ver Resultado
+                            </button>
+                        </div>
+                    )}
                     <div className="relative rounded-[2rem] overflow-hidden bg-black aspect-video border border-slate-800 shadow-2xl group">
                         <video ref={videoRef} src={previewUrl} className="w-full h-full object-contain" muted playsInline />
                         <canvas ref={overlayRef} className="absolute inset-0 pointer-events-none w-full h-full" />
@@ -717,50 +770,56 @@ const VideoAnalyzer: React.FC = () => {
 
                         {analysisHistory.length === 0 ? (
                             <div className="text-center py-20 text-slate-500 uppercase text-[10px] font-bold">No hay registros previos.</div>
-                        ) : analysisHistory.map(item => (
-                            <div
-                                key={item.id}
-                                onClick={() => toggleSelection(item.id)}
-                                className={`group bg-slate-900 border transition-all rounded-3xl p-4 flex items-center justify-between cursor-pointer ${selectedIds.includes(item.id)
-                                    ? 'border-indigo-500 bg-indigo-900/10'
-                                    : item.reviewStatus === 'Pending'
-                                        ? 'border-indigo-500/50 hover:border-indigo-400'
-                                        : 'border-slate-800 hover:border-slate-700'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className="relative">
-                                        <img src={item.thumbnail} className="w-16 h-10 object-cover rounded-lg border border-slate-800" />
-                                        {selectedIds.includes(item.id) && (
-                                            <div className="absolute -top-2 -right-2 bg-indigo-500 text-white rounded-full p-1 border-2 border-slate-950">
-                                                <CheckCheck size={10} />
+                        ) : analysisHistory
+                            .filter(item => {
+                                const params = new URLSearchParams(location.search);
+                                if (params.get('filter') === 'pending') return item.reviewStatus === 'Pending';
+                                return true;
+                            })
+                            .map(item => (
+                                <div
+                                    key={item.id}
+                                    onClick={() => toggleSelection(item.id)}
+                                    className={`group bg-slate-900 border transition-all rounded-3xl p-4 flex items-center justify-between cursor-pointer ${selectedIds.includes(item.id)
+                                        ? 'border-indigo-500 bg-indigo-900/10'
+                                        : item.reviewStatus === 'Pending'
+                                            ? 'border-indigo-500/50 hover:border-indigo-400'
+                                            : 'border-slate-800 hover:border-slate-700'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="relative">
+                                            <img src={item.thumbnail} className="w-16 h-10 object-cover rounded-lg border border-slate-800" />
+                                            {selectedIds.includes(item.id) && (
+                                                <div className="absolute -top-2 -right-2 bg-indigo-500 text-white rounded-full p-1 border-2 border-slate-950">
+                                                    <CheckCheck size={10} />
+                                                </div>
+                                            )}
+                                            {item.reviewStatus === 'Pending' && !selectedIds.includes(item.id) && (
+                                                <div className="absolute -top-2 -right-2 bg-red-500 rounded-full w-3 h-3 border-2 border-slate-950 animate-pulse" title="Pendiente de revisión" />
+                                            )}
+                                        </div>
+                                        <div className="text-left">
+                                            <div className="text-xs font-black text-white uppercase">{item.phaseDetected || 'Análisis General'}</div>
+                                            <div className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">
+                                                {item.savedAt ? new Date(item.savedAt).toLocaleDateString() : (item.timestamp ? new Date(item.timestamp * 1000).toLocaleDateString() : 'Fecha Desconocida')}
                                             </div>
-                                        )}
-                                        {item.reviewStatus === 'Pending' && !selectedIds.includes(item.id) && (
-                                            <div className="absolute -top-2 -right-2 bg-red-500 rounded-full w-3 h-3 border-2 border-slate-950 animate-pulse" title="Pendiente de revisión" />
-                                        )}
-                                    </div>
-                                    <div className="text-left">
-                                        <div className="text-xs font-black text-white uppercase">{item.phaseDetected || 'Análisis General'}</div>
-                                        <div className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">
-                                            {item.savedAt ? new Date(item.savedAt).toLocaleDateString() : (item.timestamp ? new Date(item.timestamp * 1000).toLocaleDateString() : 'Fecha Desconocida')}
                                         </div>
                                     </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="text-right">
-                                        <div className="text-lg font-black text-emerald-400">{item.score}</div>
-                                        <div className="text-[8px] text-slate-600 font-bold uppercase">SCORE</div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="text-right">
+                                            <div className="text-lg font-black text-emerald-400">{item.score}</div>
+                                            <div className="text-[8px] text-slate-600 font-bold uppercase">SCORE</div>
+                                        </div>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); if (confirm('¿Eliminar del historial?')) deleteAnalysis(item.id); }}
+                                            className="p-2 text-slate-700 hover:text-red-500 transition-colors"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
                                     </div>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); if (confirm('¿Eliminar del historial?')) deleteAnalysis(item.id); }}
-                                        className="p-2 text-slate-700 hover:text-red-500 transition-colors"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
                                 </div>
-                            </div>
-                        ))}
+                            ))}
                     </div>
                 </div>
             )}
