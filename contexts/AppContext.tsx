@@ -178,15 +178,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [currentPlan, planHistory]);
 
-  const switchAthlete = (uid: string | null) => {
-    setViewingAthleteId(uid);
-    setLoadingAuth(true); // Artificial delay for smooth UX
-    // When switching to null (exit), we revert userProfile to adminProfile immediately
-    if (!uid && user) {
-      loadDataForId(user.uid, true).then(() => setLoadingAuth(false));
-    } else {
-      // React Effect will catch the ID change and load data
-      setTimeout(() => setLoadingAuth(false), 500);
+  const switchAthlete = async (uid: string | null) => {
+    try {
+      setViewingAthleteId(uid);
+      setLoadingAuth(true);
+
+      if (!uid && user) {
+        // Return to admin view
+        await loadDataForId(user.uid, true);
+      } else if (uid) {
+        // Switch to athlete view - validate first
+        const athleteData = await fetchUserData(uid);
+        if (!athleteData) {
+          console.error('❌ Athlete not found:', uid);
+          setViewingAthleteId(null); // Reset on error
+          alert('No se pudo cargar el perfil del atleta');
+          return;
+        }
+        // Load athlete data via effect
+        await loadDataForId(uid, false);
+      }
+    } catch (error) {
+      console.error('❌ Error switching athlete:', error);
+      setViewingAthleteId(null);
+      alert('Error al cambiar de atleta');
+    } finally {
+      setLoadingAuth(false);
     }
   };
 
