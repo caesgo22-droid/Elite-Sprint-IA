@@ -1,10 +1,10 @@
 import * as React from 'react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
 import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle, MessageSquare, Table2, ScanLine, ChevronDown, ChevronUp, Flag, BarChart3, MapPin, Trophy, Trash2, Activity, User } from 'lucide-react';
-import { TrainingSession, UserProfile, Injury } from '../types';
+import { TrainingSession, UserProfile, Injury, Coach } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { calculateRecovery } from '../utils/recoveryEngine';
 import { RaceDayManager } from './RaceDayManager';
@@ -278,6 +278,7 @@ const PlanManager: React.FC = () => {
     const [stress, setStress] = useState(4);
     const [hydration, setHydration] = useState(7);
     const [restingHR, setRestingHR] = useState(userProfile.restingHR || 60);
+    const coachEmailRef = useRef<HTMLInputElement>(null);
     const [hrv, setHrv] = useState(userProfile.hrv || 50);
     const [expandedDay, setExpandedDay] = useState<string | null>(null);
     const [tempProfile, setTempProfile] = useState<UserProfile>(userProfile);
@@ -509,19 +510,52 @@ const PlanManager: React.FC = () => {
                         <div className="space-y-2">
                             {tempProfile.coaches?.map((coach, idx) => (
                                 <div key={idx} className="flex justify-between items-center bg-slate-800/40 p-3 rounded-lg border border-slate-700/50">
-                                    <span className="text-xs text-white">{coach}</span>
-                                    <button onClick={() => setTempProfile({ ...tempProfile, coaches: tempProfile.coaches.filter((_, i) => i !== idx) })} className="text-red-500"><X size={14} /></button>
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-bold text-white">{typeof coach === 'string' ? coach : coach.name}</span>
+                                        {typeof coach === 'object' && coach.role && <span className="text-[10px] text-cyan-400 uppercase">{coach.role}</span>}
+                                    </div>
+                                    <button onClick={() => setTempProfile({ ...tempProfile, coaches: tempProfile.coaches.filter((_, i) => i !== idx) })} className="text-red-500 hover:text-red-400 transition-colors">
+                                        <X size={14} />
+                                    </button>
                                 </div>
                             ))}
                             <div className="flex gap-2">
-                                <input type="email" placeholder="Email del Coach" id="newCoachEmail" className="flex-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white" />
+                                <input
+                                    type="email"
+                                    placeholder="Email del Coach"
+                                    ref={coachEmailRef}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') {
+                                            const val = coachEmailRef.current?.value;
+                                            if (val) {
+                                                const newCoach: Coach = {
+                                                    id: Date.now().toString(),
+                                                    name: val.split('@')[0],
+                                                    role: 'Head Coach',
+                                                    email: val
+                                                };
+                                                setTempProfile({ ...tempProfile, coaches: [...(tempProfile.coaches || []), newCoach] });
+                                                coachEmailRef.current!.value = '';
+                                            }
+                                        }
+                                    }}
+                                    className="flex-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                                />
                                 <button onClick={() => {
-                                    const el = document.getElementById('newCoachEmail') as HTMLInputElement;
-                                    if (el.value) {
-                                        setTempProfile({ ...tempProfile, coaches: [...(tempProfile.coaches || []), el.value] });
-                                        el.value = '';
+                                    const val = coachEmailRef.current?.value;
+                                    if (val) {
+                                        const newCoach: Coach = {
+                                            id: Date.now().toString(),
+                                            name: val.split('@')[0],
+                                            role: 'Head Coach',
+                                            email: val
+                                        };
+                                        setTempProfile({ ...tempProfile, coaches: [...(tempProfile.coaches || []), newCoach] });
+                                        coachEmailRef.current!.value = '';
                                     }
-                                }} className="bg-indigo-600 p-2 rounded-lg text-white"><Plus size={16} /></button>
+                                }} className="bg-indigo-600 p-2 rounded-lg text-white hover:bg-indigo-500 transition-colors">
+                                    <Plus size={16} />
+                                </button>
                             </div>
                         </div>
                     </section>
