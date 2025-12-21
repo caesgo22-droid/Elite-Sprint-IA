@@ -123,17 +123,31 @@ const CoachDashboard: React.FC = () => {
         return fallback;
     };
 
+
     if (viewingAthleteId) {
 
         const currentAthlete = rosterData.find(r => r.uid === viewingAthleteId);
         const profile = currentAthlete?.profile;
-        const nextComp = profile?.competitions && profile.competitions.length > 0 ? profile.competitions[0] : null;
+
+        // Safety check: if profile not loaded yet, show loading state
+        if (!profile || !currentAthlete) {
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 flex items-center justify-center">
+                    <div className="text-center">
+                        <div className="text-slate-500 text-sm uppercase tracking-widest mb-4">Cargando Perfil...</div>
+                        <div className="animate-spin h-8 w-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto"></div>
+                    </div>
+                </div>
+            );
+        }
+
+        const nextComp = profile.competitions && profile.competitions.length > 0 ? profile.competitions[0] : null;
 
         // PB Data for Chart
         const pbData = [
-            { name: '100m', time: parseFloat(profile?.pbs?.['100m']?.time || '0') },
-            { name: '200m', time: parseFloat(profile?.pbs?.['200m']?.time || '0') },
-            { name: '400m', time: parseFloat(profile?.pbs?.['400m']?.time || '0') },
+            { name: '100m', time: parseFloat(profile.pbs?.['100m']?.time || '0') },
+            { name: '200m', time: parseFloat(profile.pbs?.['200m']?.time || '0') },
+            { name: '400m', time: parseFloat(profile.pbs?.['400m']?.time || '0') },
         ].filter(d => d.time > 0);
 
         // Macrocycle Simulation (8 weeks)
@@ -257,22 +271,19 @@ const CoachDashboard: React.FC = () => {
                                 <BarChart data={pbData} layout="vertical" margin={{ left: -20, right: 30 }}>
                                     <defs>
                                         <linearGradient id="colorPB" x1="0" y1="0" x2="1" y2="0">
-                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
-                                            <stop offset="95%" stopColor="#10b981" stopOpacity={0.2} />
+                                            <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.8} />
+                                            <stop offset="95%" stopColor="#22d3ee" stopOpacity={0.2} />
                                         </linearGradient>
                                     </defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
                                     <XAxis type="number" hide domain={[0, 'auto']} />
-                                    <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={12} fontWeight="bold" width={60} axisLine={false} tickLine={false} />
+                                    <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={10} fontWeight="bold" width={50} axisLine={false} tickLine={false} />
                                     <Tooltip
                                         cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                                         contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '12px', fontSize: '10px' }}
                                         itemStyle={{ color: '#fff' }}
                                     />
-                                    <Bar dataKey="time" radius={[0, 10, 10, 0]} barSize={20} fill="url(#colorPB)">
-                                        {pbData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fillOpacity={1 - (index * 0.2)} />
-                                        ))}
-                                    </Bar>
+                                    <Bar dataKey="time" radius={[0, 10, 10, 0]} barSize={18} fill="url(#colorPB)" />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>

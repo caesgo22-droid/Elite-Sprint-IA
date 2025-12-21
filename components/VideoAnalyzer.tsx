@@ -369,10 +369,17 @@ const VideoAnalyzer: React.FC = () => {
                         <video ref={videoRef} src={previewUrl} className="w-full h-full object-contain" muted playsInline />
                         <canvas ref={overlayRef} className="absolute inset-0 pointer-events-none w-full h-full" />
 
+
                         <div className="absolute top-4 right-4 flex gap-2">
-                            <button onClick={() => setShowSkeleton(!showSkeleton)} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${showSkeleton ? 'bg-cyan-500 border-cyan-400 text-white' : 'bg-black/60 border-white/20 text-white/60'}`}>
-                                <Zap size={10} className="inline mr-1" /> Overly {showSkeleton ? 'ON' : 'OFF'}
-                            </button>
+                            <div className="relative group/overlay">
+                                <button onClick={() => setShowSkeleton(!showSkeleton)} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${showSkeleton ? 'bg-cyan-500 border-cyan-400 text-white' : 'bg-black/60 border-white/20 text-white/60'}`}>
+                                    <Zap size={10} className="inline mr-1" /> Overlay {showSkeleton ? 'ON' : 'OFF'}
+                                </button>
+                                <div className="absolute top-full mt-2 right-0 w-56 bg-slate-900 border border-slate-700 rounded-lg p-3 text-[9px] text-slate-300 leading-relaxed opacity-0 group-hover/overlay:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
+                                    <div className="font-bold text-cyan-400 mb-1">Esqueleto Biomecánico</div>
+                                    Muestra/oculta la visualización del esqueleto sobre el video durante el análisis en tiempo real.
+                                </div>
+                            </div>
                         </div>
 
                         {capturedFrames.length > 0 && (
@@ -452,7 +459,7 @@ const VideoAnalyzer: React.FC = () => {
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-4">
                                 <div className="space-y-2">
                                     <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2"><ShieldCheck size={12} /> Successes</h4>
                                     <ul className="space-y-1">
@@ -523,6 +530,11 @@ const VideoAnalyzer: React.FC = () => {
                                         {analysis.reviewStatus === 'Reviewed' && (
                                             <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-bold border border-emerald-500/30 flex items-center gap-1">
                                                 <CheckCheck size={10} /> REVISADO
+                                            </span>
+                                        )}
+                                        {analysis.reviewStatus === 'Pending' && (
+                                            <span className="text-[9px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold border border-red-500/30 flex items-center gap-1" title="Video pendiente de revisión por el staff">
+                                                <AlertCircle size={10} /> PENDIENTE
                                             </span>
                                         )}
                                     </div>
