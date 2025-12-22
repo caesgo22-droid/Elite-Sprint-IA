@@ -12,7 +12,7 @@ import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 const getAIStudio = () => (window as any).aistudio;
 
 const VideoAnalyzer: React.FC = () => {
-    const { saveAnalysis, userProfile, updateAnalysis, analysisHistory, deleteAnalysis } = useApp();
+    const { saveAnalysis, userProfile, updateAnalysis, analysisHistory, deleteAnalysis, currentPlan, lastAnalysis } = useApp();
     const [sessionAnalyses, setSessionAnalyses] = useState<BiomechanicalAnalysis[]>([]);
     const [loading, setLoading] = useState(false);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -117,7 +117,8 @@ const VideoAnalyzer: React.FC = () => {
         try {
             const video = videoRef.current;
             const duration = video.duration;
-            const scanSteps = 12;
+            // ✅ OPTIMIZED: Increased from 12 to 30 frames for better phase detection
+            const scanSteps = Math.min(30, Math.ceil(duration * 10)); // 10 fps, max 30
             const tempHistory: any[] = [];
             const frames: string[] = [];
 
@@ -155,10 +156,16 @@ const VideoAnalyzer: React.FC = () => {
 
                     tempHistory.push({ landmarks, mechanics, advanced, com, timestamp: time * 1000 });
 
+                    // ✅ OPTIMIZED: Adaptive resolution based on device
+                    const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+                    const thumbWidth = isMobile ? 320 : 160;
+                    const thumbHeight = isMobile ? 180 : 90;
+
                     const canvas = document.createElement('canvas');
-                    canvas.width = 160; canvas.height = 90;
-                    canvas.getContext('2d')?.drawImage(video, 0, 0, 160, 90);
-                    frames.push(canvas.toDataURL('image/jpeg', 0.5));
+                    canvas.width = thumbWidth;
+                    canvas.height = thumbHeight;
+                    canvas.getContext('2d')?.drawImage(video, 0, 0, thumbWidth, thumbHeight);
+                    frames.push(canvas.toDataURL('image/jpeg', 0.5)); // Low quality for thumbnails
                 }
                 setStatusMessage(`Escaneando: ${Math.round((i / scanSteps) * 100)}%`);
             }
@@ -194,7 +201,8 @@ const VideoAnalyzer: React.FC = () => {
             }
 
             const isMaster = analysisMode === 'External';
-            const filmstripBase64 = filmstripCanvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+            // ✅ OPTIMIZED: High quality (95%) for Gemini analysis
+            const filmstripBase64 = filmstripCanvas.toDataURL('image/jpeg', 0.95).split(',')[1];
 
             let payload: string[] = [filmstripBase64];
             if (isMaster && ctx) {
@@ -211,7 +219,8 @@ const VideoAnalyzer: React.FC = () => {
                     video.currentTime = (frame as any).timestamp / 1000;
                     await new Promise(r => setTimeout(r, 100));
                     ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-                    masterFrames.push(filmstripCanvas.toDataURL('image/jpeg', 0.6).split(',')[1]);
+                    // ✅ OPTIMIZED: High quality (95%) for Gemini analysis
+                    masterFrames.push(filmstripCanvas.toDataURL('image/jpeg', 0.95).split(',')[1]);
                 }
                 payload = masterFrames;
             }
@@ -222,7 +231,17 @@ const VideoAnalyzer: React.FC = () => {
 
             let analysis: BiomechanicalAnalysis | null = null;
             try {
-                const aiResult = await analyzeTechnique(payload, primaryFrame.mechanics, primaryFrame.advanced, analysisMode);
+                // ✅ OPTIMIZED: Pass athlete context for more relevant analysis
+                const currentSession = currentPlan?.sessions?.find((s: any) => s.day === new Date().toLocaleDateString('es-ES', { weekday: 'long' }));
+                const aiResult = await analyzeTechnique(
+                    payload,
+                    primaryFrame.mechanics,
+                    primaryFrame.advanced,
+                    analysisMode,
+                    userProfile,
+                    lastAnalysis,
+                    currentSession
+                );
                 if (!aiResult) throw new Error("IA offline o requiere configuración.");
 
                 analysis = {

@@ -165,3 +165,68 @@ export interface StaffBriefing {
   type: 'Strategy' | 'Physical' | 'Psychology' | 'Technique' | 'General';
   replies?: StaffReply[];
 }
+
+// ===== NEW: Staff Communication Types =====
+
+export interface AssignedTask {
+  id: string;
+  athleteId: string;
+  assignedBy: string;
+  assignedByName: string;
+  title: string;
+  description: string;
+  dueDate: string;
+  status: 'Pending' | 'In Progress' | 'Completed';
+  type: 'Drill' | 'Video' | 'Recovery' | 'General';
+  priority: 'Low' | 'Medium' | 'High';
+  completedAt?: string;
+  createdAt: string;
+}
+
+export interface StaffMessage {
+  id: string;
+  from: string; // uid
+  fromName: string;
+  to: string; // uid
+  toName: string;
+  content: string;
+  timestamp: string;
+  read: boolean;
+  attachments?: string[]; // URLs
+}
+
+export interface VideoAnnotation {
+  id: string;
+  analysisId: string;
+  videoTimestamp: number; // Seconds in video
+  authorId: string;
+  authorName: string;
+  authorRole: string;
+  type: 'text' | 'voice';
+  content: string; // Text or audio URL
+  createdAt: string;
+}
+
+export interface ActivityEvent {
+  id: string;
+  userId: string;
+  type: 'analysis' | 'plan' | 'session' | 'briefing' | 'task' | 'message';
+  title: string;
+  description: string;
+  timestamp: string;
+  metadata?: any; // Additional context
+}
+
+export interface WeeklyProgressData {
+  weekStart: string;
+  sessionsCompleted: number;
+  sessionsPlanned: number;
+  avgVideoScore: number;
+  avgFatigue: number;
+  avgReadiness: number;
+  keyMetrics: {
+    gct?: number;
+    strideLength?: number;
+    velocity?: number;
+  };
+}

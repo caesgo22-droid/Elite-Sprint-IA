@@ -77,12 +77,24 @@ export const LiveCoach: React.FC = () => {
     <div className="absolute bottom-16 left-4 right-4 bg-slate-900 border border-slate-700 rounded-xl p-3 shadow-2xl animate-in slide-in-from-bottom-5 z-20">
       <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Consultar a:</h4>
       <div className="grid grid-cols-2 gap-2">
-        {userProfile.coaches?.length > 0 ? userProfile.coaches.map(c => (
-          <button key={c.id} onClick={() => handleSend(input, `${c.name} (${c.role})`)} disabled={!input.trim()} className="text-left p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs transition-colors border border-slate-700 hover:border-cyan-500">
-            <div className="font-bold text-white">{c.name}</div>
-            <div className="text-cyan-400">{c.role}</div>
-          </button>
-        )) : <div className="col-span-2 text-xs text-slate-500 text-center py-2">No hay staff registrado. Ve a Staff y agrega miembros.</div>}
+        {userProfile.coaches?.length > 0 ? userProfile.coaches.map((c, idx) => {
+          // Handle both string (legacy) and Coach object formats
+          const coachName = typeof c === 'string' ? c : c.name;
+          const coachRole = typeof c === 'string' ? 'Coach' : c.role;
+          const coachId = typeof c === 'string' ? `coach-${idx}` : c.id;
+
+          return (
+            <button
+              key={coachId}
+              onClick={() => handleSend(input, `${coachName} (${coachRole})`)}
+              disabled={!input.trim()}
+              className="text-left p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs transition-colors border border-slate-700 hover:border-cyan-500"
+            >
+              <div className="font-bold text-white">{coachName}</div>
+              <div className="text-cyan-400">{coachRole}</div>
+            </button>
+          );
+        }) : <div className="col-span-2 text-xs text-slate-500 text-center py-2">No hay staff registrado. Ve a Staff y agrega miembros.</div>}
       </div>
     </div>
   );
@@ -108,10 +120,10 @@ export const LiveCoach: React.FC = () => {
         {chatHistory.map((msg) => (
           <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
             <div className={`max-w-[85%] rounded-2xl p-4 text-sm leading-relaxed shadow-lg ${msg.sender === 'user'
-                ? 'bg-gradient-to-br from-cyan-600 to-cyan-700 text-white rounded-br-none border border-cyan-500/20'
-                : msg.isToolLog
-                  ? 'bg-emerald-950/40 border border-emerald-500/30 text-emerald-200 backdrop-blur-sm'
-                  : 'bg-slate-900/80 backdrop-blur-md text-slate-200 rounded-bl-none border border-slate-700/50'
+              ? 'bg-gradient-to-br from-cyan-600 to-cyan-700 text-white rounded-br-none border border-cyan-500/20'
+              : msg.isToolLog
+                ? 'bg-emerald-950/40 border border-emerald-500/30 text-emerald-200 backdrop-blur-sm'
+                : 'bg-slate-900/80 backdrop-blur-md text-slate-200 rounded-bl-none border border-slate-700/50'
               }`}>
               {msg.isToolLog && <Wrench size={12} className="inline mr-2 text-emerald-400" />}
               {msg.text}

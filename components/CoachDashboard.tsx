@@ -2,11 +2,12 @@ import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { findAthleteByEmail, fetchUserData, getPlanHistory, getAnalysisHistory, getStaffBriefings, addStaffBriefing, addBriefingReply } from '../services/firebase';
-import { Users, Plus, Search, UserCircle2, Briefcase, Eye, LogOut, Activity, ArrowRight, AlertCircle, Microscope, Zap, Trophy } from 'lucide-react';
+import { Users, Plus, Search, UserCircle2, Briefcase, Eye, LogOut, Activity, ArrowRight, AlertCircle, Microscope, Zap, Trophy, History } from 'lucide-react';
 import { UserProfile, StaffBriefing, StaffReply } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, Cell } from 'recharts';
+import TaskManager from './TaskManager';
 
 const CoachDashboard: React.FC = () => {
     const { adminProfile, user, userProfile, updateRoster, viewingAthleteId, switchAthlete, t, updateProfile } = useApp();

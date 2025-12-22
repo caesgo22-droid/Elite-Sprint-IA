@@ -316,10 +316,21 @@ const PlanManager: React.FC = () => {
         if (!tempProfile.events.includes(focusEvent)) setFocusEvent(tempProfile.events[0]);
     };
 
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
     const handleGenerate = async () => {
         setLoading(true);
-        const plan = await generateTrainingPlan(userProfile, { fatigue, sleep, soreness, stress, hydration, restingHR, hrv }, new Date().toLocaleDateString('es-ES'), focusEvent, acwr || undefined);
-        if (plan) setPlan(plan); else alert("Error crítico al generar el plan.");
+        setErrorMsg(null);
+        try {
+            const plan = await generateTrainingPlan(userProfile, { fatigue, sleep, soreness, stress, hydration, restingHR, hrv }, new Date().toLocaleDateString('es-ES'), focusEvent, acwr || undefined);
+            if (plan) {
+                setPlan(plan);
+            } else {
+                setErrorMsg("No se pudo generar el plan. Verifique su conexión y la configuración de API Key.");
+            }
+        } catch (e) {
+            setErrorMsg("Error inesperado al generar el plan.");
+        }
         setLoading(false);
     };
 
@@ -673,6 +684,11 @@ const PlanManager: React.FC = () => {
                                 <input type="number" value={hrv} onChange={e => setHrv(parseInt(e.target.value))} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white" />
                             </div>
                         </div>
+                        {errorMsg && (
+                            <div className="p-3 bg-red-900/40 border border-red-500/50 rounded-lg text-red-200 text-xs font-bold text-center animate-pulse">
+                                ⚠️ {errorMsg}
+                            </div>
+                        )}
                     </div>
                     <button onClick={handleGenerate} disabled={loading} className="w-full bg-cyan-600 text-white font-bold py-4 rounded-xl"> {loading ? 'Generando...' : 'Generar Plan Elite'} </button>
                 </div>

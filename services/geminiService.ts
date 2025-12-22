@@ -2,6 +2,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { TrainingPlan, NexusInsight, UserProfile } from "../types";
 import { COACH_PERSONA, PLAN_GENERATION_PROMPT, VIDEO_ANALYSIS_PROMPT, ANALYSIS_SYSTEM_INSTRUCTION, MASTER_AUDIT_PROMPT, MASTER_ANALYSIS_SYSTEM_INSTRUCTION } from "../utils/prompts";
 
+import { getEnv } from "../utils/env";
+
 const cleanAndParseJSON = (text: string) => {
     if (!text) return null;
     try {
@@ -19,15 +21,26 @@ const cleanAndParseJSON = (text: string) => {
 };
 
 const getModelInstance = (modelName: string) => {
-    const apiKey = (window as any).aistudio?.apiKey || process.env.GEMINI_API_KEY || process.env.API_KEY;
-    if (!apiKey) return null;
+    const apiKey = (window as any).aistudio?.apiKey || getEnv("GEMINI_API_KEY") || getEnv("VITE_GEMINI_API_KEY") || getEnv("API_KEY");
+    if (!apiKey) {
+        console.warn("⚠️ Google Gemini API Key missing. Video analysis and AI features will be unavailable.");
+        return null;
+    }
     const genAI = new GoogleGenerativeAI(apiKey);
-    return genAI.getGenerativeModel({ model: modelName });
+    return genAI.getGenerativeModel({
+        model: modelName,
+        generationConfig: {
+            temperature: 0.1,  // More deterministic for technical analysis
+            topP: 0.95,
+            topK: 40,
+        }
+    });
 };
 
-export const analyzeTechnique = async (images: string[], bioData: any, advancedMetrics: any, analysisMode: string): Promise<any> => {
+export const analyzeTechnique = async (images: string[], bioData: any, advancedMetrics: any, analysisMode: string, userProfile?: any, lastAnalysis?: any, currentSession?: any): Promise<any> => {
     const isMaster = analysisMode === 'External';
-    const modelName = isMaster ? "gemini-pro-latest" : "gemini-flash-latest";
+    // ✅ UPGRADED: Gemini 2.0 Flash (faster and more accurate than Pro 1.5)
+    const modelName = isMaster ? "gemini-2.0-flash-exp" : "gemini-2.0-flash-thinking-exp";
     const model = getModelInstance(modelName);
     if (!model) return null;
 
@@ -36,9 +49,21 @@ export const analyzeTechnique = async (images: string[], bioData: any, advancedM
             inlineData: { mimeType: "image/jpeg", data: img }
         }));
 
+        // Build enriched prompt with athlete context
+        let contextAddition = "";
+        if (userProfile) {
+            const activeInjuries = userProfile.injuries?.filter((i: any) => i.status === 'Activa').map((i: any) => i.location).join(', ') || 'Ninguna';
+            const mainEvent = userProfile.events?.[0] || '100m';
+            const pb = userProfile.pbs?.[mainEvent]?.time || 'N/A';
+            const lastErrors = lastAnalysis?.criticalErrors?.join(', ') || 'Primer análisis';
+            const sessionFocus = currentSession?.biomechanicsKpi || 'General';
+
+            contextAddition = `\n\nCONTEXTO DEL ATLETA:\n- Evento Principal: ${mainEvent}\n- PB Actual: ${pb}\n- Lesiones Activas: ${activeInjuries}\n- Último Análisis: ${lastErrors}\n- Objetivo de Sesión: ${sessionFocus}\n`;
+        }
+
         const prompt = isMaster
-            ? MASTER_AUDIT_PROMPT({ bioData, advancedMetrics })
-            : VIDEO_ANALYSIS_PROMPT({ bioData, advancedMetrics });
+            ? MASTER_AUDIT_PROMPT({ bioData, advancedMetrics }) + contextAddition
+            : VIDEO_ANALYSIS_PROMPT({ bioData, advancedMetrics }) + contextAddition;
 
         const result = await model.generateContent({
             contents: [{
@@ -64,7 +89,7 @@ export const analyzeTechnique = async (images: string[], bioData: any, advancedM
 };
 
 export const generateNexusInsight = async (logs: any[], readiness: any, analysisHistory: any[], acwr: any): Promise<NexusInsight | null> => {
-    const model = getModelInstance("gemini-flash-latest");
+    const model = getModelInstance("gemini-2.0-flash-thinking-exp");
     if (!model) return null;
 
     const prompt = `AUDITORÍA HOLÍSTICA (Nivel 5).
@@ -99,7 +124,7 @@ export const generateNexusInsight = async (logs: any[], readiness: any, analysis
 };
 
 export const generateTrainingPlan = async (profile: UserProfile, readiness: any, currentDate: string, focusEvent?: string, acwr?: any): Promise<TrainingPlan | null> => {
-    const model = getModelInstance("gemini-flash-latest");
+    const model = getModelInstance("gemini-2.0-flash-exp");
     if (!model) return null;
 
     try {
@@ -130,7 +155,7 @@ export const generateTrainingPlan = async (profile: UserProfile, readiness: any,
 };
 
 export const chatWithCoach = async (history: any[], message: string, context: any): Promise<any> => {
-    const model = getModelInstance("gemini-pro-latest");
+    const model = getModelInstance("gemini-2.0-flash-exp");
     if (!model) return { text: "Sistema Offline." };
 
     try {

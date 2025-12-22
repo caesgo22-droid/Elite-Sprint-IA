@@ -5,6 +5,7 @@ import { BrainCircuit, Activity, RefreshCw, Key, ShieldCheck, ArrowRight, Calend
 import { useNavigate } from 'react-router-dom';
 import { generateNexusInsight } from '../services/geminiService';
 import { AthletePassport } from './AthletePassport';
+import { getEnv } from '../utils/env';
 
 const getAIStudio = () => (window as any).aistudio;
 
@@ -20,7 +21,7 @@ const HomeDashboard: React.FC = () => {
     const CACHE_KEY = 'nexus_cache_v1';
     const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+    const apiKey = getEnv("GEMINI_API_KEY") || getEnv("VITE_GEMINI_API_KEY") || getEnv("API_KEY");
     if (!apiKey && !force) return;
 
     // 1. Try to load from cache first if not forced

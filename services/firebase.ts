@@ -1,28 +1,15 @@
-
 import * as firebaseApp from "firebase/app";
 import * as firebaseAuth from "firebase/auth";
 import { getFirestore, doc, setDoc, getDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc, Firestore, where, limit } from "firebase/firestore";
-
-// Helper to get env vars safely in Vite/Node
-const getEnv = (key: string) => {
-  // Check import.meta.env (Vite standard)
-  if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env[key]) {
-    return (import.meta as any).env[key];
-  }
-  // Check process.env (Fallback)
-  if (typeof process !== 'undefined' && process.env && process.env[key]) {
-    return process.env[key];
-  }
-  return "";
-};
+import { getEnv } from "../utils/env";
 
 const firebaseConfig = {
-  apiKey: getEnv("VITE_FIREBASE_API_KEY"),
-  authDomain: getEnv("VITE_FIREBASE_AUTH_DOMAIN"),
-  projectId: getEnv("VITE_FIREBASE_PROJECT_ID"),
-  storageBucket: getEnv("VITE_FIREBASE_STORAGE_BUCKET"),
-  messagingSenderId: getEnv("VITE_FIREBASE_MESSAGING_SENDER_ID"),
-  appId: getEnv("VITE_FIREBASE_APP_ID")
+  apiKey: getEnv("FIREBASE_API_KEY") || getEnv("VITE_FIREBASE_API_KEY"),
+  authDomain: getEnv("FIREBASE_AUTH_DOMAIN") || getEnv("VITE_FIREBASE_AUTH_DOMAIN"),
+  projectId: getEnv("FIREBASE_PROJECT_ID") || getEnv("VITE_FIREBASE_PROJECT_ID"),
+  storageBucket: getEnv("FIREBASE_STORAGE_BUCKET") || getEnv("VITE_FIREBASE_STORAGE_BUCKET"),
+  messagingSenderId: getEnv("FIREBASE_MESSAGING_SENDER_ID") || getEnv("VITE_FIREBASE_MESSAGING_SENDER_ID"),
+  appId: getEnv("FIREBASE_APP_ID") || getEnv("VITE_FIREBASE_APP_ID")
 };
 
 // Workaround for potential environment type mismatch for firebase/app
@@ -35,10 +22,10 @@ let auth: any = null;
 let db: Firestore | null = null;
 let googleProvider: any = null;
 let isInitialized = false;
+let connectionError = "";
 
 try {
   // Check if config is valid to prevent crash
-  // IF keys are missing, we don't throw, we just log and stay uninitialized.
   if (firebaseConfig.apiKey) {
     if (!getApps().length) {
       app = initializeApp(firebaseConfig);
@@ -50,15 +37,18 @@ try {
     db = getFirestore(app);
     googleProvider = new GoogleAuthProvider();
     isInitialized = true;
+    console.log("✅ Firebase initialized successfully");
   } else {
     console.warn("🔥 Firebase config missing. App will run in offline mode (UI Only).");
+    connectionError = "Falta Configuración";
   }
 
-} catch (error) {
+} catch (error: any) {
   console.error("🔥 FIREBASE INITIALIZATION ERROR:", error);
+  connectionError = error.message || "Error Crítico";
 }
 
-export { auth, db, googleProvider, isInitialized };
+export { auth, db, googleProvider, isInitialized, connectionError };
 
 // --- Firestore Helpers (Safe Wrappers) ---
 
@@ -203,4 +193,109 @@ export const addBriefingReply = async (athleteId: string, briefingId: string, re
       await setDoc(briefingRef, { replies: updatedReplies }, { merge: true });
     }
   } catch (e) { console.error(e); }
+};
+
+// ===== NEW: Staff Communication Functions =====
+
+export const assignTask = async (athleteId: string, task: any) => {
+  if (!db || !isInitialized) return;
+  try {
+    await setDoc(doc(db, "users", athleteId, "assignedTasks", task.id), task);
+  } catch (e) { console.error("Error assigning task:", e); }
+};
+
+export const getAssignedTasks = async (athleteId: string): Promise<any[]> => {
+  if (!db || !isInitialized) return [];
+  try {
+    const q = query(collection(db, "users", athleteId, "assignedTasks"), orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => d.data());
+  } catch (e) { console.error(e); return []; }
+};
+
+export const updateTaskStatus = async (athleteId: string, taskId: string, status: string, completedAt?: string) => {
+  if (!db || !isInitialized) return;
+  try {
+    const taskRef = doc(db, "users", athleteId, "assignedTasks", taskId);
+    await setDoc(taskRef, { status, ...(completedAt && { completedAt }) }, { merge: true });
+  } catch (e) { console.error(e); }
+};
+
+export const sendStaffMessage = async (message: any) => {
+  if (!db || !isInitialized) return;
+  try {
+    // Save to both sender and recipient for easy querying
+    await setDoc(doc(db, "users", message.from, "messages", message.id), message);
+    await setDoc(doc(db, "users", message.to, "messages", message.id), message);
+  } catch (e) { console.error("Error sending message:", e); }
+};
+
+export const getStaffMessages = async (userId: string, otherUserId: string): Promise<any[]> => {
+  if (!db || !isInitialized) return [];
+  try {
+    const q = query(
+      collection(db, "users", userId, "messages"),
+      where("from", "in", [userId, otherUserId]),
+      where("to", "in", [userId, otherUserId]),
+      orderBy("timestamp", "asc")
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => d.data());
+  } catch (e) {
+    console.error(e);
+    // Fallback: get all messages and filter client-side
+    try {
+      const allQ = query(collection(db, "users", userId, "messages"), orderBy("timestamp", "asc"));
+      const allSnapshot = await getDocs(allQ);
+      return allSnapshot.docs
+        .map(d => d.data())
+        .filter((m: any) =>
+          (m.from === userId && m.to === otherUserId) ||
+          (m.from === otherUserId && m.to === userId)
+        );
+    } catch (e2) { return []; }
+  }
+};
+
+export const markMessageAsRead = async (userId: string, messageId: string) => {
+  if (!db || !isInitialized) return;
+  try {
+    await setDoc(doc(db, "users", userId, "messages", messageId), { read: true }, { merge: true });
+  } catch (e) { console.error(e); }
+};
+
+export const addVideoAnnotation = async (analysisId: string, annotation: any) => {
+  if (!db || !isInitialized) return;
+  try {
+    await setDoc(doc(db, "analysisAnnotations", analysisId, "annotations", annotation.id), annotation);
+  } catch (e) { console.error("Error adding annotation:", e); }
+};
+
+export const getVideoAnnotations = async (analysisId: string): Promise<any[]> => {
+  if (!db || !isInitialized) return [];
+  try {
+    const q = query(collection(db, "analysisAnnotations", analysisId, "annotations"), orderBy("videoTimestamp", "asc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => d.data());
+  } catch (e) { console.error(e); return []; }
+};
+
+export const logActivity = async (userId: string, event: any) => {
+  if (!db || !isInitialized) return;
+  try {
+    await setDoc(doc(db, "users", userId, "activityFeed", event.id), event);
+  } catch (e) { console.error(e); }
+};
+
+export const getActivityFeed = async (userId: string, limitCount: number = 20): Promise<any[]> => {
+  if (!db || !isInitialized) return [];
+  try {
+    const q = query(
+      collection(db, "users", userId, "activityFeed"),
+      orderBy("timestamp", "desc"),
+      limit(limitCount)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => d.data());
+  } catch (e) { console.error(e); return []; }
 };

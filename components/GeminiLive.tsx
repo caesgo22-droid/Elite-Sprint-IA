@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { EliteLiveService } from '../services/liveService';
 import { Mic, Radio, Headphones, X, Zap, Activity, Key, AlertCircle, Info, Clock } from 'lucide-react';
+import { getEnv } from '../utils/env';
 
 const getAIStudio = () => (window as any).aistudio;
 
@@ -19,7 +20,7 @@ export const GeminiLive: React.FC = () => {
 
   useEffect(() => {
     const config = getAIStudio();
-    const envKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+    const envKey = getEnv("GEMINI_API_KEY") || getEnv("VITE_GEMINI_API_KEY") || getEnv("API_KEY");
     const finalKey = config?.apiKey || envKey;
 
     setHasKey(!!finalKey);
