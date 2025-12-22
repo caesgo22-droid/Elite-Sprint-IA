@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import { UserProfile, TrainingPlan, PerformanceLog, ChatMessage, BiomechanicalAnalysis, NexusInsight, LoadStats } from '../types';
 import { auth, saveUserProfile, saveTrainingPlan, addPerformanceLog, updatePerformanceLog, deletePerformanceLog, fetchUserData, saveAnalysisToHistory, getAnalysisHistory, isInitialized, archivePlan, getPlanHistory, deleteAnalysisFromHistory } from '../services/firebase';
+import { getDownloadURL, ref, uploadBytes, deleteObject } from 'firebase/storage';
+import { useToasts } from './ToastContext';
 import * as firebaseAuth from 'firebase/auth';
 import { calculateACWR } from '../utils/loadCalculator';
 import { Language, TRANSLATIONS } from '../utils/translations';
@@ -77,6 +79,7 @@ const defaultProfile: UserProfile = {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { showToast } = useToasts();
   const [user, setUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [language, setLanguage] = useState<Language>('es');
@@ -193,7 +196,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!athleteData) {
           console.error('❌ Athlete not found:', uid);
           setViewingAthleteId(null); // Reset on error
-          alert('No se pudo cargar el perfil del atleta');
+          showToast('No se pudo cargar el perfil del atleta', 'error');
           return;
         }
         // Load athlete data via effect
@@ -202,7 +205,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } catch (error) {
       console.error('❌ Error switching athlete:', error);
       setViewingAthleteId(null);
-      alert('Error al cambiar de atleta');
+      showToast('Error al cambiar de atleta', 'error');
     } finally {
       setLoadingAuth(false);
     }

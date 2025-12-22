@@ -8,10 +8,14 @@ import { ElitePhysicsEngine } from '../utils/biomechanicsUtils';
 import { TrainingSession, UserProfile, Injury, BiomechanicalAnalysis } from '../types';
 import { Loader2, ScanLine, UploadCloud, History, Key, Info, X, ShieldCheck, Microscope, AlertCircle, Zap, Play, Edit3, CheckCheck, Trash2, Maximize2, Columns, RotateCcw } from 'lucide-react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
+import { AnalysisResultCard, MetricBox } from './AnalysisResultCard';
+import { AnalysisHistoryList } from './AnalysisHistoryList';
+import { useToasts } from '../contexts/ToastContext';
 
 const getAIStudio = () => (window as any).aistudio;
 
 const VideoAnalyzer: React.FC = () => {
+    const { showToast } = useToasts();
     const { saveAnalysis, userProfile, updateAnalysis, analysisHistory, deleteAnalysis, currentPlan, lastAnalysis } = useApp();
     const [sessionAnalyses, setSessionAnalyses] = useState<BiomechanicalAnalysis[]>([]);
     const [loading, setLoading] = useState(false);
@@ -300,7 +304,7 @@ const VideoAnalyzer: React.FC = () => {
         } catch (e: any) {
             console.error("Critical Analysis Error:", e);
             setStatusMessage("Error en el análisis.");
-            alert(e.message || "Fallo en el análisis.");
+            showToast(e.message || "Fallo en el análisis.", 'error');
         } finally {
             setLoading(false);
         }
@@ -505,151 +509,13 @@ const VideoAnalyzer: React.FC = () => {
                     </div>
 
                     {[...(activeAnalysis ? [activeAnalysis] : []), ...sessionAnalyses].map(analysis => (
-                        <div key={analysis.id} className="bg-slate-900 border border-slate-700 p-6 rounded-[2rem] space-y-6 animate-in slide-in-from-bottom-4 shadow-2xl overflow-hidden relative">
-                            {activeAnalysis?.id === analysis.id && (
-                                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-indigo-500 text-white text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-widest z-10">Vista de Historial</div>
-                            )}
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <h3 className={`font-black text-2xl tracking-tighter uppercase ${analysis.category === 'External' ? 'text-indigo-400' : 'text-white'}`}>{analysis.phaseDetected}</h3>
-                                    <div className="flex items-center gap-2 mt-1">
-                                        <Microscope size={12} className="text-slate-500" />
-                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Motor: {analysis.coachNotes?.includes("OFFLINE") ? 'Local' : (analysis.category === 'External' ? 'Deep Pro' : 'Flash')}</span>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-3xl font-black text-emerald-400 tracking-tighter">{analysis.score}</div>
-                                    <div className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Score</div>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-2">
-                                <MetricBox label="VEL (m/s)" value={analysis.kinetics?.comVelocity?.toString().split(' ')[0] || '--'} />
-                                <MetricBox label="GCT (sec)" value={analysis.groundContactTimeEstimate || '--'} />
-                                <MetricBox label="EFF" value={`${analysis.kinetics?.forceApplicationIndex || '--'}%`} />
-                            </div>
-
-                            {(analysis as any).jointAngles && (
-                                <div className="bg-black/40 rounded-2xl p-4 border border-slate-800/50 space-y-3">
-                                    <h4 className="text-[10px] font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2"><ScanLine size={12} /> Biomecánica de Élite</h4>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="flex justify-between items-center border-b border-slate-800/50 pb-1">
-                                            <span className="text-[10px] text-slate-500 uppercase font-bold">Rodilla (Ext)</span>
-                                            <span className="text-xs font-black text-white">{(analysis as any).jointAngles.kneeExtension || '--'}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center border-b border-slate-800/50 pb-1">
-                                            <span className="text-[10px] text-slate-500 uppercase font-bold">Cadera (Flex)</span>
-                                            <span className="text-xs font-black text-white">{(analysis as any).jointAngles.hipFlexion || '--'}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center border-b border-slate-800/50 pb-1">
-                                            <span className="text-[10px] text-slate-500 uppercase font-bold">Shin Angle</span>
-                                            <span className="text-xs font-black text-white">{(analysis as any).jointAngles.shinAngle || '--'}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center border-b border-slate-800/50 pb-1">
-                                            <span className="text-[10px] text-slate-500 uppercase font-bold">Osc. Vertical</span>
-                                            <span className="text-xs font-black text-white">{analysis.kinetics?.verticalOscillation || '--'}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="space-y-4">
-                                <div className="space-y-2">
-                                    <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2"><ShieldCheck size={12} /> Successes</h4>
-                                    <ul className="space-y-1">
-                                        {(analysis as any).successes?.map((s: string, i: number) => (
-                                            <li key={i} className="text-[11px] text-slate-300 flex items-start gap-2">
-                                                <div className="w-1 h-1 bg-emerald-500 rounded-full mt-1.5 shrink-0" />
-                                                {s}
-                                            </li>
-                                        )) || <li className="text-[11px] text-slate-600 italic">No detectado.</li>}
-                                    </ul>
-                                </div>
-                                <div className="space-y-2">
-                                    <h4 className="text-[10px] font-black text-red-400 uppercase tracking-widest flex items-center gap-2"><AlertCircle size={12} /> Weaknesses</h4>
-                                    <ul className="space-y-1">
-                                        {(analysis as any).weaknesses?.map((w: string, i: number) => (
-                                            <li key={i} className="text-[11px] text-slate-300 flex items-start gap-2">
-                                                <div className="w-1 h-1 bg-red-500 rounded-full mt-1.5 shrink-0" />
-                                                {w}
-                                            </li>
-                                        )) || (analysis as any).criticalErrors?.map((w: string, i: number) => (
-                                            <li key={i} className="text-[11px] text-slate-300 flex items-start gap-2">
-                                                <div className="w-1 h-1 bg-red-500 rounded-full mt-1.5 shrink-0" />
-                                                {w}
-                                            </li>
-                                        )) || <li className="text-[11px] text-slate-600 italic">No detectado.</li>}
-                                    </ul>
-                                </div>
-                            </div>
-
-                            {(analysis as any).correctiveDrills && (analysis as any).correctiveDrills.length > 0 && (
-                                <div className="space-y-3 pt-4 border-t border-slate-800">
-                                    <h4 className="text-[10px] font-black text-purple-400 uppercase tracking-widest flex items-center gap-2"><Microscope size={12} /> Plan de Corrección</h4>
-                                    <div className="grid gap-2">
-                                        {(analysis as any).correctiveDrills.map((drill: any, idx: number) => (
-                                            <div key={idx} className="bg-slate-950 p-3 rounded-2xl border border-slate-800/50 flex justify-between items-center group/drill">
-                                                <div className="flex-1">
-                                                    <div className="text-xs font-bold text-white uppercase tracking-tight">{typeof drill === 'string' ? drill : drill.name}</div>
-                                                    {drill.reason && <p className="text-[10px] text-slate-500 leading-tight mt-0.5 line-clamp-1 group-hover/drill:line-clamp-none transition-all">{drill.reason}</p>}
-                                                </div>
-                                                <a
-                                                    href={`https://www.youtube.com/results?search_query=track+and+field+drill+${(drill.videoKeywords || (typeof drill === 'string' ? drill : drill.name)).replace(/\s/g, '+')}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="p-2 bg-slate-800 rounded-full text-slate-500 hover:text-red-500 transition-colors"
-                                                >
-                                                    <Play size={12} fill="currentColor" />
-                                                </a>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="space-y-3">
-                                <div className="flex flex-wrap gap-2 justify-center">
-                                    {analysis.coachShouts.map((s, i) => (
-                                        <span key={i} className="text-[10px] bg-slate-950 border border-slate-800 px-4 py-2 rounded-full text-slate-200 font-black italic shadow-inner">"{s}"</span>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {userProfile.role === 'staff' && (
-                                <div className="mt-6 pt-6 border-t border-indigo-500/30 bg-indigo-900/10 -mx-4 px-4 pb-4 rounded-b-3xl">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
-                                            <Edit3 size={12} /> Zona de Feedback Staff
-                                        </h4>
-                                        {analysis.reviewStatus === 'Reviewed' && (
-                                            <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-bold border border-emerald-500/30 flex items-center gap-1">
-                                                <CheckCheck size={10} /> REVISADO
-                                            </span>
-                                        )}
-                                        {analysis.reviewStatus === 'Pending' && (
-                                            <span className="text-[9px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold border border-red-500/30 flex items-center gap-1" title="Video pendiente de revisión por el staff">
-                                                <AlertCircle size={10} /> PENDIENTE
-                                            </span>
-                                        )}
-                                    </div>
-                                    <textarea
-                                        placeholder="Añade notas técnicas para el atleta..."
-                                        value={analysis.coachNotes || ""}
-                                        onChange={(e) => updateAnalysis(analysis.id, { coachNotes: e.target.value })}
-                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-600 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all h-20"
-                                    />
-                                    <button
-                                        onClick={() => updateAnalysis(analysis.id, { reviewStatus: 'Reviewed' })}
-                                        className={`w-full mt-3 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${analysis.reviewStatus === 'Reviewed'
-                                            ? 'bg-slate-800 text-slate-400 cursor-default'
-                                            : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
-                                            }`}
-                                    >
-                                        {analysis.reviewStatus === 'Reviewed' ? 'Review Guardada' : 'Marcar como Revisado'}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+                        <AnalysisResultCard
+                            key={analysis.id}
+                            analysis={analysis}
+                            isHistoryItem={activeAnalysis?.id === analysis.id}
+                            userProfile={userProfile}
+                            updateAnalysis={updateAnalysis}
+                        />
                     ))}
                 </div>
             )}
@@ -768,111 +634,21 @@ const VideoAnalyzer: React.FC = () => {
             {/* HISTORY LIST MODAL */}
             {viewHistory && (
                 <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md p-6 overflow-y-auto">
-                    <div className="max-w-xl mx-auto space-y-4 pt-10 pb-24">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Historial Bio</h2>
-                            <button onClick={() => setViewHistory(false)} className="p-2 bg-slate-800 rounded-full text-white"><X size={18} /></button>
-                        </div>
-
-                        {/* Actions Toolbar */}
-                        {selectedIds.length > 0 && (
-                            <div className="sticky top-0 z-10 bg-indigo-600 text-white p-4 rounded-xl shadow-xl flex justify-between items-center animate-in slide-in-from-top-2">
-                                <span className="font-bold text-xs uppercase">{selectedIds.length} Seleccionados</span>
-                                <div className="flex gap-2">
-                                    {selectedIds.length === 1 && (
-                                        <button
-                                            onClick={() => {
-                                                const selected = analysisHistory.find(a => a.id === selectedIds[0]);
-                                                if (selected) {
-                                                    setActiveAnalysis(selected);
-                                                    setViewHistory(false);
-                                                }
-                                            }}
-                                            className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-xs font-black uppercase"
-                                        >
-                                            Ver Análisis
-                                        </button>
-                                    )}
-                                    {selectedIds.length === 2 && (
-                                        <button
-                                            onClick={() => {
-                                                setComparisonMode(true);
-                                                setViewHistory(false);
-                                            }}
-                                            className="bg-white text-indigo-600 px-4 py-2 rounded-lg text-xs font-black uppercase hover:bg-indigo-50"
-                                        >
-                                            Comparar
-                                        </button>
-                                    )}
-                                    <button onClick={() => setSelectedIds([])} className="p-2 hover:bg-white/10 rounded-lg"><X size={14} /></button>
-                                </div>
-                            </div>
-                        )}
-
-                        {analysisHistory.length === 0 ? (
-                            <div className="text-center py-20 text-slate-500 uppercase text-[10px] font-bold">No hay registros previos.</div>
-                        ) : analysisHistory
-                            .filter(item => {
-                                const params = new URLSearchParams(location.search);
-                                if (params.get('filter') === 'pending') return item.reviewStatus === 'Pending';
-                                return true;
-                            })
-                            .map(item => (
-                                <div
-                                    key={item.id}
-                                    onClick={() => toggleSelection(item.id)}
-                                    className={`group bg-slate-900 border transition-all rounded-3xl p-4 flex items-center justify-between cursor-pointer ${selectedIds.includes(item.id)
-                                        ? 'border-indigo-500 bg-indigo-900/10'
-                                        : item.reviewStatus === 'Pending'
-                                            ? 'border-indigo-500/50 hover:border-indigo-400'
-                                            : 'border-slate-800 hover:border-slate-700'
-                                        }`}
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className="relative">
-                                            <img src={item.thumbnail} className="w-16 h-10 object-cover rounded-lg border border-slate-800" />
-                                            {selectedIds.includes(item.id) && (
-                                                <div className="absolute -top-2 -right-2 bg-indigo-500 text-white rounded-full p-1 border-2 border-slate-950">
-                                                    <CheckCheck size={10} />
-                                                </div>
-                                            )}
-                                            {item.reviewStatus === 'Pending' && !selectedIds.includes(item.id) && (
-                                                <div className="absolute -top-2 -right-2 bg-red-500 rounded-full w-3 h-3 border-2 border-slate-950 animate-pulse" title="Pendiente de revisión" />
-                                            )}
-                                        </div>
-                                        <div className="text-left">
-                                            <div className="text-xs font-black text-white uppercase">{item.phaseDetected || 'Análisis General'}</div>
-                                            <div className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">
-                                                {item.savedAt ? new Date(item.savedAt).toLocaleDateString() : (item.timestamp ? new Date(item.timestamp * 1000).toLocaleDateString() : 'Fecha Desconocida')}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <div className="text-right">
-                                            <div className="text-lg font-black text-emerald-400">{item.score}</div>
-                                            <div className="text-[8px] text-slate-600 font-bold uppercase">SCORE</div>
-                                        </div>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); if (confirm('¿Eliminar del historial?')) deleteAnalysis(item.id); }}
-                                            className="p-2 text-slate-700 hover:text-red-500 transition-colors"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                    </div>
+                    <AnalysisHistoryList
+                        analysisHistory={analysisHistory}
+                        selectedIds={selectedIds}
+                        toggleSelection={toggleSelection}
+                        deleteAnalysis={deleteAnalysis}
+                        setActiveAnalysis={setActiveAnalysis}
+                        setComparisonMode={setComparisonMode}
+                        setViewHistory={setViewHistory}
+                        locationSearch={location.search}
+                    />
                 </div>
             )}
         </div>
     );
 };
 
-const MetricBox = ({ label, value }: { label: string, value: string }) => (
-    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800/50 text-center shadow-inner">
-        <div className="text-[8px] text-slate-600 uppercase font-black tracking-widest mb-1">{label}</div>
-        <div className="text-sm font-mono text-white font-black">{value}</div>
-    </div>
-);
 
 export default VideoAnalyzer;

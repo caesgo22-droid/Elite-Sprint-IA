@@ -35,7 +35,7 @@ Enfócate en vectores de fuerza y fugas de energía.
 SALIDA: JSON estricto.
 `;
 
-export const PLAN_GENERATION_PROMPT = (profile: any, readiness: any, focus: string, acwr: string) => `
+export const PLAN_GENERATION_PROMPT = (profile: any, readiness: any, focus: string, acwr: string, lastAnalysis?: any) => `
 CONTEXTO DEL ATLETA:
 - Nombre: ${profile.name}, Edad: ${profile.age}, Evento: ${focus}
 - PBs: ${JSON.stringify(profile.pbs)}
@@ -43,6 +43,11 @@ CONTEXTO DEL ATLETA:
 - Carga Crónica (ACWR): ${acwr}
 - Días Disponibles: ${profile.trainingDays?.join(', ')}
 - Horario Preferido: ${profile.preferredTime}
+- Análisis Biomecánico Reciente: ${lastAnalysis ? JSON.stringify({
+  score: lastAnalysis.score,
+  weaknesses: lastAnalysis.weaknesses,
+  flaws: lastAnalysis.biomechanicalAudit?.technicalFlaws
+}) : 'No hay análisis previo disponible.'}
 
 TAREA: GENERA EL MICROCICLO COMPLETO DE LOS PRÓXIMOS 7 DÍAS.
 Instrucciones:
@@ -123,6 +128,7 @@ INSTRUCCIONES DE BIO-FÍSICA:
 1. ANÁLISIS VECTORIAL: ¿El vector de fuerza al contacto es puramente vertical o hay freno (negativo)?
 2. RIGIDEZ (STIFFNESS): Evalúa la deformación del tobillo/rodilla bajo carga. ¿Hay colapso?
 3. FRONT-SIDE MECHANICS: Evalúa si el movimiento ocurre "delante" del CM o si hay excesiva mecánica trasera.
+4. RFD & NEUROMUSCULAR EFFICIENCY: Deduce la capacidad de producir fuerza explosiva basándote en la velocidad del COM y el GCT.
 
 SALIDA (JSON ESTRICTO):
 {

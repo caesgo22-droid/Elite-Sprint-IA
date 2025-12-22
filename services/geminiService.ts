@@ -101,11 +101,11 @@ export const generateNexusInsight = async (logs: any[], readiness: any, analysis
             Historial Biomecánico (últimos 3): ${JSON.stringify(analysisHistory.slice(0, 3))}. 
             
             DATOS CRÍTICOS DE CARGA (USA ESTOS VALORES EXACTOS):
-            - ACWR Ratio: ${acwrRatio}
-            - ACWR Status: ${acwrStatus}
-            
-            IMPORTANTE: Si el ACWR ratio es > 1.5, el status DEBE ser "Warning". Usa el ratio proporcionado arriba, NO inventes uno diferente.
-            Si el ACWR ratio es < 0.8, considera riesgo de "Desentrenamiento" o "Warning", pero si es semana de descarga puede ser "Recovery".
+            - RELACIÓN ACWR: ${acwr.ratio.toFixed(2)}
+      - ESTADO ACWR PROPORCIONADO: ${acwr.status}
+      - REGLA CRÍTICA: Debes ignorar cualquier cálculo interno de carga y USAR EXCLUSIVAMENTE el valor ACWR ${acwr.ratio.toFixed(2)} y el estado "${acwr.status}" proporcionados arriba para tu análisis. No inventes otros valores de ACWR.
+      - Si ACWR < 0.8, indica "Desentrenamiento" o "Warning" a menos que sea semana de descarga.
+      - Si ACWR > 1.5, indica "Alto Riesgo de Lesión" obligatoriamente.
             INSTRUCCIÓN CRÍTICA: Detecta "Fatiga Técnica Silenciosa". 
             Si la Velocidad del Centro de Masas (VCoM) ha bajado sistemáticamente o el Tiempo de Contacto (GCT) ha subido en los últimos 3 videos, marca status: "Warning" y alerta sobre riesgo de lesión.
             
@@ -131,12 +131,12 @@ export const generateNexusInsight = async (logs: any[], readiness: any, analysis
     }
 };
 
-export const generateTrainingPlan = async (profile: UserProfile, readiness: any, currentDate: string, focusEvent?: string, acwr?: any): Promise<TrainingPlan | null> => {
+export const generateTrainingPlan = async (profile: UserProfile, readiness: any, currentDate: string, focusEvent?: string, acwr?: any, lastAnalysis?: any): Promise<TrainingPlan | null> => {
     const model = getModelInstance("gemini-2.0-flash-exp");
     if (!model) return null;
 
     try {
-        const prompt = PLAN_GENERATION_PROMPT(profile, readiness, focusEvent || "100m", acwr?.ratio);
+        const prompt = PLAN_GENERATION_PROMPT(profile, readiness, focusEvent || "100m", acwr?.ratio, lastAnalysis);
 
         const result = await model.generateContent({
             contents: [{ role: "user", parts: [{ text: prompt }] }],

@@ -1,6 +1,7 @@
-import * as React from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './contexts/AppContext';
+import { ToastProvider } from './contexts/ToastContext';
 import { Layout } from './components/ui/Layout';
 import HomeDashboard from './components/HomeDashboard';
 import PlanManager from './components/PlanManager';
@@ -48,7 +49,7 @@ const AppContent: React.FC = () => {
   );
 };
 
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
   constructor(props: any) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -73,10 +74,10 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
             <p className="text-slate-400 text-sm">
               La aplicación encontró un error inesperado. Por favor, recarga la página.
             </p>
-            {this.state.error && (
+            {(this as any).state.error && (
               <details className="text-left bg-slate-900 p-4 rounded-lg text-xs text-slate-300 mt-4">
                 <summary className="cursor-pointer font-bold mb-2">Detalles técnicos</summary>
-                <code className="block whitespace-pre-wrap">{this.state.error.toString()}</code>
+                <code className="block whitespace-pre-wrap">{(this as any).state.error.toString()}</code>
               </details>
             )}
             <button
@@ -89,16 +90,18 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
         </div>
       );
     }
-    return this.props.children;
+    return (this as any).props.children;
   }
 }
 
 const App: React.FC = () => {
   return (
     <ErrorBoundary>
-      <AppProvider>
-        <AppContent />
-      </AppProvider>
+      <ToastProvider>
+        <AppProvider>
+          <AppContent />
+        </AppProvider>
+      </ToastProvider>
     </ErrorBoundary>
   );
 };

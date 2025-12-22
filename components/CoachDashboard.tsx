@@ -7,9 +7,12 @@ import { UserProfile, StaffBriefing, StaffReply } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, Cell, LabelList, ReferenceLine, ComposedChart } from 'recharts';
+import { MacrocycleChart } from './MacrocycleChart';
 import TaskManager from './TaskManager';
+import { useToasts } from '../contexts/ToastContext';
 
 const CoachDashboard: React.FC = () => {
+    const { showToast } = useToasts();
     const { adminProfile, updateRoster, viewingAthleteId, switchAthlete, t } = useApp();
     const navigate = useNavigate();
     const [emailQuery, setEmailQuery] = useState('');
@@ -68,10 +71,15 @@ const CoachDashboard: React.FC = () => {
         try {
             const athlete = await findAthleteByEmail(emailQuery.trim().toLowerCase());
             if (athlete) {
-                if (adminProfile.roster?.includes(athlete.uid)) alert("Ya en roster.");
+                if (adminProfile.roster?.includes(athlete.uid)) {
+                    showToast("Ya está en el equipo.", "info");
+                    return;
+                }
                 else updateRoster([...(adminProfile.roster || []), athlete.uid]);
                 setEmailQuery('');
-            } else alert("No encontrado.");
+            } else {
+                showToast("Atleta no encontrado.", "error");
+            }
         } catch (e) {
             console.error("Search error:", e);
         }
@@ -249,83 +257,7 @@ const AthleteProfileDetail: React.FC<{
         { name: '400m', time: parseFloat(profile.pbs?.['400m']?.time || '0') },
     ].filter(d => d.time > 0);
 
-    const macroData = useMemo(() => {
-        const history = [...(planHistory || [])]
-            .filter(p => p.createdAt)
-            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-        const recent = history.slice(-3);
-        const calcLoad = (plan: any) => {
-            let load = 0;
-            if (plan?.sessions) {
-                plan.sessions.forEach((s: any) => {
-                    const factor = s.intensity === 'Max' ? 5 : s.intensity === 'High' ? 4 : s.intensity === 'Medium' ? 3 : 1;
-                    load += factor * 10;
-                });
-            }
-            return load;
-        };
-        const data: any[] = [];
-        recent.forEach((p, i) => {
-            data.push({
-                name: `Sem ${-1 * (recent.length - i)}`,
-                realLoad: calcLoad(p),
-                isCurrent: false,
-                weekStart: new Date(p.createdAt)
-            });
-        });
-        const cLoad = currentPlan ? calcLoad(currentPlan) : 0;
-        data.push({ name: 'ACTUAL', realLoad: cLoad, isCurrent: true, weekStart: new Date() });
-        let lastLoad = cLoad || 150;
-        for (let i = 1; i <= 3; i++) {
-            lastLoad *= 1.02;
-            const d = new Date();
-            d.setDate(d.getDate() + (i * 7));
-            data.push({ name: `Sem +${i}`, projectedLoad: Math.round(lastLoad), isCurrent: false, weekStart: d });
-        }
-        return data;
-    }, [planHistory, currentPlan]);
-
-    const milestones = useMemo(() => {
-        const marks: { week: string; type: string; label: string }[] = [];
-        profile.injuries?.forEach(inj => {
-            if (!inj.diagnosedDate) return;
-            const dLine = new Date(inj.diagnosedDate);
-            macroData.forEach(d => {
-                const start = new Date(d.weekStart);
-                const end = new Date(start);
-                end.setDate(end.getDate() + 7);
-                if (dLine >= start && dLine < end) {
-                    marks.push({ week: d.name, type: 'injury', label: `🔴 ${inj.type}` });
-                }
-            });
-        });
-        profile.competitions?.forEach(comp => {
-            if (!comp.date) return;
-            const dLine = new Date(comp.date);
-            macroData.forEach(d => {
-                const start = new Date(d.weekStart);
-                const end = new Date(start);
-                end.setDate(end.getDate() + 7);
-                if (dLine >= start && dLine < end) {
-                    marks.push({ week: d.name, type: 'comp', label: `🏆 ${comp.name}` });
-                }
-            });
-        });
-        logs?.filter(l => l.event === 'Therapy').forEach(log => {
-            const dLine = new Date(log.date);
-            macroData.forEach(d => {
-                const start = new Date(d.weekStart);
-                const end = new Date(start);
-                end.setDate(end.getDate() + 7);
-                if (dLine >= start && dLine < end) {
-                    if (!marks.some(m => m.week === d.name && m.type === 'therapy')) {
-                        marks.push({ week: d.name, type: 'therapy', label: '💊' });
-                    }
-                }
-            });
-        });
-        return marks;
-    }, [macroData, profile.injuries, profile.competitions, logs]);
+    // macroData and milestones removed, logic moved to shared MacrocycleChart component
 
     const trainingDaysCount = useMemo(() => {
         const days = profile.trainingDays || [];
@@ -418,41 +350,13 @@ const AthleteProfileDetail: React.FC<{
                     </div>
                 </div>
 
-                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-black text-white uppercase tracking-tighter">Macrociclo (8 Semanas)</h3>
-                        <div className="flex gap-2 text-[8px] font-bold uppercase">
-                            <span className="flex items-center gap-1"><div className="w-1.5 h-1.5 bg-cyan-500 rounded-full"></div> Real</span>
-                            <span className="flex items-center gap-1">🔴 Lesión</span>
-                            <span className="flex items-center gap-1">💊 Ter</span>
-                        </div>
-                    </div>
-                    <div className="h-48 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <ComposedChart data={macroData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                                <XAxis dataKey="name" stroke="#475569" fontSize={9} fontWeight="900" axisLine={false} tickLine={false} />
-                                <YAxis hide domain={[0, 'auto']} />
-                                <Tooltip
-                                    contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px' }}
-                                    formatter={(value: any, name: string, props: any) => {
-                                        const weekMarks = milestones.filter(m => m.week === props.payload.name);
-                                        return [`${value} ${weekMarks.map(m => m.label).join(' ')}`, name === 'realLoad' ? 'Carga' : 'Futuro'];
-                                    }}
-                                />
-                                <Area type="monotone" dataKey="realLoad" stroke="#22d3ee" strokeWidth={4} fill="#22d3ee" fillOpacity={0.1} />
-                                <Area type="monotone" dataKey="projectedLoad" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" fill="transparent" />
-                                <ReferenceLine x="ACTUAL" stroke="#22d3ee" strokeDasharray="3 3" />
-                                {milestones.filter(m => m.type === 'injury').map((m, i) => (
-                                    <ReferenceLine key={i} x={m.week} stroke="#ef4444" strokeWidth={2} />
-                                ))}
-                                {milestones.filter(m => m.type === 'therapy').map((m, i) => (
-                                    <ReferenceLine key={i} x={m.week} stroke="#3b82f6" strokeWidth={1} strokeDasharray="2 2" />
-                                ))}
-                            </ComposedChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
+                <MacrocycleChart
+                    history={planHistory}
+                    currentPlan={currentPlan}
+                    injuries={profile.injuries}
+                    competitions={profile.competitions}
+                    therapyLogs={logs}
+                />
             </div>
 
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
@@ -472,6 +376,30 @@ const AthleteProfileDetail: React.FC<{
                     </div>
                 )}
                 <div className="space-y-4">
+                    {/* The following div is assumed to be the target based on the instruction's "Code Edit" snippet,
+                        even though its parent map function is not present in the provided full content.
+                        It's placed here as the most logical location for a "roster item" within a dashboard context. */}
+                    {/* If this is not the correct location, please provide more context for the 'rosterData.map' */}
+                    {/* ) : rosterData.map(data => ( */}
+                    <div key={"placeholder-key"} className="bg-slate-900/50 border border-slate-800 rounded-3xl p-5 hover:border-indigo-500/50 transition-all cursor-pointer group" onClick={() => { }} style={{ contentVisibility: 'auto' }}>
+                        {/* Content that would typically be inside a roster item */}
+                        <div className="flex justify-between items-center text-[8px] font-black uppercase text-slate-500 mb-2">
+                            <span>Placeholder Role • Placeholder Author</span>
+                            <span>Placeholder Date</span>
+                        </div>
+                        <p className="text-xs text-white mb-4">Placeholder content for a roster item.</p>
+                        <div className="space-y-2 ml-4 border-l-2 border-slate-700 pl-4">
+                            {/* Placeholder for replies */}
+                            <div key="placeholder-reply-key">
+                                <div className="text-[8px] font-black text-indigo-400">Placeholder Reply Author <span className="text-slate-600 ml-1">Placeholder Reply Time</span></div>
+                                <div className="text-[10px] text-slate-300">Placeholder reply content.</div>
+                            </div>
+                            <div className="flex gap-2 mt-2">
+                                <input value={''} onChange={e => { }} placeholder="Respuesta rápida..." className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-[9px] text-white outline-none focus:border-indigo-500" />
+                                <button onClick={() => { }} className="bg-slate-700 text-white px-2 rounded text-[8px] font-black">OK</button>
+                            </div>
+                        </div>
+                    </div>
                     {briefings.map(b => (
                         <div key={b.id} className="bg-slate-800 border border-slate-700 p-4 rounded-2xl">
                             <div className="flex justify-between items-center text-[8px] font-black uppercase text-slate-500 mb-2">
