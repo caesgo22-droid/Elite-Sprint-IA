@@ -22,16 +22,19 @@ const HomeDashboard: React.FC = () => {
     const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
 
     const apiKey = getEnv("GEMINI_API_KEY") || getEnv("VITE_GEMINI_API_KEY") || getEnv("API_KEY");
-    if (!apiKey && !force) return;
+    if (!apiKey && !force) {
+      setErrorStatus('key_missing');
+      return;
+    }
 
     // 1. Try to load from cache first if not forced
     if (!force) {
       const cached = localStorage.getItem(CACHE_KEY);
       if (cached) {
         const { timestamp, data } = JSON.parse(cached);
-        if (Date.now() - timestamp < CACHE_DURATION) {
+        if (Date.now() - timestamp < CACHE_DURATION && data) {
           setNexusInsight(data);
-          return; // Use valid cache
+          return;
         }
       }
     }
@@ -39,28 +42,30 @@ const HomeDashboard: React.FC = () => {
     setLoadingNexus(true);
     setErrorStatus('none');
     try {
+      if (!userProfile) throw new Error("No user profile");
+
       const readiness = {
         fatigue: 5,
         sleep: 7,
-        restingHR: userProfile.restingHR,
-        hrv: userProfile.hrv,
+        restingHR: userProfile.restingHR || 60,
+        hrv: userProfile.hrv || 50,
         recoveryLogs: logs.filter(l => l.type === 'Recovery').slice(-3)
       };
 
       const insight = await generateNexusInsight(logs, readiness, analysisHistory, acwrStats);
 
-      if (insight) {
+      if (insight && insight.status) {
         setNexusInsight(insight);
-        // Save to cache
         localStorage.setItem(CACHE_KEY, JSON.stringify({
           timestamp: Date.now(),
           data: insight
         }));
+      } else {
+        throw new Error("Invalid insight format from AI");
       }
     } catch (error: any) {
       console.error("Nexus Insight Error:", error);
       setErrorStatus('error');
-      // If error (like 429), try to show old cache even if expired
       const cached = localStorage.getItem(CACHE_KEY);
       if (cached) {
         setNexusInsight(JSON.parse(cached).data);
@@ -191,9 +196,20 @@ const HomeDashboard: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="text-center py-10 space-y-4">
-            <AlertTriangle size={24} className="mx-auto text-slate-700" />
-            <button onClick={() => fetchNexus(true)} className="text-[9px] font-black uppercase tracking-widest text-cyan-400 border border-cyan-500/20 px-4 py-2 rounded-full">Solicitar Auditoría</button>
+          <div className="text-center py-6 space-y-4">
+            <div className="mx-auto w-12 h-12 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-center">
+              <Zap className="text-slate-600" size={20} />
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-tight">
+                {errorStatus === 'key_missing' ? 'Configura tu API Key para activar Nexus' : 'Sin datos de auditoría'}
+              </p>
+            </div>
+            {errorStatus === 'key_missing' ? (
+              <button onClick={handleOpenKey} className="text-[9px] font-black uppercase tracking-widest bg-white text-black px-4 py-2 rounded-full">Configurar Key</button>
+            ) : (
+              <button onClick={() => fetchNexus(true)} disabled={loadingNexus} className="text-[9px] font-black uppercase tracking-widest border border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/10 px-4 py-2 rounded-full transition-all">Solicitar Auditoría</button>
+            )}
           </div>
         )}
       </div>

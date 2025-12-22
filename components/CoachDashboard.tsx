@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { findAthleteByEmail, fetchUserData, getPlanHistory, getAnalysisHistory, getStaffBriefings, addStaffBriefing, addBriefingReply } from '../services/firebase';
-import { Users, Plus, Search, UserCircle2, Briefcase, Eye, LogOut, Activity, ArrowRight, AlertCircle, Microscope, Zap, Trophy, History } from 'lucide-react';
+import { Users, Plus, Search, UserCircle2, Briefcase, Eye, LogOut, Activity, ArrowRight, AlertCircle, Microscope, Zap, Trophy, History, CalendarCheck, Maximize2, Dumbbell } from 'lucide-react';
 import { UserProfile, StaffBriefing, StaffReply } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { useNavigate } from 'react-router-dom';
@@ -213,7 +213,7 @@ const CoachDashboard: React.FC = () => {
                                 </h2>
                                 {currentAthlete?.risk === 'High' && <AlertCircle className="text-red-500 animate-pulse" size={24} />}
                             </div>
-                            <div className="flex flex-wrap justify-center md:justify-start gap-2">
+                            <div className="flex flex-wrap justify-center md:justify-start gap-2 mb-4">
                                 <span className="px-3 py-1 bg-indigo-500/20 rounded-lg text-indigo-200 text-xs font-bold uppercase border border-indigo-500/30">
                                     {safeStr(profile?.events?.[0] || 'Sprint')}
                                 </span>
@@ -223,6 +223,26 @@ const CoachDashboard: React.FC = () => {
                                     }`}>
                                     ACWR: {currentAthlete?.risk === 'High' ? 'CRÍTICO' : 'ÓPTIMO'}
                                 </span>
+                            </div>
+
+                            {/* ATHLETE QUICK SPECS */}
+                            <div className="flex flex-wrap justify-center md:justify-start gap-4">
+                                <div className="flex items-center gap-1.5">
+                                    <CalendarCheck className="text-slate-500" size={14} />
+                                    <span className="text-[10px] font-bold text-slate-300 uppercase">{profile?.age || 20} AÑOS</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <Maximize2 className="text-slate-500" size={14} />
+                                    <span className="text-[10px] font-bold text-slate-300 uppercase">{profile?.height || '--'} CM</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <Dumbbell className="text-slate-500" size={14} />
+                                    <span className="text-[10px] font-bold text-slate-300 uppercase">{profile?.weight || '--'} KG</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <Zap className="text-emerald-400" size={14} />
+                                    <span className="text-[10px] font-bold text-slate-300 uppercase">{profile?.trainingDays?.length || 0} DÍAS/SEM</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -272,19 +292,19 @@ const CoachDashboard: React.FC = () => {
                                 <BarChart data={pbData} layout="vertical" margin={{ left: -20, right: 30 }}>
                                     <defs>
                                         <linearGradient id="colorPB" x1="0" y1="0" x2="1" y2="0">
-                                            <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.8} />
-                                            <stop offset="95%" stopColor="#22d3ee" stopOpacity={0.2} />
+                                            <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.9} />
+                                            <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.1} />
                                         </linearGradient>
                                     </defs>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
                                     <XAxis type="number" hide domain={[0, 'auto']} />
-                                    <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={10} fontWeight="bold" width={50} axisLine={false} tickLine={false} />
+                                    <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={9} fontWeight="900" width={50} axisLine={false} tickLine={false} />
                                     <Tooltip
-                                        cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '12px', fontSize: '10px' }}
-                                        itemStyle={{ color: '#fff' }}
+                                        cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                                        contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }}
+                                        itemStyle={{ color: '#22d3ee', fontWeight: 'bold' }}
                                     />
-                                    <Bar dataKey="time" radius={[0, 10, 10, 0]} barSize={18} fill="url(#colorPB)" />
+                                    <Bar dataKey="time" radius={[0, 4, 4, 0]} barSize={24} fill="url(#colorPB)" />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -304,23 +324,39 @@ const CoachDashboard: React.FC = () => {
                                 <AreaChart data={macroData}>
                                     <defs>
                                         <linearGradient id="colorInt" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.3} />
+                                            <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.2} />
                                             <stop offset="95%" stopColor="#22d3ee" stopOpacity={0} />
-                                        </linearGradient>
-                                        <linearGradient id="colorFat" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
-                                            <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
                                         </linearGradient>
                                     </defs>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                                    <XAxis dataKey="week" stroke="#475569" fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} />
-                                    <YAxis hide domain={[0, 110]} />
+                                    <XAxis dataKey="week" stroke="#475569" fontSize={9} fontWeight="900" axisLine={false} tickLine={false} />
+                                    <YAxis hide domain={[0, 120]} />
                                     <Tooltip
-                                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '12px' }}
-                                        labelStyle={{ color: '#94a3b8', fontSize: '10px', marginBottom: '4px' }}
+                                        contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px' }}
+                                        labelStyle={{ color: '#94a3b8', fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase' }}
                                     />
-                                    <Area type="monotone" dataKey="intensity" name="Intensidad" stroke="#22d3ee" fillOpacity={1} fill="url(#colorInt)" strokeWidth={3} />
-                                    <Area type="monotone" dataKey="fatigue" name="Fatiga" stroke="#ef4444" fillOpacity={1} fill="url(#colorFat)" strokeWidth={2} strokeDasharray="5 5" />
+                                    {/* Load as a solid cyan line with area */}
+                                    <Area
+                                        type="monotone"
+                                        dataKey="intensity"
+                                        name="Carga"
+                                        stroke="#22d3ee"
+                                        fillOpacity={1}
+                                        fill="url(#colorInt)"
+                                        strokeWidth={4}
+                                        animationDuration={1500}
+                                    />
+                                    {/* Fatigue as a red dashed line WITHOUT area, but maybe a light one if preferred. The instruction says "area roja punteada" which might mean dashed line and area. */}
+                                    <Area
+                                        type="monotone"
+                                        dataKey="fatigue"
+                                        name="Fatiga"
+                                        stroke="#ef4444"
+                                        strokeDasharray="6 4"
+                                        fill="#ef4444"
+                                        fillOpacity={0.05}
+                                        strokeWidth={2}
+                                    />
                                 </AreaChart>
                             </ResponsiveContainer>
                         </div>

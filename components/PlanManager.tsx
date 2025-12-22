@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
-import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle, MessageSquare, Table2, ScanLine, ChevronDown, ChevronUp, Flag, BarChart3, MapPin, Trophy, Trash2, Activity, User } from 'lucide-react';
+import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle, MessageSquare, Table2, ScanLine, ChevronDown, ChevronUp, Flag, BarChart3, MapPin, Trophy, Trash2, Activity, User, RotateCcw } from 'lucide-react';
 import { TrainingSession, UserProfile, Injury, Coach } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { calculateRecovery } from '../utils/recoveryEngine';
@@ -242,17 +242,38 @@ const MacrocycleChart = ({ history, currentPlan }: { history: any[], currentPlan
                         <ComposedChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <defs>
                                 <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.3} />
+                                    <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.2} />
                                     <stop offset="95%" stopColor="#22d3ee" stopOpacity={0} />
                                 </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                            <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval={0} />
-                            <YAxis hide domain={['dataMin - 20', 'dataMax + 20']} />
-                            <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px' }} itemStyle={{ fontSize: '12px' }} labelStyle={{ color: '#94a3b8', fontSize: '10px', marginBottom: '4px' }} formatter={(value: any, name: string) => [value, name === 'realLoad' ? 'Carga Real' : 'Proyección']} />
+                            <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8', fontWeight: 'bold' }} axisLine={false} tickLine={false} interval={0} />
+                            <YAxis hide domain={[0, 'auto']} />
+                            <Tooltip
+                                contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px' }}
+                                labelStyle={{ color: '#94a3b8', fontSize: '9px', fontWeight: 'bold' }}
+                            />
+                            <Area
+                                type="monotone"
+                                dataKey="realLoad"
+                                name="Carga"
+                                stroke="#22d3ee"
+                                strokeWidth={4}
+                                fillOpacity={1}
+                                fill="url(#colorReal)"
+                                animationDuration={1000}
+                                activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: '#22d3ee' }}
+                            />
+                            <Area
+                                type="monotone"
+                                dataKey="projectedLoad"
+                                name="Futuro"
+                                stroke="#94a3b8"
+                                strokeWidth={2}
+                                strokeDasharray="5 5"
+                                fillOpacity={0}
+                            />
                             <ReferenceLine x="ACTUAL" stroke="#22d3ee" strokeDasharray="3 3" strokeOpacity={0.5} />
-                            <Line type="monotone" dataKey="projectedLoad" stroke="#64748b" strokeWidth={2} strokeDasharray="5 5" dot={false} activeDot={false} />
-                            <Area type="monotone" dataKey="realLoad" stroke="#22d3ee" fillOpacity={1} fill="url(#colorReal)" strokeWidth={3} activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: '#22d3ee' }} />
                         </ComposedChart>
                     </ResponsiveContainer>
                 )}
@@ -664,7 +685,24 @@ const PlanManager: React.FC = () => {
         <div className="space-y-6 animate-in fade-in duration-500 pb-16">
             <div className="flex justify-between items-end border-b border-slate-800/50 pb-4">
                 <div><h2 className="text-2xl font-black text-white uppercase tracking-tight">Microciclo</h2><p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Nivel V World Athletics</p></div>
-                <button onClick={() => setShowProfileConfig(true)} className="p-2 bg-slate-800 rounded-full text-slate-300 transition-transform active:scale-90"><UserCog size={18} /></button>
+                <div className="flex items-center gap-2">
+                    {currentPlan && (
+                        <button
+                            onClick={() => {
+                                if (window.confirm('¿Estás seguro de reiniciar el plan? El actual se archivará.')) {
+                                    (async () => {
+                                        const { resetPlan } = (useApp as any)(); // Avoiding lint issues if type not updated yet
+                                        await resetPlan();
+                                    })();
+                                }
+                            }}
+                            className="bg-red-500/10 border border-red-500/30 text-red-500 px-3 py-1.5 rounded-full text-[9px] font-black uppercase flex items-center gap-1 hover:bg-red-500/20 transition-all"
+                        >
+                            <RotateCcw size={10} /> Reiniciar Plan
+                        </button>
+                    )}
+                    <button onClick={() => setShowProfileConfig(true)} className="p-2 bg-slate-800 rounded-full text-slate-300 transition-transform active:scale-90"><UserCog size={18} /></button>
+                </div>
             </div>
             {!currentPlan ? (
                 <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 space-y-6">

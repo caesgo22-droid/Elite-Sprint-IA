@@ -367,16 +367,38 @@ const VideoAnalyzer: React.FC = () => {
 
         let frameId: number;
         const process = () => {
-            if (videoRef.current && !videoRef.current.paused) {
+            if (videoRef.current) {
+                // Only detect if playing OR if we want to ensure it shows while paused (scrubbing)
+                // We'll detect every frame if playing, and use a listener for seeks
+                if (!videoRef.current.paused) {
+                    const result = poseLandmarker.detect(videoRef.current);
+                    if (result?.landmarks?.[0]) {
+                        drawSkeleton(result.landmarks[0]);
+                    }
+                }
+            }
+            frameId = requestAnimationFrame(process);
+        };
+
+        const handleSeeked = () => {
+            if (videoRef.current && showSkeleton && poseLandmarker) {
                 const result = poseLandmarker.detect(videoRef.current);
                 if (result?.landmarks?.[0]) {
                     drawSkeleton(result.landmarks[0]);
                 }
             }
-            frameId = requestAnimationFrame(process);
         };
+
+        const video = videoRef.current;
+        video.addEventListener('seeked', handleSeeked);
+        video.addEventListener('timeupdate', handleSeeked); // Good for smooth scrubbing
+
         process();
-        return () => cancelAnimationFrame(frameId);
+        return () => {
+            cancelAnimationFrame(frameId);
+            video.removeEventListener('seeked', handleSeeked);
+            video.removeEventListener('timeupdate', handleSeeked);
+        };
     }, [showSkeleton, previewUrl, poseLandmarker]);
 
     return (

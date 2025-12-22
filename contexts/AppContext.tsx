@@ -42,6 +42,7 @@ interface AppContextType {
   nexusInsight: NexusInsight | null;
   setNexusInsight: (insight: NexusInsight | null) => void;
   deleteAnalysis: (id: string) => void;
+  resetPlan: () => Promise<void>;
 
   viewingAthleteId: string | null;
   switchAthlete: (uid: string | null) => void;
@@ -265,6 +266,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (targetId && isInitialized) saveTrainingPlan(targetId, plan);
   };
 
+  const resetPlan = async () => {
+    if (!currentPlan) return;
+    if (targetId && isInitialized) {
+      await archivePlan(targetId, currentPlan);
+      setPlanHistory(prev => [currentPlan, ...prev]);
+      await saveTrainingPlan(targetId, null);
+    }
+    setCurrentPlan(null);
+  };
+
   const updateSession = (dayName: string, updates: Partial<any>) => {
     if (!currentPlan) return;
     const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -353,7 +364,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     refreshUserData,
     updateRoster,
     loginAsGuest,
-    deleteAnalysis
+    deleteAnalysis,
+    resetPlan
   }), [
     user,
     loadingAuth,
