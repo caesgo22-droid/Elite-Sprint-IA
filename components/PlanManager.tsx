@@ -171,7 +171,13 @@ const SessionCard = React.memo(({ session, expandedDay, setExpandedDay, setSessi
     );
 });
 
-const MacrocycleChart = ({ history, currentPlan }: { history: any[], currentPlan: any }) => {
+const MacrocycleChart = ({ history, currentPlan, injuries, competitions, therapyLogs }: {
+    history: any[],
+    currentPlan: any,
+    injuries?: Injury[],
+    competitions?: { id: string; name: string; date: string }[],
+    therapyLogs?: any[]
+}) => {
     const data = useMemo(() => {
         const allPlans = [...history].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         const recentHistory = allPlans.slice(-4);
@@ -185,23 +191,27 @@ const MacrocycleChart = ({ history, currentPlan }: { history: any[], currentPlan
             }
             return load;
         };
-        const chartData = [];
+        const chartData: any[] = [];
         recentHistory.forEach((plan, i) => {
+            const weekDate = new Date(plan.createdAt);
             chartData.push({
                 name: `Sem ${-1 * (recentHistory.length - i)}`,
                 realLoad: calcLoad(plan),
                 projectedLoad: null,
                 isCurrent: false,
-                fullDate: new Date(plan.createdAt).toLocaleDateString()
+                fullDate: weekDate.toLocaleDateString(),
+                weekStart: weekDate
             });
         });
         const currentLoad = currentPlan ? calcLoad(currentPlan) : 0;
+        const now = new Date();
         chartData.push({
             name: 'ACTUAL',
             realLoad: currentLoad,
             projectedLoad: currentLoad,
             isCurrent: true,
-            fullDate: 'Esta Semana'
+            fullDate: 'Esta Semana',
+            weekStart: now
         });
         let lastLoad = currentLoad || 150;
         const phase = currentPlan?.phase || 'General Prep';
@@ -215,17 +225,74 @@ const MacrocycleChart = ({ history, currentPlan }: { history: any[], currentPlan
             } else {
                 nextLoad = lastLoad * 1.02;
             }
+            const futureDate = new Date();
+            futureDate.setDate(now.getDate() + (i * 7));
             chartData.push({
                 name: `Sem +${i}`,
                 realLoad: null,
                 projectedLoad: Math.round(nextLoad),
                 isCurrent: false,
-                fullDate: 'Proyección'
+                fullDate: 'Proyección',
+                weekStart: futureDate
             });
             lastLoad = nextLoad;
         }
         return chartData;
     }, [history, currentPlan]);
+
+    // Find milestones for each week
+    const milestones = useMemo(() => {
+        const marks: { week: string; type: 'injury' | 'competition' | 'therapy'; label: string }[] = [];
+
+        // Process past injuries
+        injuries?.filter(inj => inj.diagnosedDate).forEach(inj => {
+            const injDate = new Date(inj.diagnosedDate!);
+            data.forEach(d => {
+                if (d.weekStart) {
+                    const weekStart = new Date(d.weekStart);
+                    const weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekEnd.getDate() + 7);
+                    if (injDate >= weekStart && injDate < weekEnd) {
+                        marks.push({ week: d.name, type: 'injury', label: `🔴 ${inj.type}` });
+                    }
+                }
+            });
+        });
+
+        // Process future competitions
+        competitions?.forEach(comp => {
+            const compDate = new Date(comp.date);
+            data.forEach(d => {
+                if (d.weekStart) {
+                    const weekStart = new Date(d.weekStart);
+                    const weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekEnd.getDate() + 7);
+                    if (compDate >= weekStart && compDate < weekEnd) {
+                        marks.push({ week: d.name, type: 'competition', label: `🏆 ${comp.name}` });
+                    }
+                }
+            });
+        });
+
+        // Process therapy sessions (from logs)
+        therapyLogs?.filter(log => log.type === 'Recovery').forEach(log => {
+            const logDate = new Date(log.date);
+            data.forEach(d => {
+                if (d.weekStart) {
+                    const weekStart = new Date(d.weekStart);
+                    const weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekEnd.getDate() + 7);
+                    if (logDate >= weekStart && logDate < weekEnd) {
+                        if (!marks.some(m => m.week === d.name && m.type === 'therapy')) {
+                            marks.push({ week: d.name, type: 'therapy', label: '💊' });
+                        }
+                    }
+                }
+            });
+        });
+
+        return marks;
+    }, [data, injuries, competitions, therapyLogs]);
 
     return (
         <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl mb-6 relative overflow-hidden">
@@ -234,6 +301,13 @@ const MacrocycleChart = ({ history, currentPlan }: { history: any[], currentPlan
                 <div className="flex items-center gap-3 text-[9px] font-bold uppercase">
                     <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-cyan-500"></div> Real</div>
                     <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-slate-500 border border-dashed border-slate-300"></div> Futuro</div>
+                    {milestones.length > 0 && (
+                        <>
+                            <div className="flex items-center gap-1">🔴 Lesión</div>
+                            <div className="flex items-center gap-1">🏆 Comp</div>
+                            <div className="flex items-center gap-1">💊 Terapia</div>
+                        </>
+                    )}
                 </div>
             </div>
             <div className="h-40 w-full" style={{ minHeight: '160px' }}>
@@ -252,6 +326,13 @@ const MacrocycleChart = ({ history, currentPlan }: { history: any[], currentPlan
                             <Tooltip
                                 contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px' }}
                                 labelStyle={{ color: '#94a3b8', fontSize: '9px', fontWeight: 'bold' }}
+                                formatter={(value: any, name: string, props: any) => {
+                                    const weekMilestones = milestones.filter(m => m.week === props.payload.name);
+                                    if (weekMilestones.length > 0) {
+                                        return [`${value} ${weekMilestones.map(m => m.label).join(' ')}`, name];
+                                    }
+                                    return [value, name];
+                                }}
                             />
                             <Area
                                 type="monotone"
@@ -274,10 +355,30 @@ const MacrocycleChart = ({ history, currentPlan }: { history: any[], currentPlan
                                 fillOpacity={0}
                             />
                             <ReferenceLine x="ACTUAL" stroke="#22d3ee" strokeDasharray="3 3" strokeOpacity={0.5} />
+                            {/* Milestone Reference Lines */}
+                            {milestones.filter(m => m.type === 'injury').map((m, i) => (
+                                <ReferenceLine key={`inj-${i}`} x={m.week} stroke="#ef4444" strokeWidth={2} strokeOpacity={0.7} />
+                            ))}
+                            {milestones.filter(m => m.type === 'competition').map((m, i) => (
+                                <ReferenceLine key={`comp-${i}`} x={m.week} stroke="#eab308" strokeWidth={2} strokeOpacity={0.7} />
+                            ))}
                         </ComposedChart>
                     </ResponsiveContainer>
                 )}
             </div>
+            {/* Milestone indicators below chart */}
+            {milestones.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2 justify-center">
+                    {milestones.map((m, i) => (
+                        <span key={i} className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${m.type === 'injury' ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
+                            m.type === 'competition' ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' :
+                                'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                            }`}>
+                            {m.label}
+                        </span>
+                    ))}
+                </div>
+            )}
             <div className="flex justify-center mt-2">
                 <span className="text-[10px] text-cyan-400 font-bold bg-cyan-900/20 px-3 py-1 rounded-full border border-cyan-500/30 animate-pulse">SEMANA ACTUAL</span>
             </div>
@@ -286,7 +387,7 @@ const MacrocycleChart = ({ history, currentPlan }: { history: any[], currentPlan
 };
 
 const PlanManager: React.FC = () => {
-    const { user, userProfile, adminProfile, updateProfile, currentPlan, setPlan, resetPlan, updateSession, lastAnalysis, planHistory } = useApp();
+    const { user, userProfile, adminProfile, updateProfile, currentPlan, setPlan, resetPlan, updateSession, lastAnalysis, planHistory, logs } = useApp();
     const location = useLocation();
     const searchParams = new URLSearchParams(location.search);
 
@@ -364,7 +465,14 @@ const PlanManager: React.FC = () => {
 
     const updateSessionNote = (day: string, note: string) => updateSession(day, { coachNotes: note });
     const toggleEventSelection = (e: string) => { const current = tempProfile.events || []; if (current.includes(e)) setTempProfile({ ...tempProfile, events: current.filter(ev => ev !== e) }); else setTempProfile({ ...tempProfile, events: [...current, e] }); };
-    const toggleTrainingDay = (day: string) => { const current = tempProfile.trainingDays || []; if (current.includes(day)) setTempProfile({ ...tempProfile, trainingDays: current.filter(d => d !== day) }); else setTempProfile({ ...tempProfile, trainingDays: [...current, day] }); };
+    const toggleTrainingDay = (day: string) => {
+        const current = [...new Set(tempProfile.trainingDays || [])]; // Ensure no duplicates
+        if (current.includes(day)) {
+            setTempProfile({ ...tempProfile, trainingDays: current.filter(d => d !== day) });
+        } else {
+            setTempProfile({ ...tempProfile, trainingDays: [...current, day] });
+        }
+    };
     const updateInjury = (index: number, field: keyof Injury, value: any) => { const updated = [...(tempProfile.injuries || [])]; updated[index] = { ...updated[index], [field]: value }; setTempProfile({ ...tempProfile, injuries: updated }); };
     const showTooltip = (title: string, text: string) => setActiveTooltip({ title, text });
     const updatePB = (event: '100m' | '200m' | '400m', field: 'time' | 'date', value: string) => {
@@ -741,7 +849,13 @@ const PlanManager: React.FC = () => {
                 </div>
             ) : (
                 <div className="space-y-6">
-                    <MacrocycleChart history={planHistoryState} currentPlan={currentPlan} />
+                    <MacrocycleChart
+                        history={planHistoryState}
+                        currentPlan={currentPlan}
+                        injuries={userProfile.injuries}
+                        competitions={userProfile.competitions}
+                        therapyLogs={logs}
+                    />
                     <div className="bg-slate-900 p-6 rounded-2xl border border-slate-700">
                         <div className="flex items-center gap-2 mb-2">
                             <span className="px-2 py-0.5 bg-cyan-900/30 text-cyan-400 border border-cyan-500/20 rounded text-[10px] font-bold uppercase">{currentPlan.phase}</span>

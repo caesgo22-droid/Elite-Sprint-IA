@@ -14,7 +14,7 @@ const CoachDashboard: React.FC = () => {
     const navigate = useNavigate(); // Hook for navigation
     const [emailQuery, setEmailQuery] = useState('');
     const [searching, setSearching] = useState(false);
-    const [rosterData, setRosterData] = useState<{ uid: string, profile: UserProfile, risk: 'High' | 'Low' | 'Optimal', pendingReviews: number, lastActive: string }[]>([]);
+    const [rosterData, setRosterData] = useState<{ uid: string, profile: UserProfile, risk: 'High' | 'Low' | 'Optimal', acwrRatio: number, pendingReviews: number, lastActive: string }[]>([]);
     const [loadingRoster, setLoadingRoster] = useState(false);
     const photoInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -84,17 +84,24 @@ const CoachDashboard: React.FC = () => {
                 const aHist = await getAnalysisHistory(uid);
 
                 let risk: 'High' | 'Low' | 'Optimal' = 'Optimal';
+                let acwrRatio = 0;
                 if (data.currentPlan) {
                     const acwr = calculateACWR([data.currentPlan as any, ...pHist as any]);
+                    acwrRatio = acwr.ratio;
                     if (acwr.status === 'Alto Riesgo') risk = 'High';
                     else if (acwr.status === 'Carga Baja') risk = 'Low';
                 }
 
-                const pendingReviews = aHist.filter((a: any) => a.reviewStatus === 'Pending').length;
+                // Only count pending reviews from last 14 days
+                const fourteenDaysAgo = Date.now() - (14 * 24 * 60 * 60 * 1000);
+                const pendingReviews = aHist.filter((a: any) => {
+                    const savedAt = a.savedAt ? new Date(a.savedAt).getTime() : 0;
+                    return a.reviewStatus === 'Pending' && savedAt > fourteenDaysAgo;
+                }).length;
                 const lastLog = data.logs && data.logs.length > 0 ? data.logs[data.logs.length - 1] : null;
                 const lastActive = lastLog ? lastLog.date : 'Inactivo';
 
-                if (data.profile) profiles.push({ uid, profile: data.profile as UserProfile, risk, pendingReviews, lastActive });
+                if (data.profile) profiles.push({ uid, profile: data.profile as UserProfile, risk, acwrRatio, pendingReviews, lastActive });
             }
             setRosterData(profiles);
             setLoadingRoster(false);
@@ -221,7 +228,7 @@ const CoachDashboard: React.FC = () => {
                                     currentAthlete?.risk === 'Low' ? 'bg-blue-500/20 text-blue-200 border-blue-500/30' :
                                         'bg-green-500/20 text-green-200 border-green-500/30'
                                     }`}>
-                                    ACWR: {currentAthlete?.risk === 'High' ? 'CRÍTICO' : 'ÓPTIMO'}
+                                    ACWR: {currentAthlete?.acwrRatio?.toFixed(2) || '0.00'} {currentAthlete?.risk === 'High' ? 'CRÍTICO' : currentAthlete?.risk === 'Low' ? 'BAJO' : 'ÓPTIMO'}
                                 </span>
                             </div>
 

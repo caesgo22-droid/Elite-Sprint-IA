@@ -92,12 +92,19 @@ export const generateNexusInsight = async (logs: any[], readiness: any, analysis
     const model = getModelInstance("gemini-2.0-flash-thinking-exp");
     if (!model) return null;
 
+    const acwrStatus = acwr?.status || 'Desconocido';
+    const acwrRatio = acwr?.ratio || 0;
+
     const prompt = `AUDITORÍA HOLÍSTICA (Nivel 5).
             Historial Tiempos: ${JSON.stringify(logs.slice(-5))}. 
             Readiness: ${JSON.stringify(readiness)}. 
             Historial Biomecánico (últimos 3): ${JSON.stringify(analysisHistory.slice(0, 3))}. 
-            Carga (ACWR): ${acwr?.ratio}.
             
+            DATOS CRÍTICOS DE CARGA (USA ESTOS VALORES EXACTOS):
+            - ACWR Ratio: ${acwrRatio}
+            - ACWR Status: ${acwrStatus}
+            
+            IMPORTANTE: Si el ACWR ratio es > 1.5, el status DEBE ser "Warning". Usa el ratio proporcionado arriba, NO inventes uno diferente.
             INSTRUCCIÓN CRÍTICA: Detecta "Fatiga Técnica Silenciosa". 
             Si la Velocidad del Centro de Masas (VCoM) ha bajado sistemáticamente o el Tiempo de Contacto (GCT) ha subido en los últimos 3 videos, marca status: "Warning" y alerta sobre riesgo de lesión.
             

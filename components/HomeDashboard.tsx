@@ -16,6 +16,10 @@ const HomeDashboard: React.FC = () => {
   const [errorStatus, setErrorStatus] = useState<'none' | 'key_missing' | 'error'>('none');
   const [showTherapyModal, setShowTherapyModal] = useState(false);
   const [showTherapyHistory, setShowTherapyHistory] = useState(false);
+  const [therapyType, setTherapyType] = useState('Descarga');
+  const [therapyMuscle, setTherapyMuscle] = useState('General');
+  const [therapyGrade, setTherapyGrade] = useState(0);
+  const [therapyNotes, setTherapyNotes] = useState('');
 
   const fetchNexus = async (force: boolean = false) => {
     const CACHE_KEY = 'nexus_cache_v1';
@@ -309,31 +313,100 @@ const HomeDashboard: React.FC = () => {
       </div>
 
       {showTherapyModal && (
-        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-6" onClick={() => setShowTherapyModal(false)}>
-          <div className="bg-slate-900 border border-blue-500/30 p-8 rounded-[2.5rem] w-full max-w-sm text-center relative shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="w-16 h-16 bg-blue-500/10 rounded-3xl border border-blue-500/20 flex items-center justify-center mx-auto mb-4">
-              <Stethoscope size={32} className="text-blue-400" />
+        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setShowTherapyModal(false)}>
+          <div className="bg-slate-900 border border-blue-500/30 p-6 rounded-[2rem] w-full max-w-sm relative shadow-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="w-14 h-14 bg-blue-500/10 rounded-2xl border border-blue-500/20 flex items-center justify-center mx-auto mb-4">
+              <Stethoscope size={28} className="text-blue-400" />
             </div>
-            <h4 className="text-xl font-black text-white mb-2 uppercase tracking-tight">Registro de Terapia</h4>
-            <p className="text-xs text-slate-400 leading-relaxed mb-6">Selecciona el tipo de sesión realizada hoy.</p>
+            <h4 className="text-lg font-black text-white mb-1 text-center uppercase tracking-tight">Registro de Terapia</h4>
+            <p className="text-[10px] text-slate-400 leading-relaxed mb-4 text-center">Registra los detalles de tu sesión de recuperación.</p>
 
-            <div className="grid grid-cols-2 gap-2 mb-6">
-              {['Descarga', 'Fisio/Kine', 'Pistola Masaje', 'Hielo/Botas', 'Contrastes', 'Presoterapia'].map((t) => (
-                <button
-                  key={t}
-                  onClick={() => handleTherapyLog(t)}
-                  className="bg-slate-800 border border-slate-700 hover:bg-slate-700 hover:border-blue-500/50 p-3 rounded-2xl text-[10px] font-bold text-white transition-all uppercase tracking-tighter"
-                >
-                  {t}
-                </button>
-              ))}
+            {/* Therapy Type Selection */}
+            <div className="mb-4">
+              <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Tipo de Terapia</label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {['Descarga', 'Fisio', 'Pistola', 'Hielo', 'Contraste', 'Presoterapia'].map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTherapyType(t)}
+                    className={`p-2 rounded-xl text-[9px] font-bold uppercase transition-all ${therapyType === t
+                      ? 'bg-blue-500/20 border-blue-500/50 text-blue-300 border'
+                      : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
+                      }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="flex flex-col gap-3">
-              <button onClick={() => { setShowTherapyModal(false); setShowTherapyHistory(true); }} className="w-full bg-slate-950 border border-slate-800 text-blue-400 font-bold py-3 rounded-2xl uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
+            {/* Muscle Group Selection */}
+            <div className="mb-4">
+              <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Grupo Muscular</label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {['Isquiotibiales', 'Cuádriceps', 'Gemelos', 'Espalda', 'Glúteos', 'General'].map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setTherapyMuscle(m)}
+                    className={`p-2 rounded-xl text-[8px] font-bold uppercase transition-all ${therapyMuscle === m
+                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 border'
+                      : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
+                      }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Grade (for injury-related therapy) */}
+            <div className="mb-4">
+              <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-2">¿Es por Lesión? (Opcional)</label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {[{ label: 'No', value: 0 }, { label: 'G1', value: 1 }, { label: 'G2', value: 2 }, { label: 'G3', value: 3 }].map((g) => (
+                  <button
+                    key={g.label}
+                    onClick={() => setTherapyGrade(g.value)}
+                    className={`p-2 rounded-xl text-[9px] font-bold uppercase transition-all ${therapyGrade === g.value
+                      ? g.value === 0 ? 'bg-slate-600 border-slate-500 text-white border' : 'bg-red-500/20 border-red-500/50 text-red-300 border'
+                      : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
+                      }`}
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div className="mb-4">
+              <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Notas Adicionales</label>
+              <textarea
+                value={therapyNotes}
+                onChange={(e) => setTherapyNotes(e.target.value)}
+                placeholder="Ej: Trabajo de liberación en fascia, 20 minutos..."
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-xs text-white placeholder-slate-600 min-h-[60px] resize-none outline-none focus:border-blue-500/50"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  const detailedNotes = `[${therapyType}] ${therapyMuscle}${therapyGrade > 0 ? ` - Grado ${therapyGrade}` : ''}. ${therapyNotes}`;
+                  handleTherapyLog(therapyType, detailedNotes);
+                  setTherapyType('Descarga');
+                  setTherapyMuscle('General');
+                  setTherapyGrade(0);
+                  setTherapyNotes('');
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3 rounded-xl uppercase tracking-widest text-[10px] transition-all"
+              >
+                Guardar Registro
+              </button>
+              <button onClick={() => { setShowTherapyModal(false); setShowTherapyHistory(true); }} className="w-full bg-slate-950 border border-slate-800 text-blue-400 font-bold py-2.5 rounded-xl uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
                 <History size={14} /> Ver Historial
               </button>
-              <button onClick={() => setShowTherapyModal(false)} className="w-full bg-slate-800 text-slate-400 font-bold py-3 rounded-2xl uppercase tracking-widest text-[10px]">Cancelar</button>
+              <button onClick={() => setShowTherapyModal(false)} className="w-full text-slate-500 font-bold py-2 uppercase tracking-widest text-[10px]">Cancelar</button>
             </div>
           </div>
         </div>
