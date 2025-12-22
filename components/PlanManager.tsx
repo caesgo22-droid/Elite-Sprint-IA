@@ -286,7 +286,7 @@ const MacrocycleChart = ({ history, currentPlan }: { history: any[], currentPlan
 };
 
 const PlanManager: React.FC = () => {
-    const { user, userProfile, adminProfile, updateProfile, currentPlan, setPlan, updateSession, lastAnalysis, planHistory } = useApp();
+    const { user, userProfile, adminProfile, updateProfile, currentPlan, setPlan, resetPlan, updateSession, lastAnalysis, planHistory } = useApp();
     const location = useLocation();
     const searchParams = new URLSearchParams(location.search);
 
@@ -365,7 +365,7 @@ const PlanManager: React.FC = () => {
     const updateSessionNote = (day: string, note: string) => updateSession(day, { coachNotes: note });
     const toggleEventSelection = (e: string) => { const current = tempProfile.events || []; if (current.includes(e)) setTempProfile({ ...tempProfile, events: current.filter(ev => ev !== e) }); else setTempProfile({ ...tempProfile, events: [...current, e] }); };
     const toggleTrainingDay = (day: string) => { const current = tempProfile.trainingDays || []; if (current.includes(day)) setTempProfile({ ...tempProfile, trainingDays: current.filter(d => d !== day) }); else setTempProfile({ ...tempProfile, trainingDays: [...current, day] }); };
-    const updateInjury = (index: number, field: keyof Injury, value: string) => { const updated = [...(tempProfile.injuries || [])]; updated[index] = { ...updated[index], [field]: value }; setTempProfile({ ...tempProfile, injuries: updated }); };
+    const updateInjury = (index: number, field: keyof Injury, value: any) => { const updated = [...(tempProfile.injuries || [])]; updated[index] = { ...updated[index], [field]: value }; setTempProfile({ ...tempProfile, injuries: updated }); };
     const showTooltip = (title: string, text: string) => setActiveTooltip({ title, text });
     const updatePB = (event: '100m' | '200m' | '400m', field: 'time' | 'date', value: string) => {
         const newPBs = { ...tempProfile.pbs, [event]: { ...tempProfile.pbs[event], [field]: value } };
@@ -656,7 +656,13 @@ const PlanManager: React.FC = () => {
                                         <input type="text" value={injury.type} onChange={e => updateInjury(idx, 'type', e.target.value)} className="bg-transparent font-bold text-xs text-white outline-none" placeholder="Tipo de lesión" />
                                         <button onClick={() => setTempProfile({ ...tempProfile, injuries: tempProfile.injuries.filter((_, i) => i !== idx) })} className="text-red-500"><X size={14} /></button>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2 mt-1">
+                                    <textarea
+                                        value={injury.description || ''}
+                                        onChange={e => updateInjury(idx, 'description', e.target.value)}
+                                        className="w-full bg-slate-900/50 border border-slate-700/50 rounded p-2 text-[10px] text-slate-300 min-h-[40px] resize-none outline-none focus:border-cyan-500/50"
+                                        placeholder="Descripción o detalles..."
+                                    />
+                                    <div className="grid grid-cols-3 gap-2 mt-1">
                                         <select value={injury.severity} onChange={e => updateInjury(idx, 'severity', e.target.value)} className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-white">
                                             <option value="Leve">Leve</option>
                                             <option value="Moderada">Moderada</option>
@@ -664,8 +670,14 @@ const PlanManager: React.FC = () => {
                                         </select>
                                         <select value={injury.status} onChange={e => updateInjury(idx, 'status', e.target.value)} className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-white">
                                             <option value="Activa">Activa</option>
-                                            <option value="Recuperación">En Recuperación</option>
+                                            <option value="Recuperación">Recuperación</option>
                                             <option value="Resuelta">Resuelta</option>
+                                        </select>
+                                        <select value={injury.grade || ''} onChange={e => updateInjury(idx, 'grade', parseInt(e.target.value))} className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-white">
+                                            <option value="">Grado?</option>
+                                            <option value="1">G1</option>
+                                            <option value="2">G2</option>
+                                            <option value="3">G3</option>
                                         </select>
                                     </div>
                                 </div>
@@ -682,7 +694,7 @@ const PlanManager: React.FC = () => {
     }
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500 pb-16">
+        <div key={currentPlan?.id || 'no-plan'} className="space-y-6 animate-in fade-in duration-500 pb-16">
             <div className="flex justify-between items-end border-b border-slate-800/50 pb-4">
                 <div><h2 className="text-2xl font-black text-white uppercase tracking-tight">Microciclo</h2><p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Nivel V World Athletics</p></div>
                 <div className="flex items-center gap-2">
@@ -690,10 +702,7 @@ const PlanManager: React.FC = () => {
                         <button
                             onClick={() => {
                                 if (window.confirm('¿Estás seguro de reiniciar el plan? El actual se archivará.')) {
-                                    (async () => {
-                                        const { resetPlan } = (useApp as any)(); // Avoiding lint issues if type not updated yet
-                                        await resetPlan();
-                                    })();
+                                    resetPlan();
                                 }
                             }}
                             className="bg-red-500/10 border border-red-500/30 text-red-500 px-3 py-1.5 rounded-full text-[9px] font-black uppercase flex items-center gap-1 hover:bg-red-500/20 transition-all"

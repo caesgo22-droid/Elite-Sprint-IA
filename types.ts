@@ -3,7 +3,16 @@
 // types.ts
 
 export interface PersonalBest { time: string; date: string; }
-export interface Injury { type: string; location: string; severity: 'Leve' | 'Moderada' | 'Grave'; status: 'Activa' | 'Recuperación' | 'Resuelta'; }
+export interface Injury {
+  type: string;
+  location: string;
+  severity: 'Leve' | 'Moderada' | 'Grave';
+  status: 'Activa' | 'Recuperación' | 'Resuelta';
+  grade?: number; // 1-3
+  description?: string;
+  diagnosedDate?: string;
+  recoveryStatus?: number; // 0-100%
+}
 
 export interface Coach {
   id: string;

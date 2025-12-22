@@ -6,7 +6,7 @@ import { Users, Plus, Search, UserCircle2, Briefcase, Eye, LogOut, Activity, Arr
 import { UserProfile, StaffBriefing, StaffReply } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { useNavigate } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, Cell, LabelList } from 'recharts';
 import TaskManager from './TaskManager';
 
 const CoachDashboard: React.FC = () => {
@@ -215,7 +215,7 @@ const CoachDashboard: React.FC = () => {
                             </div>
                             <div className="flex flex-wrap justify-center md:justify-start gap-2 mb-4">
                                 <span className="px-3 py-1 bg-indigo-500/20 rounded-lg text-indigo-200 text-xs font-bold uppercase border border-indigo-500/30">
-                                    {safeStr(profile?.events?.[0] || 'Sprint')}
+                                    {profile?.events?.join(', ') || 'Sprint'}
                                 </span>
                                 <span className={`px-3 py-1 rounded-lg text-xs font-bold uppercase border ${currentAthlete?.risk === 'High' ? 'bg-red-500/20 text-red-200 border-red-500/30' :
                                     currentAthlete?.risk === 'Low' ? 'bg-blue-500/20 text-blue-200 border-blue-500/30' :
@@ -241,7 +241,7 @@ const CoachDashboard: React.FC = () => {
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                     <Zap className="text-emerald-400" size={14} />
-                                    <span className="text-[10px] font-bold text-slate-300 uppercase">{profile?.trainingDays?.length || 0} DÍAS/SEM</span>
+                                    <span className="text-[10px] font-bold text-slate-300 uppercase">{[...new Set(profile?.trainingDays || [])].length} DÍAS/SEM</span>
                                 </div>
                             </div>
                         </div>
@@ -254,13 +254,18 @@ const CoachDashboard: React.FC = () => {
                             <div className="text-sm font-black text-white truncate">{nextComp ? safeStr(nextComp.name) : 'No Asignada'}</div>
                             <div className="text-[10px] text-indigo-400 font-bold mt-1">{nextComp ? safeStr(nextComp.date) : '--'}</div>
                         </div>
-                        <div className="bg-slate-900/50 border border-slate-700/50 p-4 rounded-2xl">
-                            <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">Lesiones Activas</div>
+                        <div className="bg-slate-900/50 border border-slate-700/50 p-4 rounded-2xl relative overflow-hidden group">
+                            <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">Status Médico</div>
                             <div className={`text-sm font-black ${profile?.injuries?.some(i => i.status === 'Activa') ? 'text-red-400' : 'text-emerald-400'}`}>
                                 {profile?.injuries?.filter(i => i.status === 'Activa').length || 0} Activas
                             </div>
-                            <div className="text-[10px] text-slate-500 font-bold mt-1 truncate">
-                                {profile?.injuries?.filter(i => i.status === 'Activa').map(i => safeStr(i.location)).join(', ') || 'Sin Reportes'}
+                            <div className="mt-2 space-y-1">
+                                {profile?.injuries?.filter(i => i.status === 'Activa').map((inj, idx) => (
+                                    <div key={idx} className="text-[9px] leading-tight flex flex-col">
+                                        <span className="text-slate-200 font-bold uppercase truncate">{inj.type} {inj.grade ? `• G${inj.grade}` : ''}</span>
+                                        {inj.description && <span className="text-slate-500 italic text-[8px] truncate">{inj.description}</span>}
+                                    </div>
+                                ))}
                             </div>
                         </div>
                         <div className="bg-slate-900/50 border border-slate-700/50 p-4 rounded-2xl">
@@ -304,7 +309,9 @@ const CoachDashboard: React.FC = () => {
                                         contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }}
                                         itemStyle={{ color: '#22d3ee', fontWeight: 'bold' }}
                                     />
-                                    <Bar dataKey="time" radius={[0, 4, 4, 0]} barSize={24} fill="url(#colorPB)" />
+                                    <Bar dataKey="time" radius={[0, 6, 6, 0]} barSize={28} fill="url(#colorPB)">
+                                        <LabelList dataKey="time" position="right" fill="#22d3ee" fontSize={10} fontWeight="900" offset={10} />
+                                    </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -355,7 +362,7 @@ const CoachDashboard: React.FC = () => {
                                         strokeDasharray="6 4"
                                         fill="#ef4444"
                                         fillOpacity={0.05}
-                                        strokeWidth={2}
+                                        strokeWidth={4}
                                     />
                                 </AreaChart>
                             </ResponsiveContainer>
@@ -563,7 +570,9 @@ const CoachDashboard: React.FC = () => {
                             <div>
                                 <div className="font-bold text-white text-sm group-hover:text-indigo-300 transition-colors">{safeStr(data.profile?.name)}</div>
                                 <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="text-[10px] text-slate-500 uppercase font-black">{data.profile?.events?.[0] || 'SPRINT'}</span>
+                                    <span className="text-[10px] text-slate-500 uppercase font-black">
+                                        {data.profile?.events?.slice(0, 2).join(' / ') || 'SPRINT'} {data.profile?.events?.length > 2 ? '...' : ''}
+                                    </span>
                                     <span className="w-1 h-1 bg-slate-700 rounded-full"></span>
                                     <span className={`text-[10px] font-bold ${data.risk === 'High' ? 'text-red-400' : data.risk === 'Low' ? 'text-blue-400' : 'text-green-400'
                                         }`}>
