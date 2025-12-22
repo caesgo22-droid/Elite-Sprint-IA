@@ -6,11 +6,11 @@ import { Users, Plus, Search, UserCircle2, Briefcase, Eye, LogOut, Activity, Arr
 import { UserProfile, StaffBriefing, StaffReply } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { useNavigate } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, Cell, LabelList } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, Cell, LabelList, ReferenceLine } from 'recharts';
 import TaskManager from './TaskManager';
 
 const CoachDashboard: React.FC = () => {
-    const { adminProfile, user, userProfile, updateRoster, viewingAthleteId, switchAthlete, t, updateProfile } = useApp();
+    const { adminProfile, user, userProfile, updateRoster, viewingAthleteId, switchAthlete, t, updateProfile, currentPlan, planHistory, logs } = useApp();
     const navigate = useNavigate(); // Hook for navigation
     const [emailQuery, setEmailQuery] = useState('');
     const [searching, setSearching] = useState(false);
@@ -158,17 +158,128 @@ const CoachDashboard: React.FC = () => {
             { name: '400m', time: parseFloat(profile.pbs?.['400m']?.time || '0') },
         ].filter(d => d.time > 0);
 
-        // Macrocycle Simulation (8 weeks)
-        const macroData = [
-            { week: 'W1', intensity: 70, fatigue: 40 },
-            { week: 'W2', intensity: 80, fatigue: 55 },
-            { week: 'W3', intensity: 90, fatigue: 75 },
-            { week: 'W4', intensity: 60, fatigue: 30 }, // Recovery
-            { week: 'W5', intensity: 85, fatigue: 60 },
-            { week: 'W6', intensity: 95, fatigue: 80 },
-            { week: 'W7', intensity: 100, fatigue: 90 }, // Peak
-            { week: 'W8', intensity: 50, fatigue: 20 }, // Tap
-        ];
+        // Dynamic Macrocycle Data
+        const macroData = React.useMemo(() => {
+            const allPlans = logs && planHistory ? [...planHistory].sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) : [];
+            const recentHistory = allPlans.slice(-4);
+
+            const calcLoad = (plan: any) => {
+                let load = 0;
+                if (plan && plan.sessions) {
+                    plan.sessions.forEach((s: any) => {
+                        const factor = s.intensity === 'Max' ? 5 : s.intensity === 'High' ? 4 : s.intensity === 'Medium' ? 3 : 1;
+                        load += factor * 10;
+                    });
+                }
+                return load;
+            };
+
+            const chartData: any[] = [];
+
+            // Historical
+            recentHistory.forEach((plan: any, i: number) => {
+                const weekDate = new Date(plan.createdAt);
+                chartData.push({
+                    week: `W${i - 4}`,
+                    intensity: calcLoad(plan),
+                    fatigue: null,
+                    isCurrent: false,
+                    weekStart: weekDate
+                });
+            });
+
+            // Current
+            const currentLoad = currentPlan ? calcLoad(currentPlan) : 0;
+            const now = new Date();
+            chartData.push({
+                week: 'CUR',
+                intensity: currentLoad,
+                fatigue: currentLoad,
+                isCurrent: true,
+                weekStart: now
+            });
+
+            // Projection
+            let lastLoad = currentLoad || 150;
+            const phase = currentPlan?.phase || 'General Prep';
+            for (let i = 1; i <= 3; i++) {
+                let nextLoad = lastLoad;
+                if (phase.includes('Specific') || phase.includes('Pre-Comp')) {
+                    if (i === 3) nextLoad = lastLoad * 0.7;
+                    else nextLoad = lastLoad * 1.05;
+                } else if (phase.includes('Competition') || phase.includes('Tapering')) {
+                    nextLoad = lastLoad * 0.85;
+                } else {
+                    nextLoad = lastLoad * 1.02;
+                }
+                const futureDate = new Date();
+                futureDate.setDate(now.getDate() + (i * 7));
+                chartData.push({
+                    week: `+W${i}`,
+                    intensity: null,
+                    fatigue: Math.round(nextLoad),
+                    isCurrent: false,
+                    weekStart: futureDate
+                });
+                lastLoad = nextLoad;
+            }
+            return chartData;
+        }, [planHistory, currentPlan, logs]);
+
+        // Milestones
+        const milestones = React.useMemo(() => {
+            const marks: { week: string; type: 'injury' | 'competition' | 'therapy'; label: string }[] = [];
+            const allInjuries = profile.injuries || [];
+            const allComps = profile.competitions || [];
+            const allLogs = logs || [];
+
+            allInjuries.filter(inj => inj.diagnosedDate).forEach(inj => {
+                const injDate = new Date(inj.diagnosedDate!);
+                macroData.forEach(d => {
+                    if (d.weekStart) {
+                        const weekStart = new Date(d.weekStart);
+                        const weekEnd = new Date(weekStart);
+                        weekEnd.setDate(weekEnd.getDate() + 7);
+                        if (injDate >= weekStart && injDate < weekEnd) {
+                            marks.push({ week: d.week, type: 'injury', label: 'Lesión' });
+                        }
+                    }
+                });
+            });
+
+            allComps.forEach(comp => {
+                const compDate = new Date(comp.date);
+                macroData.forEach(d => {
+                    if (d.weekStart) {
+                        const weekStart = new Date(d.weekStart);
+                        const weekEnd = new Date(weekStart);
+                        weekEnd.setDate(weekEnd.getDate() + 7);
+                        if (compDate >= weekStart && compDate < weekEnd) {
+                            marks.push({ week: d.week, type: 'competition', label: 'Comp' });
+                        }
+                    }
+                });
+            });
+
+            allLogs.filter(l => l.event === 'Therapy').forEach(log => {
+                const logDate = new Date(log.date); // Log date is string YYYY-MM-DD
+                // Handle string date manually if needed, usually new Date(string) works
+                macroData.forEach(d => {
+                    if (d.weekStart) {
+                        const weekStart = new Date(d.weekStart);
+                        const weekEnd = new Date(weekStart);
+                        weekEnd.setDate(weekEnd.getDate() + 7);
+                        if (logDate >= weekStart && logDate < weekEnd) {
+                            if (!marks.some(m => m.week === d.week && m.type === 'therapy')) {
+                                marks.push({ week: d.week, type: 'therapy', label: 'Ter' });
+                            }
+                        }
+                    }
+                });
+            });
+
+            return marks;
+        }, [macroData, profile, logs]);
 
         return (
             <div className="space-y-6 animate-in fade-in duration-300">
@@ -248,7 +359,7 @@ const CoachDashboard: React.FC = () => {
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                     <Zap className="text-emerald-400" size={14} />
-                                    <span className="text-[10px] font-bold text-slate-300 uppercase">{[...new Set(profile?.trainingDays || [])].length} DÍAS/SEM</span>
+                                    <span className="text-[10px] font-bold text-slate-300 uppercase">{[...new Set((profile?.trainingDays || []).map(d => d.trim().toLowerCase()))].length} DÍAS/SEM</span>
                                 </div>
                             </div>
                         </div>
@@ -344,20 +455,10 @@ const CoachDashboard: React.FC = () => {
                                     </defs>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                                     <XAxis dataKey="week" stroke="#475569" fontSize={9} fontWeight="900" axisLine={false} tickLine={false} />
-                                    <YAxis hide domain={[0, 120]} />
+                                    <YAxis hide domain={[0, 'auto']} />
                                     <Tooltip
                                         contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px' }}
                                         labelStyle={{ color: '#94a3b8', fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase' }}
-                                    />
-                                    {/* Load as a solid cyan line with area */}
-                                    <Area
-                                        type="monotone"
-                                        dataKey="intensity"
-                                        name="Carga"
-                                        stroke="#22d3ee"
-                                        fillOpacity={1}
-                                        fill="url(#colorInt)"
-                                        strokeWidth={4}
                                         animationDuration={1500}
                                     />
                                     {/* Fatigue as a red dashed line WITHOUT area, but maybe a light one if preferred. The instruction says "area roja punteada" which might mean dashed line and area. */}

@@ -17,7 +17,9 @@ const HomeDashboard: React.FC = () => {
   const [showTherapyModal, setShowTherapyModal] = useState(false);
   const [showTherapyHistory, setShowTherapyHistory] = useState(false);
   const [therapyType, setTherapyType] = useState('Descarga');
+  const [customTherapyType, setCustomTherapyType] = useState('');
   const [therapyMuscle, setTherapyMuscle] = useState('General');
+  const [customTherapyMuscle, setCustomTherapyMuscle] = useState('');
   const [therapyGrade, setTherapyGrade] = useState(0);
   const [therapyNotes, setTherapyNotes] = useState('');
 
@@ -324,39 +326,57 @@ const HomeDashboard: React.FC = () => {
             {/* Therapy Type Selection */}
             <div className="mb-4">
               <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Tipo de Terapia</label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {['Descarga', 'Fisio', 'Pistola', 'Hielo', 'Contraste', 'Presoterapia'].map((t) => (
+              <div className="grid grid-cols-3 gap-1.5 mb-2">
+                {['Descarga', 'Fisio', 'Pistola', 'Hielo', 'Contraste', 'Otros'].map((t) => (
                   <button
                     key={t}
                     onClick={() => setTherapyType(t)}
                     className={`p-2 rounded-xl text-[9px] font-bold uppercase transition-all ${therapyType === t
-                      ? 'bg-blue-500/20 border-blue-500/50 text-blue-300 border'
-                      : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
+                        ? 'bg-blue-500/20 border-blue-500/50 text-blue-300 border'
+                        : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
                       }`}
                   >
                     {t}
                   </button>
                 ))}
               </div>
+              {therapyType === 'Otros' && (
+                <input
+                  type="text"
+                  value={customTherapyType}
+                  onChange={(e) => setCustomTherapyType(e.target.value)}
+                  placeholder="Especificar tipo..."
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-xs text-white placeholder-slate-600 outline-none focus:border-blue-500/50"
+                />
+              )}
             </div>
 
             {/* Muscle Group Selection */}
             <div className="mb-4">
               <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Grupo Muscular</label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {['Isquiotibiales', 'Cuádriceps', 'Gemelos', 'Espalda', 'Glúteos', 'General'].map((m) => (
+              <div className="grid grid-cols-3 gap-1.5 mb-2">
+                {['Isquiotibiales', 'Cuádriceps', 'Gemelos', 'Espalda', 'Glúteos', 'Otros'].map((m) => (
                   <button
                     key={m}
                     onClick={() => setTherapyMuscle(m)}
                     className={`p-2 rounded-xl text-[8px] font-bold uppercase transition-all ${therapyMuscle === m
-                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 border'
-                      : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
+                        ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 border'
+                        : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
                       }`}
                   >
                     {m}
                   </button>
                 ))}
               </div>
+              {therapyMuscle === 'Otros' && (
+                <input
+                  type="text"
+                  value={customTherapyMuscle}
+                  onChange={(e) => setCustomTherapyMuscle(e.target.value)}
+                  placeholder="Especificar músculo..."
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-xs text-white placeholder-slate-600 outline-none focus:border-emerald-500/50"
+                />
+              )}
             </div>
 
             {/* Grade (for injury-related therapy) */}
@@ -392,12 +412,16 @@ const HomeDashboard: React.FC = () => {
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => {
-                  const detailedNotes = `[${therapyType}] ${therapyMuscle}${therapyGrade > 0 ? ` - Grado ${therapyGrade}` : ''}. ${therapyNotes}`;
-                  handleTherapyLog(therapyType, detailedNotes);
+                  const finalType = therapyType === 'Otros' ? customTherapyType || 'Terapia' : therapyType;
+                  const finalMuscle = therapyMuscle === 'Otros' ? customTherapyMuscle || 'General' : therapyMuscle;
+                  const detailedNotes = `[${finalType}] ${finalMuscle}${therapyGrade > 0 ? ` - Grado ${therapyGrade}` : ''}. ${therapyNotes}`;
+                  handleTherapyLog(finalType, detailedNotes);
                   setTherapyType('Descarga');
                   setTherapyMuscle('General');
                   setTherapyGrade(0);
                   setTherapyNotes('');
+                  setCustomTherapyType('');
+                  setCustomTherapyMuscle('');
                 }}
                 className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3 rounded-xl uppercase tracking-widest text-[10px] transition-all"
               >

@@ -105,6 +105,7 @@ export const generateNexusInsight = async (logs: any[], readiness: any, analysis
             - ACWR Status: ${acwrStatus}
             
             IMPORTANTE: Si el ACWR ratio es > 1.5, el status DEBE ser "Warning". Usa el ratio proporcionado arriba, NO inventes uno diferente.
+            Si el ACWR ratio es < 0.8, considera riesgo de "Desentrenamiento" o "Warning", pero si es semana de descarga puede ser "Recovery".
             INSTRUCCIÓN CRÍTICA: Detecta "Fatiga Técnica Silenciosa". 
             Si la Velocidad del Centro de Masas (VCoM) ha bajado sistemáticamente o el Tiempo de Contacto (GCT) ha subido en los últimos 3 videos, marca status: "Warning" y alerta sobre riesgo de lesión.
             
