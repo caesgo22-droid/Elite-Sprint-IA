@@ -193,7 +193,7 @@ const HomeDashboard: React.FC = () => {
               <div className="h-px bg-white/10 flex-1"></div>
             </div>
             <h3 className="text-[10px] font-black text-white leading-tight uppercase tracking-tight">
-              {typeof nexusInsight.headline === 'string' ? nexusInsight.headline : 'Estado del Microciclo'}
+              {typeof nexusInsight.headline === 'string' ? nexusInsight.headline : 'Estado del Macrociclo'}
             </h3>
             <div className="p-3 bg-black/30 rounded-2xl border border-white/5 shadow-inner">
               <p className="text-[10px] text-white/90 leading-relaxed font-medium line-clamp-4">
@@ -309,7 +309,7 @@ const HomeDashboard: React.FC = () => {
         ) : (
           <div className="text-center py-6 space-y-3">
             <p className="text-xs text-slate-500 font-medium italic">Sin sesión programada para hoy.</p>
-            <button onClick={() => navigate('/plan')} className="bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-cyan-900/30">Generar Microciclo</button>
+            <button onClick={() => navigate('/plan')} className="bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-cyan-900/30">Generar Macrociclo</button>
           </div>
         )}
       </div>
@@ -332,8 +332,8 @@ const HomeDashboard: React.FC = () => {
                     key={t}
                     onClick={() => setTherapyType(t)}
                     className={`p-2 rounded-xl text-[9px] font-bold uppercase transition-all ${therapyType === t
-                        ? 'bg-blue-500/20 border-blue-500/50 text-blue-300 border'
-                        : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
+                      ? 'bg-blue-500/20 border-blue-500/50 text-blue-300 border'
+                      : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
                       }`}
                   >
                     {t}
@@ -360,8 +360,8 @@ const HomeDashboard: React.FC = () => {
                     key={m}
                     onClick={() => setTherapyMuscle(m)}
                     className={`p-2 rounded-xl text-[8px] font-bold uppercase transition-all ${therapyMuscle === m
-                        ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 border'
-                        : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
+                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 border'
+                      : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
                       }`}
                   >
                     {m}

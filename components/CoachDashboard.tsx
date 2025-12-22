@@ -1,74 +1,21 @@
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { findAthleteByEmail, fetchUserData, getPlanHistory, getAnalysisHistory, getStaffBriefings, addStaffBriefing, addBriefingReply } from '../services/firebase';
-import { Users, Plus, Search, UserCircle2, Briefcase, Eye, LogOut, Activity, ArrowRight, AlertCircle, Microscope, Zap, Trophy, History, CalendarCheck, Maximize2, Dumbbell } from 'lucide-react';
+import { Users, Plus, Search, UserCircle2, Briefcase, Eye, LogOut, Activity, ArrowLeft, AlertCircle, Microscope, Zap, Trophy, History, CalendarCheck, Maximize2, Dumbbell } from 'lucide-react';
 import { UserProfile, StaffBriefing, StaffReply } from '../types';
 import { calculateACWR } from '../utils/loadCalculator';
 import { useNavigate } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, Cell, LabelList, ReferenceLine } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, Cell, LabelList, ReferenceLine, ComposedChart } from 'recharts';
 import TaskManager from './TaskManager';
 
 const CoachDashboard: React.FC = () => {
-    const { adminProfile, user, userProfile, updateRoster, viewingAthleteId, switchAthlete, t, updateProfile, currentPlan, planHistory, logs } = useApp();
-    const navigate = useNavigate(); // Hook for navigation
+    const { adminProfile, updateRoster, viewingAthleteId, switchAthlete, t } = useApp();
+    const navigate = useNavigate();
     const [emailQuery, setEmailQuery] = useState('');
     const [searching, setSearching] = useState(false);
     const [rosterData, setRosterData] = useState<{ uid: string, profile: UserProfile, risk: 'High' | 'Low' | 'Optimal', acwrRatio: number, pendingReviews: number, lastActive: string }[]>([]);
     const [loadingRoster, setLoadingRoster] = useState(false);
-    const photoInputRef = React.useRef<HTMLInputElement>(null);
-
-    // Staff Round Table State
-    const [briefings, setBriefings] = useState<StaffBriefing[]>([]);
-    const [newBriefing, setNewBriefing] = useState('');
-    const [showBriefingForm, setShowBriefingForm] = useState(false);
-    const [selectedType, setSelectedType] = useState<'Strategy' | 'Physical' | 'Psychology' | 'Technique' | 'General'>('Strategy');
-    const [replyContent, setReplyContent] = useState<{ [key: string]: string }>({});
-
-    useEffect(() => {
-        if (viewingAthleteId) {
-            getStaffBriefings(viewingAthleteId).then((data: any[]) => setBriefings(data));
-        }
-    }, [viewingAthleteId]);
-
-    const handlePostBriefing = async () => {
-        if (!newBriefing.trim()) return;
-        const brief: StaffBriefing = {
-            id: Date.now().toString(),
-            athleteId: viewingAthleteId!,
-            authorId: adminProfile.uid || 'admin',
-            authorName: adminProfile.name || 'Staff',
-            role: adminProfile.role || 'Coach', // Fallback
-            content: newBriefing,
-            type: selectedType,
-            timestamp: new Date().toISOString(),
-            replies: []
-        };
-        await addStaffBriefing(viewingAthleteId!, brief);
-        setBriefings([brief, ...briefings]);
-        setNewBriefing('');
-        setShowBriefingForm(false);
-    };
-
-    const handleReply = async (briefingId: string) => {
-        const content = replyContent[briefingId];
-        if (!content?.trim()) return;
-
-        const reply: StaffReply = {
-            id: Date.now().toString(),
-            authorName: adminProfile.name || 'Staff',
-            role: adminProfile.role || 'Coach',
-            content: content,
-            timestamp: new Date().toISOString()
-        };
-
-        await addBriefingReply(viewingAthleteId!, briefingId, reply);
-
-        // Optimistic update
-        const updated = briefings.map(b => b.id === briefingId ? { ...b, replies: [...(b.replies || []), reply] } : b);
-        setBriefings(updated);
-        setReplyContent({ ...replyContent, [briefingId]: '' });
-    };
 
     useEffect(() => {
         const loadRoster = async () => {
@@ -79,537 +26,69 @@ const CoachDashboard: React.FC = () => {
             setLoadingRoster(true);
             const profiles = [];
             for (const uid of adminProfile.roster) {
-                const data = await fetchUserData(uid);
-                const pHist = await getPlanHistory(uid);
-                const aHist = await getAnalysisHistory(uid);
+                try {
+                    const data = await fetchUserData(uid);
+                    const pHist = await getPlanHistory(uid);
+                    const aHist = await getAnalysisHistory(uid);
 
-                let risk: 'High' | 'Low' | 'Optimal' = 'Optimal';
-                let acwrRatio = 0;
-                if (data.currentPlan) {
-                    const acwr = calculateACWR([data.currentPlan as any, ...pHist as any]);
-                    acwrRatio = acwr.ratio;
-                    if (acwr.status === 'Alto Riesgo') risk = 'High';
-                    else if (acwr.status === 'Carga Baja') risk = 'Low';
+                    let risk: 'High' | 'Low' | 'Optimal' = 'Optimal';
+                    let acwrRatio = 0;
+                    if (data.currentPlan) {
+                        const acwr = calculateACWR([data.currentPlan as any, ...pHist as any]);
+                        acwrRatio = acwr.ratio;
+                        if (acwr.status === 'Alto Riesgo') risk = 'High';
+                        else if (acwr.status === 'Carga Baja') risk = 'Low';
+                    }
+
+                    const fourteenDaysAgo = Date.now() - (14 * 24 * 60 * 60 * 1000);
+                    const pendingReviews = aHist.filter((a: any) => {
+                        const savedAt = a.savedAt ? new Date(a.savedAt).getTime() : 0;
+                        return a.reviewStatus === 'Pending' && savedAt > fourteenDaysAgo;
+                    }).length;
+
+                    const lastLog = data.logs && data.logs.length > 0 ? data.logs[data.logs.length - 1] : null;
+                    const lastActive = lastLog ? lastLog.date : 'Inactivo';
+
+                    if (data.profile) {
+                        profiles.push({ uid, profile: data.profile as UserProfile, risk, acwrRatio, pendingReviews, lastActive });
+                    }
+                } catch (e) {
+                    console.error("Error loading roster item:", uid, e);
                 }
-
-                // Only count pending reviews from last 14 days
-                const fourteenDaysAgo = Date.now() - (14 * 24 * 60 * 60 * 1000);
-                const pendingReviews = aHist.filter((a: any) => {
-                    const savedAt = a.savedAt ? new Date(a.savedAt).getTime() : 0;
-                    return a.reviewStatus === 'Pending' && savedAt > fourteenDaysAgo;
-                }).length;
-                const lastLog = data.logs && data.logs.length > 0 ? data.logs[data.logs.length - 1] : null;
-                const lastActive = lastLog ? lastLog.date : 'Inactivo';
-
-                if (data.profile) profiles.push({ uid, profile: data.profile as UserProfile, risk, acwrRatio, pendingReviews, lastActive });
             }
             setRosterData(profiles);
             setLoadingRoster(false);
         };
         loadRoster();
-    }, [adminProfile.roster]);
-
+    }, [adminProfile.roster, viewingAthleteId]); // Reload roster on return from athlete view to sync deletions
 
     const handleAddAthlete = async () => {
         if (!emailQuery.trim()) return;
-        setSearching(false); // Reset search state
         setSearching(true);
-        const athlete = await findAthleteByEmail(emailQuery.trim().toLowerCase());
-        if (athlete) {
-            if (adminProfile.roster?.includes(athlete.uid)) alert("Ya en roster.");
-            else updateRoster([...(adminProfile.roster || []), athlete.uid]);
-            setEmailQuery('');
-        } else alert("No encontrado.");
+        try {
+            const athlete = await findAthleteByEmail(emailQuery.trim().toLowerCase());
+            if (athlete) {
+                if (adminProfile.roster?.includes(athlete.uid)) alert("Ya en roster.");
+                else updateRoster([...(adminProfile.roster || []), athlete.uid]);
+                setEmailQuery('');
+            } else alert("No encontrado.");
+        } catch (e) {
+            console.error("Search error:", e);
+        }
         setSearching(false);
     };
 
-    // Helper for safe string rendering
-    const safeStr = (val: any, fallback: string = '--'): string => {
-        if (typeof val === 'string') return val;
-        if (typeof val === 'number') return String(val);
-        if (val && typeof val === 'object') return 'Data Error';
-        return fallback;
-    };
-
-
     if (viewingAthleteId) {
-
-        const currentAthlete = rosterData.find(r => r.uid === viewingAthleteId);
-        const profile = currentAthlete?.profile || userProfile; // Fallback to userProfile if not found in roster
-
-        // Safety check: if profile not loaded yet AND we don't have a fallback, show loading state
-        if (!profile || !currentAthlete) {
-            return (
-                <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 flex items-center justify-center">
-                    <div className="text-center">
-                        <div className="text-slate-500 text-sm uppercase tracking-widest mb-4">Sincronizando Atleta...</div>
-                        <div className="animate-spin h-8 w-8 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto"></div>
-                    </div>
-                </div>
-            );
-        }
-
-        const nextComp = profile.competitions && profile.competitions.length > 0 ? profile.competitions[0] : null;
-
-        // PB Data for Chart
-        const pbData = [
-            { name: '100m', time: parseFloat(profile.pbs?.['100m']?.time || '0') },
-            { name: '200m', time: parseFloat(profile.pbs?.['200m']?.time || '0') },
-            { name: '400m', time: parseFloat(profile.pbs?.['400m']?.time || '0') },
-        ].filter(d => d.time > 0);
-
-        // Dynamic Macrocycle Data
-        const macroData = React.useMemo(() => {
-            const allPlans = logs && planHistory ? [...planHistory].sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) : [];
-            const recentHistory = allPlans.slice(-4);
-
-            const calcLoad = (plan: any) => {
-                let load = 0;
-                if (plan && plan.sessions) {
-                    plan.sessions.forEach((s: any) => {
-                        const factor = s.intensity === 'Max' ? 5 : s.intensity === 'High' ? 4 : s.intensity === 'Medium' ? 3 : 1;
-                        load += factor * 10;
-                    });
-                }
-                return load;
-            };
-
-            const chartData: any[] = [];
-
-            // Historical
-            recentHistory.forEach((plan: any, i: number) => {
-                const weekDate = new Date(plan.createdAt);
-                chartData.push({
-                    week: `W${i - 4}`,
-                    intensity: calcLoad(plan),
-                    fatigue: null,
-                    isCurrent: false,
-                    weekStart: weekDate
-                });
-            });
-
-            // Current
-            const currentLoad = currentPlan ? calcLoad(currentPlan) : 0;
-            const now = new Date();
-            chartData.push({
-                week: 'CUR',
-                intensity: currentLoad,
-                fatigue: currentLoad,
-                isCurrent: true,
-                weekStart: now
-            });
-
-            // Projection
-            let lastLoad = currentLoad || 150;
-            const phase = currentPlan?.phase || 'General Prep';
-            for (let i = 1; i <= 3; i++) {
-                let nextLoad = lastLoad;
-                if (phase.includes('Specific') || phase.includes('Pre-Comp')) {
-                    if (i === 3) nextLoad = lastLoad * 0.7;
-                    else nextLoad = lastLoad * 1.05;
-                } else if (phase.includes('Competition') || phase.includes('Tapering')) {
-                    nextLoad = lastLoad * 0.85;
-                } else {
-                    nextLoad = lastLoad * 1.02;
-                }
-                const futureDate = new Date();
-                futureDate.setDate(now.getDate() + (i * 7));
-                chartData.push({
-                    week: `+W${i}`,
-                    intensity: null,
-                    fatigue: Math.round(nextLoad),
-                    isCurrent: false,
-                    weekStart: futureDate
-                });
-                lastLoad = nextLoad;
-            }
-            return chartData;
-        }, [planHistory, currentPlan, logs]);
-
-        // Milestones
-        const milestones = React.useMemo(() => {
-            const marks: { week: string; type: 'injury' | 'competition' | 'therapy'; label: string }[] = [];
-            const allInjuries = profile.injuries || [];
-            const allComps = profile.competitions || [];
-            const allLogs = logs || [];
-
-            allInjuries.filter(inj => inj.diagnosedDate).forEach(inj => {
-                const injDate = new Date(inj.diagnosedDate!);
-                macroData.forEach(d => {
-                    if (d.weekStart) {
-                        const weekStart = new Date(d.weekStart);
-                        const weekEnd = new Date(weekStart);
-                        weekEnd.setDate(weekEnd.getDate() + 7);
-                        if (injDate >= weekStart && injDate < weekEnd) {
-                            marks.push({ week: d.week, type: 'injury', label: 'Lesión' });
-                        }
-                    }
-                });
-            });
-
-            allComps.forEach(comp => {
-                const compDate = new Date(comp.date);
-                macroData.forEach(d => {
-                    if (d.weekStart) {
-                        const weekStart = new Date(d.weekStart);
-                        const weekEnd = new Date(weekStart);
-                        weekEnd.setDate(weekEnd.getDate() + 7);
-                        if (compDate >= weekStart && compDate < weekEnd) {
-                            marks.push({ week: d.week, type: 'competition', label: 'Comp' });
-                        }
-                    }
-                });
-            });
-
-            allLogs.filter(l => l.event === 'Therapy').forEach(log => {
-                const logDate = new Date(log.date); // Log date is string YYYY-MM-DD
-                // Handle string date manually if needed, usually new Date(string) works
-                macroData.forEach(d => {
-                    if (d.weekStart) {
-                        const weekStart = new Date(d.weekStart);
-                        const weekEnd = new Date(weekStart);
-                        weekEnd.setDate(weekEnd.getDate() + 7);
-                        if (logDate >= weekStart && logDate < weekEnd) {
-                            if (!marks.some(m => m.week === d.week && m.type === 'therapy')) {
-                                marks.push({ week: d.week, type: 'therapy', label: 'Ter' });
-                            }
-                        }
-                    }
-                });
-            });
-
-            return marks;
-        }, [macroData, profile, logs]);
-
+        const athleteData = rosterData.find(r => r.uid === viewingAthleteId);
         return (
-            <div className="space-y-6 animate-in fade-in duration-300">
-                {/* EXECUTIVE SUMMARY HEADER */}
-                <div className="bg-indigo-950 border border-indigo-500/30 rounded-[2rem] p-6 shadow-2xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-6 opacity-10">
-                        <Activity size={150} className="text-indigo-400" />
-                    </div>
-                    <button onClick={() => switchAthlete(null)} className="absolute top-6 left-6 p-2 bg-indigo-900/50 rounded-full text-indigo-300 hover:text-white transition-colors z-20">
-                        <ArrowRight className="rotate-180" size={20} />
-                    </button>
-
-                    <div className="mt-8 relative z-10 flex flex-col md:flex-row items-center gap-6">
-                        <div className="relative group/avatar">
-                            <div className="w-24 h-24 rounded-[2rem] bg-gradient-to-br from-indigo-500 via-purple-600 to-indigo-900 shadow-xl flex items-center justify-center border-4 border-slate-900 shrink-0 overflow-hidden">
-                                {profile?.photoURL ? (
-                                    <img src={profile.photoURL} alt="Avatar" className="w-full h-full object-cover" />
-                                ) : (
-                                    <UserCircle2 className="text-white" size={48} />
-                                )}
-                            </div>
-                            <button
-                                onClick={() => photoInputRef.current?.click()}
-                                className="absolute -bottom-1 -right-1 bg-slate-900 border border-slate-700 p-1.5 rounded-xl text-indigo-400 hover:text-white transition-all shadow-lg md:hidden group-hover/avatar:block"
-                            >
-                                <Plus size={14} />
-                            </button>
-                            <input
-                                type="file"
-                                ref={photoInputRef}
-                                className="hidden"
-                                accept="image/*"
-                                onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file && profile) {
-                                        const reader = new FileReader();
-                                        reader.onloadend = () => {
-                                            updateProfile({ ...profile, photoURL: reader.result as string });
-                                        };
-                                        reader.readAsDataURL(file);
-                                    }
-                                }}
-                            />
-                        </div>
-                        <div className="text-center md:text-left">
-                            <div className="flex items-center justify-center md:justify-start gap-2 mb-1">
-                                <h2 className="text-3xl font-black text-white uppercase tracking-tighter">
-                                    {safeStr(profile?.name || 'Atleta')}
-                                </h2>
-                                {currentAthlete?.risk === 'High' && <AlertCircle className="text-red-500 animate-pulse" size={24} />}
-                            </div>
-                            <div className="flex flex-wrap justify-center md:justify-start gap-2 mb-4">
-                                <span className="px-3 py-1 bg-indigo-500/20 rounded-lg text-indigo-200 text-xs font-bold uppercase border border-indigo-500/30">
-                                    {profile?.events?.join(', ') || 'Sprint'}
-                                </span>
-                                <span className={`px-3 py-1 rounded-lg text-xs font-bold uppercase border ${currentAthlete?.risk === 'High' ? 'bg-red-500/20 text-red-200 border-red-500/30' :
-                                    currentAthlete?.risk === 'Low' ? 'bg-blue-500/20 text-blue-200 border-blue-500/30' :
-                                        'bg-green-500/20 text-green-200 border-green-500/30'
-                                    }`}>
-                                    ACWR: {currentAthlete?.acwrRatio?.toFixed(2) || '0.00'} {currentAthlete?.risk === 'High' ? 'CRÍTICO' : currentAthlete?.risk === 'Low' ? 'BAJO' : 'ÓPTIMO'}
-                                </span>
-                            </div>
-
-                            {/* ATHLETE QUICK SPECS */}
-                            <div className="flex flex-wrap justify-center md:justify-start gap-4">
-                                <div className="flex items-center gap-1.5">
-                                    <CalendarCheck className="text-slate-500" size={14} />
-                                    <span className="text-[10px] font-bold text-slate-300 uppercase">{profile?.age || 20} AÑOS</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                    <Maximize2 className="text-slate-500" size={14} />
-                                    <span className="text-[10px] font-bold text-slate-300 uppercase">{profile?.height || '--'} CM</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                    <Dumbbell className="text-slate-500" size={14} />
-                                    <span className="text-[10px] font-bold text-slate-300 uppercase">{profile?.weight || '--'} KG</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                    <Zap className="text-emerald-400" size={14} />
-                                    <span className="text-[10px] font-bold text-slate-300 uppercase">{[...new Set((profile?.trainingDays || []).map(d => d.trim().toLowerCase()))].length} DÍAS/SEM</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* EXECUTIVE METRICS GRID */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-8 relative z-10">
-                        <div className="bg-slate-900/50 border border-slate-700/50 p-4 rounded-2xl">
-                            <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">Próxima Competencia</div>
-                            <div className="text-sm font-black text-white truncate">{nextComp ? safeStr(nextComp.name) : 'No Asignada'}</div>
-                            <div className="text-[10px] text-indigo-400 font-bold mt-1">{nextComp ? safeStr(nextComp.date) : '--'}</div>
-                        </div>
-                        <div className="bg-slate-900/50 border border-slate-700/50 p-4 rounded-2xl relative overflow-hidden group">
-                            <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">Status Médico</div>
-                            <div className={`text-sm font-black ${profile?.injuries?.some(i => i.status === 'Activa') ? 'text-red-400' : 'text-emerald-400'}`}>
-                                {profile?.injuries?.filter(i => i.status === 'Activa').length || 0} Activas
-                            </div>
-                            <div className="mt-2 space-y-1">
-                                {profile?.injuries?.filter(i => i.status === 'Activa').map((inj, idx) => (
-                                    <div key={idx} className="text-[9px] leading-tight flex flex-col">
-                                        <span className="text-slate-200 font-bold uppercase truncate">{inj.type} {inj.grade ? `• G${inj.grade}` : ''}</span>
-                                        {inj.description && <span className="text-slate-500 italic text-[8px] truncate">{inj.description}</span>}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="bg-slate-900/50 border border-slate-700/50 p-4 rounded-2xl">
-                            <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">Enfoque Actual</div>
-                            <div className="text-sm font-black text-white">Pre-Competitivo</div>
-                            <div className="text-[10px] text-emerald-400 font-bold mt-1">Semana 4/12</div>
-                        </div>
-                        <div className="bg-slate-900/50 border border-slate-700/50 p-4 rounded-2xl">
-                            <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">Última Actividad</div>
-                            <div className="text-sm font-black text-white">{safeStr(currentAthlete?.lastActive, 'Inactivo')}</div>
-                            <div className="text-[10px] text-slate-500 font-bold mt-1">{currentAthlete?.lastActive !== 'Inactivo' ? 'Reciente' : 'Sin data'}</div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* VISUAL ANALYTICS SECTION */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* PB CHART */}
-                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
-                        <div className="flex justify-between items-center mb-6">
-                            <div>
-                                <h3 className="text-lg font-black text-white uppercase tracking-tighter">Récords Personales</h3>
-                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Mejores Tiempos (s)</p>
-                            </div>
-                            <Activity className="text-yellow-500" size={24} />
-                        </div>
-                        <div className="h-48 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={pbData} layout="vertical" margin={{ left: -20, right: 30 }}>
-                                    <defs>
-                                        <linearGradient id="colorPB" x1="0" y1="0" x2="1" y2="0">
-                                            <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.9} />
-                                            <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.1} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
-                                    <XAxis type="number" hide domain={[0, 'auto']} />
-                                    <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={9} fontWeight="900" width={50} axisLine={false} tickLine={false} />
-                                    <Tooltip
-                                        cursor={{ fill: 'rgba(255,255,255,0.03)' }}
-                                        contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '10px' }}
-                                        itemStyle={{ color: '#22d3ee', fontWeight: 'bold' }}
-                                    />
-                                    <Bar dataKey="time" radius={[0, 6, 6, 0]} barSize={28} fill="url(#colorPB)">
-                                        <LabelList dataKey="time" position="right" fill="#22d3ee" fontSize={10} fontWeight="900" offset={10} />
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-
-                    {/* MACROCYCLE CHART */}
-                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
-                        <div className="flex justify-between items-center mb-6">
-                            <div>
-                                <h3 className="text-lg font-black text-white uppercase tracking-tighter">Macrociclo (8 Semanas)</h3>
-                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Carga & Fatiga Estimada</p>
-                            </div>
-                            <Zap className="text-indigo-400" size={24} />
-                        </div>
-                        <div className="h-48 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={macroData}>
-                                    <defs>
-                                        <linearGradient id="colorInt" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.2} />
-                                            <stop offset="95%" stopColor="#22d3ee" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                                    <XAxis dataKey="week" stroke="#475569" fontSize={9} fontWeight="900" axisLine={false} tickLine={false} />
-                                    <YAxis hide domain={[0, 'auto']} />
-                                    <Tooltip
-                                        contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px' }}
-                                        labelStyle={{ color: '#94a3b8', fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase' }}
-                                        animationDuration={1500}
-                                    />
-                                    {/* Fatigue as a red dashed line WITHOUT area, but maybe a light one if preferred. The instruction says "area roja punteada" which might mean dashed line and area. */}
-                                    <Area
-                                        type="monotone"
-                                        dataKey="fatigue"
-                                        name="Fatiga"
-                                        stroke="#ef4444"
-                                        strokeDasharray="6 4"
-                                        fill="#ef4444"
-                                        fillOpacity={0.05}
-                                        strokeWidth={4}
-                                    />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-                </div>
-
-                {/* QUICK ACTIONS ROW */}
-                <div className="grid grid-cols-3 gap-3 mt-6">
-                    <button onClick={() => navigate('/plan')} className="bg-emerald-900/20 hover:bg-emerald-900/40 border border-emerald-500/30 p-4 rounded-2xl flex flex-col items-center gap-2 group transition-all">
-                        <Activity className="text-emerald-400 group-hover:scale-110 transition-transform" />
-                        <span className="text-[10px] font-black text-emerald-100 uppercase">Gestionar Plan</span>
-                    </button>
-                    <button onClick={() => navigate('/video?history=true')} className="bg-purple-900/20 hover:bg-purple-900/40 border border-purple-500/30 p-4 rounded-2xl flex flex-col items-center gap-2 group transition-all relative">
-                        <History className="text-purple-400 group-hover:scale-110 transition-transform" />
-                        <span className="text-[10px] font-black text-purple-100 uppercase">Historial Bio</span>
-                        {currentAthlete?.pendingReviews ? (
-                            <span className="absolute top-2 right-2 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full animate-bounce">
-                                {currentAthlete.pendingReviews}
-                            </span>
-                        ) : null}
-                    </button>
-                    <button onClick={() => navigate('/')} className="bg-indigo-900/20 hover:bg-indigo-900/40 border border-indigo-500/30 p-4 rounded-2xl flex flex-col items-center gap-2 group transition-all">
-                        <Briefcase className="text-indigo-400 group-hover:scale-110 transition-transform" />
-                        <span className="text-[10px] font-black text-indigo-100 uppercase">Full Profile</span>
-                    </button>
-                </div>
-
-                {/* PENDING NOTIFICATION */}
-                {currentAthlete?.pendingReviews ? (
-                    <div onClick={() => navigate('/video?history=true&filter=pending')} className="bg-red-500/10 border border-red-500/30 p-4 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-red-500/20 transition-colors mt-6">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-red-500/20 rounded-lg text-red-400"><Eye size={20} /></div>
-                            <div>
-                                <div className="text-sm font-black text-white text-left">Videos por Revisar</div>
-                                <div className="text-[10px] text-red-300 font-bold uppercase text-left">{currentAthlete.pendingReviews} Nuevos análisis requieren tu feedback.</div>
-                            </div>
-                        </div>
-                        <ArrowRight className="text-red-400" size={16} />
-                    </div>
-                ) : null}
-
-                {/* STAFF ROUND TABLE SECTION */}
-                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 relative overflow-hidden mt-6">
-                    <div className="flex justify-between items-center mb-6">
-                        <div>
-                            <h3 className="text-lg font-black text-white flex items-center gap-2 uppercase tracking-tighter">
-                                <Users className="text-cyan-400" size={20} /> Mesa Redonda
-                            </h3>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Sincronización de Staff</p>
-                        </div>
-                        <button onClick={() => setShowBriefingForm(!showBriefingForm)} className="bg-cyan-600 hover:bg-cyan-500 text-white p-2 rounded-xl transition-colors">
-                            <Plus size={20} />
-                        </button>
-                    </div>
-
-                    {showBriefingForm && (
-                        <div className="bg-slate-800 p-4 rounded-2xl mb-6 animate-in slide-in-from-top-4">
-                            <div className="flex gap-2 mb-3 overflow-x-auto pb-2">
-                                {['Strategy', 'Physical', 'Technique', 'Psychology'].map(type => (
-                                    <button
-                                        key={type}
-                                        onClick={() => setSelectedType(type as any)}
-                                        className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase border transition-all ${selectedType === type ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300' : 'border-slate-700 text-slate-500 hover:border-slate-600'}`}
-                                    >
-                                        {type}
-                                    </button>
-                                ))}
-                            </div>
-                            <textarea
-                                value={newBriefing}
-                                onChange={e => setNewBriefing(e.target.value)}
-                                placeholder="Comparte estrategia, objetivos o adjunta links..."
-                                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white placeholder-slate-600 focus:border-cyan-500 focus:outline-none h-24 resize-none mb-3"
-                            />
-                            <div className="flex justify-end">
-                                <button onClick={handlePostBriefing} className="bg-cyan-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-cyan-500">
-                                    Publicar Briefing
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="space-y-4 max-h-[500px] overflow-y-auto scrollbar-hide">
-                        {briefings.length === 0 ? (
-                            <div className="text-center py-8 text-slate-600 text-xs italic">
-                                No hay briefings de staff aún. Inicia la conversación.
-                            </div>
-                        ) : briefings.map(brief => (
-                            <div key={brief.id} className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-900 to-slate-900 border border-cyan-500/30 flex items-center justify-center text-xs font-bold text-cyan-400">
-                                            {safeStr(brief.authorName).charAt(0)}
-                                        </div>
-                                        <div>
-                                            <div className="text-sm font-bold text-white">{safeStr(brief.authorName)}</div>
-                                            <div className="text-[10px] text-cyan-400 uppercase font-black tracking-wider">{safeStr(brief.role)} • {safeStr(brief.type)}</div>
-                                        </div>
-                                    </div>
-                                    <div className="text-[10px] text-slate-500">
-                                        {brief.timestamp ? new Date(brief.timestamp).toLocaleDateString() : '--/--/--'}
-                                    </div>
-                                </div>
-
-                                <p className="text-sm text-slate-300 leading-relaxed mb-4 whitespace-pre-wrap">{safeStr(brief.content)}</p>
-
-                                {brief.replies && brief.replies.length > 0 && (
-                                    <div className="space-y-3 pl-4 border-l-2 border-slate-700 mb-4">
-                                        {brief.replies.map(reply => (
-                                            <div key={reply.id} className="text-xs">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <span className="font-bold text-slate-200">{safeStr(reply.authorName)}</span>
-                                                    <span className="text-[9px] text-slate-500 uppercase">{safeStr(reply.role)}</span>
-                                                </div>
-                                                <p className="text-slate-400">{safeStr(reply.content)}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        placeholder="Complementar estrategia..."
-                                        value={replyContent[brief.id] || ''}
-                                        onChange={e => setReplyContent({ ...replyContent, [brief.id]: e.target.value })}
-                                        onKeyDown={e => e.key === 'Enter' && handleReply(brief.id)}
-                                        className="flex-1 bg-slate-900 rounded-lg border border-slate-700 px-3 py-2 text-xs text-white placeholder-slate-600 focus:border-slate-500 outline-none"
-                                    />
-                                    <button onClick={() => handleReply(brief.id)} className="p-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">
-                                        <ArrowRight size={14} />
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
+            <AthleteProfileDetail
+                uid={viewingAthleteId}
+                athleteRef={athleteData}
+                switchAthlete={switchAthlete}
+                adminProfile={adminProfile}
+                t={t}
+                navigate={navigate}
+            />
         );
     }
 
@@ -676,14 +155,13 @@ const CoachDashboard: React.FC = () => {
                                     }`} title={`Riesgo: ${data.risk}`}></div>
                             </div>
                             <div>
-                                <div className="font-bold text-white text-sm group-hover:text-indigo-300 transition-colors">{safeStr(data.profile?.name)}</div>
+                                <div className="font-bold text-white text-sm group-hover:text-indigo-300 transition-colors">{data.profile?.name || 'Atleta'}</div>
                                 <div className="flex items-center gap-2 mt-0.5">
                                     <span className="text-[10px] text-slate-500 uppercase font-black">
-                                        {data.profile?.events?.slice(0, 2).join(' / ') || 'SPRINT'} {data.profile?.events?.length > 2 ? '...' : ''}
+                                        {data.profile?.events?.slice(0, 2).join(' / ') || 'SPRINT'}
                                     </span>
                                     <span className="w-1 h-1 bg-slate-700 rounded-full"></span>
-                                    <span className={`text-[10px] font-bold ${data.risk === 'High' ? 'text-red-400' : data.risk === 'Low' ? 'text-blue-400' : 'text-green-400'
-                                        }`}>
+                                    <span className={`text-[10px] font-bold ${data.risk === 'High' ? 'text-red-400' : data.risk === 'Low' ? 'text-blue-400' : 'text-green-400'}`}>
                                         {data.risk === 'High' ? 'ALTO RIESGO' : data.risk === 'Low' ? 'CARGA BAJA' : 'ÓPTIMO'}
                                     </span>
                                 </div>
@@ -700,10 +178,322 @@ const CoachDashboard: React.FC = () => {
                                 <div className="text-[9px] text-slate-500 font-bold uppercase">Último Log</div>
                                 <div className="text-xs font-black text-white">{data.lastActive}</div>
                             </div>
-                            <ArrowRight className="text-slate-700 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all" size={20} />
+                            <ArrowLeft className="text-slate-700 group-hover:text-indigo-500 group-hover:-translate-x-1 transition-all rotate-180" size={20} />
                         </div>
                     </div>
                 ))}
+            </div>
+        </div>
+    );
+};
+
+const AthleteProfileDetail: React.FC<{
+    uid: string;
+    athleteRef: any;
+    switchAthlete: (id: string | null) => void;
+    adminProfile: UserProfile;
+    t: any;
+    navigate: any;
+}> = ({ uid, athleteRef, switchAthlete, adminProfile, t, navigate }) => {
+    const { userProfile, currentPlan, planHistory, logs, acwrStats, updateProfile } = useApp();
+    const [briefings, setBriefings] = useState<StaffBriefing[]>([]);
+    const [newBriefing, setNewBriefing] = useState('');
+    const [showBriefingForm, setShowBriefingForm] = useState(false);
+    const [replyContent, setReplyContent] = useState<Record<string, string>>({});
+    const photoInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        getStaffBriefings(uid).then(setBriefings);
+    }, [uid]);
+
+    const handlePostBriefing = async () => {
+        if (!newBriefing.trim()) return;
+        const brief: StaffBriefing = {
+            id: Date.now().toString(),
+            athleteId: uid,
+            authorId: adminProfile.uid || 'admin',
+            authorName: adminProfile.name || 'Staff',
+            role: adminProfile.role || 'Coach',
+            content: newBriefing,
+            type: 'General',
+            timestamp: new Date().toISOString(),
+            replies: []
+        };
+        await addStaffBriefing(uid, brief);
+        setBriefings([brief, ...briefings]);
+        setNewBriefing('');
+        setShowBriefingForm(false);
+    };
+
+    const handleReply = async (briefingId: string) => {
+        const content = replyContent[briefingId];
+        if (!content?.trim()) return;
+        const reply: StaffReply = {
+            id: Date.now().toString(),
+            authorName: adminProfile.name || 'Staff',
+            role: adminProfile.role || 'Coach',
+            content: content,
+            timestamp: new Date().toISOString()
+        };
+        await addBriefingReply(uid, briefingId, reply);
+        setBriefings(briefings.map(b => b.id === briefingId ? { ...b, replies: [...(b.replies || []), reply] } : b));
+        setReplyContent({ ...replyContent, [briefingId]: '' });
+    };
+
+    const profile = athleteRef?.profile || userProfile;
+    if (!profile) return null;
+
+    const pbData = [
+        { name: '100m', time: parseFloat(profile.pbs?.['100m']?.time || '0') },
+        { name: '200m', time: parseFloat(profile.pbs?.['200m']?.time || '0') },
+        { name: '400m', time: parseFloat(profile.pbs?.['400m']?.time || '0') },
+    ].filter(d => d.time > 0);
+
+    const macroData = useMemo(() => {
+        const history = [...(planHistory || [])]
+            .filter(p => p.createdAt)
+            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        const recent = history.slice(-3);
+        const calcLoad = (plan: any) => {
+            let load = 0;
+            if (plan?.sessions) {
+                plan.sessions.forEach((s: any) => {
+                    const factor = s.intensity === 'Max' ? 5 : s.intensity === 'High' ? 4 : s.intensity === 'Medium' ? 3 : 1;
+                    load += factor * 10;
+                });
+            }
+            return load;
+        };
+        const data: any[] = [];
+        recent.forEach((p, i) => {
+            data.push({
+                name: `Sem ${-1 * (recent.length - i)}`,
+                realLoad: calcLoad(p),
+                isCurrent: false,
+                weekStart: new Date(p.createdAt)
+            });
+        });
+        const cLoad = currentPlan ? calcLoad(currentPlan) : 0;
+        data.push({ name: 'ACTUAL', realLoad: cLoad, isCurrent: true, weekStart: new Date() });
+        let lastLoad = cLoad || 150;
+        for (let i = 1; i <= 3; i++) {
+            lastLoad *= 1.02;
+            const d = new Date();
+            d.setDate(d.getDate() + (i * 7));
+            data.push({ name: `Sem +${i}`, projectedLoad: Math.round(lastLoad), isCurrent: false, weekStart: d });
+        }
+        return data;
+    }, [planHistory, currentPlan]);
+
+    const milestones = useMemo(() => {
+        const marks: { week: string; type: string; label: string }[] = [];
+        profile.injuries?.forEach(inj => {
+            if (!inj.diagnosedDate) return;
+            const dLine = new Date(inj.diagnosedDate);
+            macroData.forEach(d => {
+                const start = new Date(d.weekStart);
+                const end = new Date(start);
+                end.setDate(end.getDate() + 7);
+                if (dLine >= start && dLine < end) {
+                    marks.push({ week: d.name, type: 'injury', label: `🔴 ${inj.type}` });
+                }
+            });
+        });
+        profile.competitions?.forEach(comp => {
+            if (!comp.date) return;
+            const dLine = new Date(comp.date);
+            macroData.forEach(d => {
+                const start = new Date(d.weekStart);
+                const end = new Date(start);
+                end.setDate(end.getDate() + 7);
+                if (dLine >= start && dLine < end) {
+                    marks.push({ week: d.name, type: 'comp', label: `🏆 ${comp.name}` });
+                }
+            });
+        });
+        logs?.filter(l => l.event === 'Therapy').forEach(log => {
+            const dLine = new Date(log.date);
+            macroData.forEach(d => {
+                const start = new Date(d.weekStart);
+                const end = new Date(start);
+                end.setDate(end.getDate() + 7);
+                if (dLine >= start && dLine < end) {
+                    if (!marks.some(m => m.week === d.name && m.type === 'therapy')) {
+                        marks.push({ week: d.name, type: 'therapy', label: '💊' });
+                    }
+                }
+            });
+        });
+        return marks;
+    }, [macroData, profile.injuries, profile.competitions, logs]);
+
+    const trainingDaysCount = useMemo(() => {
+        const days = profile.trainingDays || [];
+        // Normalizer map to prevent duplicates between different languages/abbreviations
+        const normalizer: Record<string, string> = {
+            'lun': 'mon', 'lunes': 'mon', 'mon': 'mon', 'monday': 'mon',
+            'mar': 'tue', 'martes': 'tue', 'tue': 'tue', 'tuesday': 'tue',
+            'mie': 'wed', 'miercoles': 'wed', 'wed': 'wed', 'wednesday': 'wed',
+            'jue': 'thu', 'jueves': 'thu', 'thu': 'thu', 'thursday': 'thu',
+            'vie': 'fri', 'viernes': 'fri', 'fri': 'fri', 'friday': 'fri',
+            'sab': 'sat', 'sabado': 'sat', 'sat': 'sat', 'saturday': 'sat',
+            'dom': 'sun', 'domingo': 'sun', 'sun': 'sun', 'sunday': 'sun'
+        };
+        const uniqueNormalized = new Set(
+            days.map(d => normalizer[d.toLowerCase().trim()] || d.toLowerCase().trim())
+        );
+        return uniqueNormalized.size;
+    }, [profile.trainingDays]);
+
+    return (
+        <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="bg-indigo-950 border border-indigo-500/30 rounded-[2rem] p-6 shadow-2xl relative overflow-hidden">
+                <button onClick={() => switchAthlete(null)} className="absolute top-6 left-6 p-2 bg-indigo-900/50 rounded-full text-indigo-300 hover:text-white transition-colors z-20">
+                    <ArrowLeft size={20} />
+                </button>
+                <div className="mt-8 relative z-10 flex flex-col md:flex-row items-center gap-6">
+                    <div className="w-24 h-24 rounded-[2rem] bg-indigo-900 border-4 border-slate-900 shadow-xl overflow-hidden shrink-0">
+                        {profile.photoURL ? <img src={profile.photoURL} className="w-full h-full object-cover" /> : <UserCircle2 className="text-white m-auto" size={48} />}
+                    </div>
+                    <div className="text-center md:text-left">
+                        <div className="flex flex-col md:flex-row md:items-center gap-3 mb-2">
+                            <h2 className="text-4xl font-black text-white uppercase tracking-tighter">{profile.name || 'Invitado'}</h2>
+                            <div className="flex gap-2 flex-wrap justify-center md:justify-start">
+                                <span className={`px-3 py-1 bg-indigo-500/20 rounded-full text-[9px] font-black border border-indigo-500/30 uppercase ${acwrStats.status === 'Alto Riesgo' ? 'text-red-400 border-red-500/30' :
+                                    acwrStats.status === 'Carga Baja' ? 'text-blue-400 border-blue-500/30' : 'text-indigo-300'
+                                    }`}>
+                                    ACWR: {acwrStats.ratio.toFixed(2)} {acwrStats.status.toUpperCase()}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap justify-center md:justify-start gap-4 text-[10px] font-bold text-slate-300 uppercase">
+                            <span className="flex items-center gap-1"><CalendarCheck size={12} /> {profile.age || 20} AÑOS</span>
+                            <span className="flex items-center gap-1"><Maximize2 size={12} /> {profile.height || '--'} CM</span>
+                            <span className="flex items-center gap-1"><Dumbbell size={12} /> {profile.weight || '--'} KG</span>
+                            <span className="flex items-center gap-1 text-emerald-400"><Zap size={12} /> {trainingDaysCount} DÍAS/SEM</span>
+                        </div>
+                    </div>
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-8 relative z-10">
+                    <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">Próx. COMPETENCIA</div>
+                    <div className="text-xs font-black text-white uppercase truncate">{profile.competitions?.[0] ? profile.competitions[0].name : 'No programada'}</div>
+                    <div className="text-[9px] text-yellow-500 font-bold mt-1 uppercase">{profile.competitions?.[0] ? profile.competitions[0].date : '-'}</div>
+                    <div className="bg-slate-900/50 border border-slate-700/50 p-4 rounded-2xl">
+                        <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">LESIONES ACTIVAS</div>
+                        <div className="text-xs font-black text-red-400">{profile.injuries?.filter(i => i.status === 'Activa').length || 0} Reportadas</div>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                            {profile.injuries?.filter(i => i.status === 'Activa').slice(0, 2).map((inj, i) => (
+                                <span key={i} className="text-[8px] text-slate-300 bg-red-500/10 px-1 rounded truncate">{inj.type}</span>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="bg-slate-900/50 border border-slate-700/50 p-4 rounded-2xl">
+                        <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">ENFOQUE ACTUAL</div>
+                        <div className="text-xs font-black text-white">{currentPlan?.phase || 'Plan General'}</div>
+                        <div className="text-[9px] text-emerald-400 font-bold mt-1">Sincronizado</div>
+                    </div>
+                    <div className="bg-slate-900/50 border border-slate-700/50 p-4 rounded-2xl">
+                        <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">ÚLTIMO REGISTRO</div>
+                        <div className="text-xs font-black text-white">{athleteRef?.lastActive || 'Inactivo'}</div>
+                        <div className="text-[9px] text-slate-500 font-bold mt-1 uppercase">Sincronizado</div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+                    <h3 className="text-lg font-black text-white uppercase tracking-tighter mb-4">Récords Personales</h3>
+                    <div className="h-48 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={pbData} layout="vertical" margin={{ left: -20, right: 30 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+                                <XAxis type="number" hide />
+                                <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={10} fontWeight="900" width={50} axisLine={false} tickLine={false} />
+                                <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px' }} />
+                                <Bar dataKey="time" radius={[0, 6, 6, 0]} fill="#06b6d4">
+                                    <LabelList dataKey="time" position="right" fill="#22d3ee" fontSize={10} fontWeight="900" offset={10} />
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-black text-white uppercase tracking-tighter">Macrociclo (8 Semanas)</h3>
+                        <div className="flex gap-2 text-[8px] font-bold uppercase">
+                            <span className="flex items-center gap-1"><div className="w-1.5 h-1.5 bg-cyan-500 rounded-full"></div> Real</span>
+                            <span className="flex items-center gap-1">🔴 Lesión</span>
+                            <span className="flex items-center gap-1">💊 Ter</span>
+                        </div>
+                    </div>
+                    <div className="h-48 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={macroData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                                <XAxis dataKey="name" stroke="#475569" fontSize={9} fontWeight="900" axisLine={false} tickLine={false} />
+                                <YAxis hide domain={[0, 'auto']} />
+                                <Tooltip
+                                    contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px' }}
+                                    formatter={(value: any, name: string, props: any) => {
+                                        const weekMarks = milestones.filter(m => m.week === props.payload.name);
+                                        return [`${value} ${weekMarks.map(m => m.label).join(' ')}`, name === 'realLoad' ? 'Carga' : 'Futuro'];
+                                    }}
+                                />
+                                <Area type="monotone" dataKey="realLoad" stroke="#22d3ee" strokeWidth={4} fill="#22d3ee" fillOpacity={0.1} />
+                                <Area type="monotone" dataKey="projectedLoad" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" fill="transparent" />
+                                <ReferenceLine x="ACTUAL" stroke="#22d3ee" strokeDasharray="3 3" />
+                                {milestones.filter(m => m.type === 'injury').map((m, i) => (
+                                    <ReferenceLine key={i} x={m.week} stroke="#ef4444" strokeWidth={2} />
+                                ))}
+                                {milestones.filter(m => m.type === 'therapy').map((m, i) => (
+                                    <ReferenceLine key={i} x={m.week} stroke="#3b82f6" strokeWidth={1} strokeDasharray="2 2" />
+                                ))}
+                            </ComposedChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-lg font-black text-white uppercase tracking-tighter">Bitácora de Staff</h3>
+                    <button onClick={() => setShowBriefingForm(!showBriefingForm)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest text-white">
+                        <Plus size={14} /> Nueva Nota
+                    </button>
+                </div>
+                {showBriefingForm && (
+                    <div className="mb-6 bg-slate-800/50 p-4 rounded-2xl border border-indigo-500/20">
+                        <textarea value={newBriefing} onChange={e => setNewBriefing(e.target.value)} placeholder="Notas internas sobre el atleta..." className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white focus:border-indigo-500 outline-none h-24 mb-3" />
+                        <div className="flex justify-end gap-2 text-[10px] font-black uppercase">
+                            <button onClick={() => setShowBriefingForm(false)} className="text-slate-400 px-4 py-2">Cancelar</button>
+                            <button onClick={handlePostBriefing} className="bg-indigo-600 text-white px-4 py-2 rounded-xl">Publicar</button>
+                        </div>
+                    </div>
+                )}
+                <div className="space-y-4">
+                    {briefings.map(b => (
+                        <div key={b.id} className="bg-slate-800 border border-slate-700 p-4 rounded-2xl">
+                            <div className="flex justify-between items-center text-[8px] font-black uppercase text-slate-500 mb-2">
+                                <span>{b.role} • {b.authorName}</span>
+                                <span>{new Date(b.timestamp).toLocaleDateString()}</span>
+                            </div>
+                            <p className="text-xs text-white mb-4">{b.content}</p>
+                            <div className="space-y-2 ml-4 border-l-2 border-slate-700 pl-4">
+                                {b.replies?.map(r => (
+                                    <div key={r.id}>
+                                        <div className="text-[8px] font-black text-indigo-400">{r.authorName} <span className="text-slate-600 ml-1">{new Date(r.timestamp).toLocaleTimeString()}</span></div>
+                                        <div className="text-[10px] text-slate-300">{r.content}</div>
+                                    </div>
+                                ))}
+                                <div className="flex gap-2 mt-2">
+                                    <input value={replyContent[b.id] || ''} onChange={e => setReplyContent({ ...replyContent, [b.id]: e.target.value })} placeholder="Respuesta rápida..." className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-[9px] text-white outline-none focus:border-indigo-500" />
+                                    <button onClick={() => handleReply(b.id)} className="bg-slate-700 text-white px-2 rounded text-[8px] font-black">OK</button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
     );

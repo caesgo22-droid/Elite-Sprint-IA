@@ -12,16 +12,16 @@ export const calculateACWR = (historyPlans: TrainingPlan[]): LoadStats => {
         .filter(s => s.feedback && s.feedback.completed && s.feedback.timestamp && !isNaN(new Date(s.feedback.timestamp).getTime()));
 
     // Sort by date descending
-    allSessions.sort((a, b) => 
+    allSessions.sort((a, b) =>
         new Date(b.feedback!.timestamp!).getTime() - new Date(a.feedback!.timestamp!).getTime()
     );
 
     const today = new Date();
-    
+
     // Helper to get load for a specific window
     const getAverageLoad = (days: number) => {
         let totalLoad = 0;
-        
+
         // Standard rolling average logic: Sum load in window / days
         for (let i = 0; i < days; i++) {
             const targetDate = new Date();
@@ -29,7 +29,7 @@ export const calculateACWR = (historyPlans: TrainingPlan[]): LoadStats => {
             const dateStr = targetDate.toDateString();
 
             // Find sessions on this date
-            const dailySessions = allSessions.filter(s => 
+            const dailySessions = allSessions.filter(s =>
                 new Date(s.feedback!.timestamp!).toDateString() === dateStr
             );
 
@@ -59,7 +59,8 @@ export const calculateACWR = (historyPlans: TrainingPlan[]): LoadStats => {
 
     let status: 'Óptimo' | 'Alto Riesgo' | 'Carga Baja' = 'Óptimo';
     if (ratio > 1.5) status = 'Alto Riesgo';
-    else if (ratio < 0.8) status = 'Carga Baja';
+    else if (ratio < 0.8 && ratio > 0) status = 'Carga Baja';
+    else if (ratio === 0 && acuteLoad > 0) status = 'Alto Riesgo'; // Edge case: suddenly high load from zero
 
     return {
         acuteLoad: Math.round(acuteLoad),

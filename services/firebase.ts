@@ -98,7 +98,7 @@ export const saveAnalysisToHistory = async (uid: string, analysis: any) => {
   if (!db || !isInitialized) return;
   try {
     const analysisPayload = { ...analysis, savedAt: new Date().toISOString() };
-    await addDoc(collection(db, "users", uid, "analysisHistory"), analysisPayload);
+    await setDoc(doc(db, "users", uid, "analysisHistory", analysis.id), analysisPayload);
   } catch (e) { console.error(e); }
 };
 
