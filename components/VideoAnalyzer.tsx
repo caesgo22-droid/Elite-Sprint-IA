@@ -79,7 +79,7 @@ const VideoAnalyzer: React.FC = () => {
                         modelAssetPath: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task`,
                         delegate: "GPU"
                     },
-                    runningMode: "IMAGE",
+                    runningMode: "VIDEO", // Changed to VIDEO for better performance and temporal consistency
                     numPoses: 1
                 });
                 setPoseLandmarker(landmarker);
@@ -118,61 +118,52 @@ const VideoAnalyzer: React.FC = () => {
         setStatusMessage("Inicializando Scan...");
         physicsEngine.current.reset();
 
+        // Pause usage of the live overlay loop to prevent conflicts
+        const video = videoRef.current;
+        const videoWasPlaying = !video.paused;
+        video.pause();
+
         try {
-            const video = videoRef.current;
             const duration = video.duration;
-            // ✅ OPTIMIZED: Increased from 12 to 30 frames for better phase detection
-            const scanSteps = Math.min(30, Math.ceil(duration * 10)); // 10 fps, max 30
+            // Scan continuously at 10 FPS for smoother data
+            const fps = 10;
+            const scanSteps = Math.ceil(duration * fps);
             const tempHistory: any[] = [];
             const frames: string[] = [];
 
+            // We must process frames sequentially for VIDEO mode
             for (let i = 0; i <= scanSteps; i++) {
                 const time = (duration / scanSteps) * i;
                 video.currentTime = time;
 
-                let detected = false;
-                let retries = 0;
-                const maxRetries = 3;
+                // Wait for seek to complete
+                await new Promise<void>((resolve) => {
+                    const onSeeked = () => {
+                        video.removeEventListener('seeked', onSeeked);
+                        resolve();
+                    };
+                    video.addEventListener('seeked', onSeeked);
+                });
 
-                while (!detected && retries < maxRetries) {
-                    await new Promise((resolve) => {
-                        const timeout = setTimeout(() => {
-                            video.removeEventListener('seeked', onSeeked);
-                            resolve(false);
-                        }, 2000);
+                // In VIDEO mode, timestamps generally need to be increasing, but detectForVideo handles random access
+                // nicely if we treat it as a stream or just respect the timestamp.
+                // However, for pure analysis accuracy, sequential is best.
 
-                        const onSeeked = () => {
-                            clearTimeout(timeout);
-                            video.removeEventListener('seeked', onSeeked);
-                            resolve(true);
-                        };
-                        video.addEventListener('seeked', onSeeked);
-                    });
+                // Small settle time for video decoder
+                await new Promise(r => setTimeout(r, 50));
 
-                    // Settle time
-                    await new Promise(r => setTimeout(r, 150 + (retries * 100)));
-                    const result = poseLandmarker.detect(video);
+                const result = poseLandmarker.detectForVideo(video, time * 1000); // Use detectForVideo with Ms timestamp
 
-                    if (result?.landmarks?.[0]) {
-                        detected = true;
-                        let landmarks = result.landmarks[0];
+                if (result?.landmarks?.[0]) {
+                    const landmarks = result.landmarks[0];
+                    const com = physicsEngine.current.calculateCenterOfMass(landmarks);
+                    const mechanics = physicsEngine.current.calculateSprintMechanics(landmarks);
+                    const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, time * 1000, com);
 
-                        if (tempHistory.length > 0) {
-                            const prev = tempHistory[tempHistory.length - 1].landmarks;
-                            landmarks = landmarks.map((curr: any, idx: number) => ({
-                                ...curr,
-                                x: (curr.x + prev[idx].x) / 2,
-                                y: (curr.y + prev[idx].y) / 2,
-                                z: (curr.z + prev[idx].z) / 2,
-                            }));
-                        }
+                    tempHistory.push({ landmarks, mechanics, advanced, com, timestamp: time * 1000 });
 
-                        const com = physicsEngine.current.calculateCenterOfMass(landmarks);
-                        const mechanics = physicsEngine.current.calculateSprintMechanics(landmarks);
-                        const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, time * 1000, com);
-
-                        tempHistory.push({ landmarks, mechanics, advanced, com, timestamp: time * 1000 });
-
+                    // Capture thumbnails occasionally (e.g. every 1 second or so for the UI)
+                    if (i % fps === 0) {
                         const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
                         const thumbWidth = isMobile ? 320 : 160;
                         const thumbHeight = isMobile ? 180 : 90;
@@ -182,18 +173,12 @@ const VideoAnalyzer: React.FC = () => {
                         canvas.height = thumbHeight;
                         canvas.getContext('2d')?.drawImage(video, 0, 0, thumbWidth, thumbHeight);
                         frames.push(canvas.toDataURL('image/jpeg', 0.5));
-                    } else {
-                        retries++;
-                        if (retries < maxRetries) {
-                            // Try slightly different time if detection fails
-                            video.currentTime = Math.max(0, time + (retries * 0.05));
-                        }
                     }
                 }
                 setStatusMessage(`Escaneando: ${Math.round((i / scanSteps) * 100)}%`);
             }
 
-            if (tempHistory.length === 0) throw new Error("Atleta no detectado.");
+            if (tempHistory.length === 0) throw new Error("Atleta no detectado. Intenta con un video con mejor iluminación.");
             setCapturedFrames(frames);
 
             const { touchdownFrame, maxFlexionFrame, toeOffFrame } = physicsEngine.current.detectSprintPhases(tempHistory);
@@ -212,7 +197,14 @@ const VideoAnalyzer: React.FC = () => {
             if (ctx) {
                 for (let k = 0; k < 3; k++) {
                     video.currentTime = phases[k].timestamp / 1000;
-                    await new Promise(r => setTimeout(r, 150));
+                    await new Promise<void>((resolve) => {
+                        const onSeeked = () => {
+                            video.removeEventListener('seeked', onSeeked);
+                            resolve();
+                        };
+                        video.addEventListener('seeked', onSeeked);
+                    });
+                    await new Promise(r => setTimeout(r, 100)); // wait for frame render
                     ctx.drawImage(video, k * video.videoWidth, 0, video.videoWidth, video.videoHeight);
 
                     ctx.fillStyle = "rgba(0,0,0,0.5)";
@@ -224,11 +216,11 @@ const VideoAnalyzer: React.FC = () => {
             }
 
             const isMaster = analysisMode === 'External';
-            // ✅ OPTIMIZED: High quality (95%) for Gemini analysis
             const filmstripBase64 = filmstripCanvas.toDataURL('image/jpeg', 0.95).split(',')[1];
 
             let payload: string[] = [filmstripBase64];
             if (isMaster && ctx) {
+                // Capture intermediate frames for Master audit
                 const masterP = [
                     phases[0],
                     tempHistory[Math.floor((tempHistory.indexOf(phases[0]) + tempHistory.indexOf(phases[1])) / 2)] || phases[0],
@@ -240,9 +232,15 @@ const VideoAnalyzer: React.FC = () => {
                 const masterFrames: string[] = [];
                 for (const frame of masterP) {
                     video.currentTime = (frame as any).timestamp / 1000;
+                    await new Promise<void>((resolve) => {
+                        const onSeeked = () => {
+                            video.removeEventListener('seeked', onSeeked);
+                            resolve();
+                        };
+                        video.addEventListener('seeked', onSeeked);
+                    });
                     await new Promise(r => setTimeout(r, 100));
                     ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-                    // ✅ OPTIMIZED: High quality (95%) for Gemini analysis
                     masterFrames.push(filmstripCanvas.toDataURL('image/jpeg', 0.95).split(',')[1]);
                 }
                 payload = masterFrames;
@@ -254,7 +252,6 @@ const VideoAnalyzer: React.FC = () => {
 
             let analysis: BiomechanicalAnalysis | null = null;
             try {
-                // ✅ OPTIMIZED: Pass athlete context for more relevant analysis
                 const currentSession = currentPlan?.sessions?.find((s: any) => s.day === new Date().toLocaleDateString('es-ES', { weekday: 'long' }));
                 const aiResult = await analyzeTechnique(
                     payload,
@@ -326,6 +323,7 @@ const VideoAnalyzer: React.FC = () => {
             showToast(e.message || "Fallo en el análisis.", 'error');
         } finally {
             setLoading(false);
+            if (videoWasPlaying) video.play();
         }
     };
 
@@ -379,50 +377,61 @@ const VideoAnalyzer: React.FC = () => {
     };
 
     useEffect(() => {
-        if (!videoRef.current || !poseLandmarker) return;
+        if (!videoRef.current || !poseLandmarker || loading) return; // Don't run detect loop if analyzing
 
-        // Clear canvas if skeleton is hidden
-        if (!showSkeleton) {
-            const ctx = overlayRef.current?.getContext('2d');
-            if (ctx) ctx.clearRect(0, 0, overlayRef.current!.width, overlayRef.current!.height);
-            return;
-        }
+        let animationFrameId: number;
+        let lastVideoTime = -1;
 
-        let frameId: number;
-        const process = () => {
-            if (videoRef.current) {
-                // Only detect if playing OR if we want to ensure it shows while paused (scrubbing)
-                // We'll detect every frame if playing, and use a listener for seeks
-                if (!videoRef.current.paused) {
-                    const result = poseLandmarker.detect(videoRef.current);
-                    if (result?.landmarks?.[0]) {
-                        drawSkeleton(result.landmarks[0]);
+        const loop = () => {
+            const video = videoRef.current;
+            if (video && !video.paused && showSkeleton) {
+                // Only detect if frame has changed
+                if (video.currentTime !== lastVideoTime) {
+                    lastVideoTime = video.currentTime;
+                    try {
+                        const result = poseLandmarker.detectForVideo(video, performance.now());
+                        if (result?.landmarks?.[0]) {
+                            drawSkeleton(result.landmarks[0]);
+                        } else {
+                            // Clear if no detection
+                            const ctx = overlayRef.current?.getContext('2d');
+                            if (ctx) ctx.clearRect(0, 0, overlayRef.current!.width, overlayRef.current!.height);
+                        }
+                    } catch (e) {
+                        // Ignore temporal errors
                     }
                 }
             }
-            frameId = requestAnimationFrame(process);
+            animationFrameId = requestAnimationFrame(loop);
         };
 
-        const handleSeeked = () => {
-            if (videoRef.current && showSkeleton && poseLandmarker) {
-                const result = poseLandmarker.detect(videoRef.current);
-                if (result?.landmarks?.[0]) {
-                    drawSkeleton(result.landmarks[0]);
-                }
+        // Handle seeking for static frame updates
+        const onSeeked = () => {
+            const video = videoRef.current;
+            if (video && showSkeleton && !loading) {
+                try {
+                    // For static frames or seek events, detectForVideo still works well if we pass a timestamp
+                    // Ideally we use the video timestamp, but detectForVideo expects specific timing.
+                    // Often for static analysis, detect() is actually fine, BUT we initialized with VIDEO mode.
+                    // In VIDEO mode, passing timestamp is required.
+                    const result = poseLandmarker.detectForVideo(video, performance.now());
+                    if (result?.landmarks?.[0]) {
+                        drawSkeleton(result.landmarks[0]);
+                    }
+                } catch (e) { console.warn(e); }
             }
         };
 
         const video = videoRef.current;
-        video.addEventListener('seeked', handleSeeked);
-        video.addEventListener('timeupdate', handleSeeked); // Good for smooth scrubbing
+        video.addEventListener('seeked', onSeeked);
 
-        process();
+        loop();
+
         return () => {
-            cancelAnimationFrame(frameId);
-            video.removeEventListener('seeked', handleSeeked);
-            video.removeEventListener('timeupdate', handleSeeked);
+            cancelAnimationFrame(animationFrameId);
+            video.removeEventListener('seeked', onSeeked);
         };
-    }, [showSkeleton, previewUrl, poseLandmarker]);
+    }, [showSkeleton, previewUrl, poseLandmarker, loading]);
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500 pb-20 px-2">
