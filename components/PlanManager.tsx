@@ -74,7 +74,7 @@ const PlanManager: React.FC = () => {
         setLoading(true);
         setErrorMsg(null);
         try {
-            const plan = await generateTrainingPlan(userProfile, { fatigue, sleep, soreness, stress, hydration, restingHR, hrv }, new Date().toLocaleDateString('es-ES'), focusEvent, acwr || undefined, lastAnalysis);
+            const plan = await generateTrainingPlan(userProfile, { fatigue, sleep, soreness, stress, hydration, restingHR, hrv }, new Date().toLocaleDateString('es-ES'), focusEvent, acwr || undefined, lastAnalysis, logs);
             if (plan) {
                 setPlan(plan);
                 showToast("Plan generado con éxito", "success");

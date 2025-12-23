@@ -89,21 +89,29 @@ export const analyzeTechnique = async (images: string[], bioData: any, advancedM
     }
 };
 
-export const generateNexusInsight = async (logs: any[], readiness: any, analysisHistory: any[], acwr: any): Promise<NexusInsight | null> => {
+export const generateNexusInsight = async (logs: any[], readiness: any, analysisHistory: any[], acwr: any, profile?: UserProfile): Promise<NexusInsight | null> => {
     const model = getModelInstance("gemini-2.0-flash-exp");
     if (!model) return null;
 
-    const acwrStatus = acwr?.status || 'Desconocido';
     const acwrRatio = acwr?.ratio || 0;
+    const therapyLogs = logs.filter(l => l.type === 'Recovery' || l.event === 'Therapy').slice(-3);
+
+    // Extract medical and competition context from profile
+    const activeInjuries = profile?.injuries?.filter((inj: any) => inj.status === 'Activa').map((inj: any) => `${inj.location} (${inj.type})`).join(', ') || 'Ninguna';
+    const upcomingComps = profile?.competitions?.map((c: any) => `${c.name} (${c.date})`).join(', ') || 'Ninguna';
 
     const prompt = `AUDITORÍA HOLÍSTICA (Nivel 5).
-            Historial Tiempos: ${JSON.stringify(logs.slice(-5))}. 
+            Historial Tiempos: ${JSON.stringify(logs.slice(-7))}. 
             Readiness: ${JSON.stringify(readiness)}. 
             Historial Biomecánico (últimos 3): ${JSON.stringify(analysisHistory.slice(0, 3))}. 
+            REPORTE MÉDICO & COMPETITIVO:
+            - Lesiones Activas: ${activeInjuries}
+            - Terapia Reciente: ${JSON.stringify(therapyLogs)}
+            - Próximas Competiciones: ${upcomingComps}
             
             - SI ACWR < 0.8: Marca status "Recovery" o "Neutral".
             - SI ACWR > 1.5: Marca status "Warning" OBLIGATORIAMENTE.
-            - REGLA DE ORO: No recalcules la carga. Si el ACWR proporcionado es ${acwr.ratio.toFixed(2)}, ese es el ÚNICO valor real.
+            - REGLA DE ORO: No recalcules la carga. Si el ACWR proporcionado es ${acwrRatio.toFixed(2)}, ese es el ÚNICO valor real.
             INSTRUCCIÓN CRÍTICA: Detecta "Fatiga Técnica Silenciosa". 
             Si la Velocidad del Centro de Masas (VCoM) ha bajado sistemáticamente o el Tiempo de Contacto (GCT) ha subido en los últimos 3 videos, marca status: "Warning" y alerta sobre riesgo de lesión.
             
@@ -129,12 +137,17 @@ export const generateNexusInsight = async (logs: any[], readiness: any, analysis
     }
 };
 
-export const generateTrainingPlan = async (profile: UserProfile, readiness: any, currentDate: string, focusEvent?: string, acwr?: any, lastAnalysis?: any): Promise<TrainingPlan | null> => {
+export const generateTrainingPlan = async (profile: UserProfile, readiness: any, currentDate: string, focusEvent?: string, acwr?: any, lastAnalysis?: any, logs?: any[]): Promise<TrainingPlan | null> => {
     const model = getModelInstance("gemini-2.0-flash-exp");
     if (!model) return null;
 
     try {
-        const prompt = PLAN_GENERATION_PROMPT(profile, readiness, focusEvent || "100m", acwr?.ratio, lastAnalysis);
+        const therapyLogs = logs?.filter((l: any) => l.type === 'Recovery' || l.event === 'Therapy').slice(-3);
+        const enrichedProfile = {
+            ...profile,
+            recentTherapy: therapyLogs?.map((l: any) => `${l.date}: ${l.notes || l.activity || l.event}`).join(' | ')
+        };
+        const prompt = PLAN_GENERATION_PROMPT(enrichedProfile, readiness, focusEvent || "100m", acwr?.ratio, lastAnalysis);
 
         const result = await model.generateContent({
             contents: [{ role: "user", parts: [{ text: prompt }] }],

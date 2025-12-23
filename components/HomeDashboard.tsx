@@ -71,7 +71,7 @@ const HomeDashboard: React.FC = () => {
         recoveryLogs: logs.filter(l => l.type === 'Recovery').slice(-3)
       };
 
-      const insight = await generateNexusInsight(logs, readiness, analysisHistory, acwrStats);
+      const insight = await generateNexusInsight(logs, readiness, analysisHistory, acwrStats, userProfile);
 
       if (insight && insight.status) {
         setNexusInsight(insight);

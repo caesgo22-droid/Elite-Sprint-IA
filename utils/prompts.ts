@@ -39,6 +39,9 @@ export const PLAN_GENERATION_PROMPT = (profile: any, readiness: any, focus: stri
 CONTEXTO DEL ATLETA:
 - Nombre: ${profile.name}, Edad: ${profile.age}, Evento: ${focus}
 - PBs: ${JSON.stringify(profile.pbs)}
+- Lesiones Activas: ${profile.injuries?.filter((inj: any) => inj.status === 'Activa').map((inj: any) => `${inj.location} (${inj.type})`).join(', ') || 'Ninguna'}
+- Competiciones Próximas: ${profile.competitions?.map((c: any) => `${c.name} (${c.date})`).join(', ') || 'Ninguna'}
+- Historial de Terapia (Últimos 7 días): ${profile.recentTherapy || 'Sin registros recientes'}
 - Estado Actual (Readiness): ${JSON.stringify(readiness)}
 - Carga Crónica (ACWR): ${acwr}
 - Días Disponibles: ${profile.trainingDays?.join(', ')}
