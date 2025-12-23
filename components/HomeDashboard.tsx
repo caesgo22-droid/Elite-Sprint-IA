@@ -76,9 +76,19 @@ const HomeDashboard: React.FC = () => {
     } catch (error: any) {
       console.error("Nexus Insight Error:", error);
       setErrorStatus('error');
+
       const cached = localStorage.getItem(CACHE_KEY);
       if (cached) {
-        setNexusInsight(JSON.parse(cached).data);
+        const { data, snapshotACWR } = JSON.parse(cached);
+        const acwrChanged = snapshotACWR && Math.abs(snapshotACWR - acwrStats.ratio) > 0.1;
+
+        if (!acwrChanged && data) {
+          setNexusInsight(data);
+        } else {
+          // If ACWR has changed significantly, the old AI warning is dangerous. 
+          // Clear it so the user sees the real data from the Plan/Context instead of hallucinated warnings.
+          setNexusInsight(null);
+        }
       }
     } finally { setLoadingNexus(false); }
   };
@@ -218,17 +228,23 @@ const HomeDashboard: React.FC = () => {
         ) : (
           <div className="text-center py-6 space-y-4">
             <div className="mx-auto w-12 h-12 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-center">
-              <Zap className="text-slate-600" size={20} />
+              <Zap className={acwrStats.status === 'Alto Riesgo' ? 'text-red-400' : 'text-slate-600'} size={20} />
             </div>
             <div>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-tight">
-                {errorStatus === 'key_missing' ? 'Configura tu API Key para activar Nexus' : 'Sin datos de auditoría'}
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-tight">
+                {errorStatus === 'key_missing' ? 'Configura tu API Key para activar Nexus' : 'Sincronizando Auditoría...'}
               </p>
+              <div className="mt-2 text-[9px] font-medium text-slate-500 uppercase tracking-tighter">
+                ACWR Actual: <span className={acwrStats.status === 'Alto Riesgo' ? 'text-red-400' : 'text-cyan-400'}>{acwrStats.ratio.toFixed(2)} ({acwrStats.status})</span>
+              </div>
             </div>
             {errorStatus === 'key_missing' ? (
               <button onClick={handleOpenKey} className="text-[9px] font-black uppercase tracking-widest bg-white text-black px-4 py-2 rounded-full">Configurar Key</button>
             ) : (
-              <button onClick={() => fetchNexus(true)} disabled={loadingNexus} className="text-[9px] font-black uppercase tracking-widest border border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/10 px-4 py-2 rounded-full transition-all">Solicitar Auditoría</button>
+              <button onClick={() => fetchNexus(true)} disabled={loadingNexus} className="text-[9px] font-black uppercase tracking-widest border border-slate-700 text-slate-400 hover:bg-white/5 px-4 py-2 rounded-full transition-all flex items-center gap-2 mx-auto">
+                <RefreshCw size={10} className={loadingNexus ? 'animate-spin' : ''} />
+                Actualizar Nexus Auditoría
+              </button>
             )}
           </div>
         )}
