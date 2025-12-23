@@ -51,7 +51,7 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
     const [tooltip, setTooltip] = useState<{ x: number; y: number; content: React.ReactNode } | null>(null);
 
     // 1. Process Data
-    const { chartPoints, milestones, metrics, maxLoad } = useMemo(() => {
+    const { chartPoints, milestones, metrics, maxLoad, rawPoints } = useMemo(() => {
         // Collect data similar to previous implementation
         const allPlans = [...history].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         // Show last 4 weeks + current + 3 projected = 8 data points ideally
@@ -211,7 +211,8 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
             chartPoints,
             milestones: computedMilestones,
             metrics: { currentLoad, planLoad, loadDeviation, acwr },
-            maxLoad: scaleMax
+            maxLoad: scaleMax,
+            rawPoints // Export rawPoints
         };
     }, [history, currentPlan, injuries, competitions, therapyLogs]);
 
