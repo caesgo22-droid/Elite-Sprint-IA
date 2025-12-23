@@ -40,7 +40,8 @@ const getModelInstance = (modelName: string) => {
 export const analyzeTechnique = async (images: string[], bioData: any, advancedMetrics: any, analysisMode: string, userProfile?: any, lastAnalysis?: any, currentSession?: any): Promise<any> => {
     const isMaster = analysisMode === 'External';
     // ✅ UPGRADED: Gemini 2.0 Flash (faster and more accurate than Pro 1.5)
-    const modelName = isMaster ? "gemini-2.0-flash-exp" : "gemini-2.0-flash-thinking-exp";
+    // ✅ UPGRADED: Gemini 2.0 Flash (Stable Exp)
+    const modelName = "gemini-2.0-flash-exp";
     const model = getModelInstance(modelName);
     if (!model) return null;
 
@@ -89,7 +90,7 @@ export const analyzeTechnique = async (images: string[], bioData: any, advancedM
 };
 
 export const generateNexusInsight = async (logs: any[], readiness: any, analysisHistory: any[], acwr: any): Promise<NexusInsight | null> => {
-    const model = getModelInstance("gemini-2.0-flash-thinking-exp");
+    const model = getModelInstance("gemini-2.0-flash-exp");
     if (!model) return null;
 
     const acwrStatus = acwr?.status || 'Desconocido';
@@ -100,12 +101,9 @@ export const generateNexusInsight = async (logs: any[], readiness: any, analysis
             Readiness: ${JSON.stringify(readiness)}. 
             Historial Biomecánico (últimos 3): ${JSON.stringify(analysisHistory.slice(0, 3))}. 
             
-            DATOS CRÍTICOS DE CARGA (USA ESTOS VALORES EXACTOS):
-            - RELACIÓN ACWR: ${acwr.ratio.toFixed(2)}
-      - ESTADO ACWR PROPORCIONADO: ${acwr.status}
-      - REGLA CRÍTICA: Debes ignorar cualquier cálculo interno de carga y USAR EXCLUSIVAMENTE el valor ACWR ${acwr.ratio.toFixed(2)} y el estado "${acwr.status}" proporcionados arriba para tu análisis. No inventes otros valores de ACWR.
-      - Si ACWR < 0.8, indica "Desentrenamiento" o "Warning" a menos que sea semana de descarga.
-      - Si ACWR > 1.5, indica "Alto Riesgo de Lesión" obligatoriamente.
+            - SI ACWR < 0.8: Marca status "Recovery" o "Neutral".
+            - SI ACWR > 1.5: Marca status "Warning" OBLIGATORIAMENTE.
+            - REGLA DE ORO: No recalcules la carga. Si el ACWR proporcionado es ${acwr.ratio.toFixed(2)}, ese es el ÚNICO valor real.
             INSTRUCCIÓN CRÍTICA: Detecta "Fatiga Técnica Silenciosa". 
             Si la Velocidad del Centro de Masas (VCoM) ha bajado sistemáticamente o el Tiempo de Contacto (GCT) ha subido en los últimos 3 videos, marca status: "Warning" y alerta sobre riesgo de lesión.
             

@@ -55,21 +55,38 @@ export const calculateACWR = (historyPlans: TrainingPlan[], logs: PerformanceLog
         return totalLoad / days;
     };
 
-    const acuteLoad = getAverageLoad(7);
-    const chronicLoad = getAverageLoad(28);
+    // 3. Chronic Load Calculation with Cold-Start Protection
+    // If the athlete has < 14 days of history, we normalize chronic load to avoid artificial spikes.
+    // However, ACWR is Acute(7)/Chronic(28). 
+    // If sessions exist only in the last 7 days, Chronic load is very low, making Ratio very high.
 
-    // Avoid division by zero for new users
-    let ratio = 0;
-    if (chronicLoad === 0) {
-        ratio = acuteLoad > 0 ? 1.5 : 0; // If brand new and suddenly training, high risk. 1.5 is threshold.
-    } else {
-        ratio = acuteLoad / chronicLoad;
+    // Logic: If active window is very short, be conservative.
+    const chronicLoadRaw = getAverageLoad(28);
+    const acuteLoad = getAverageLoad(7);
+
+    // Cold start adjustment: if chronic load is very low (e.g. first week), 
+    // we assume a "base" chronic load or Cap the ratio.
+    let chronicLoad = chronicLoadRaw;
+    let isColdStart = false;
+
+    const uniqueDays = new Set(allSessions.map(s => s.date.toDateString())).size;
+    if (uniqueDays < 14 && chronicLoadRaw < (acuteLoad * 0.5)) {
+        // Assume at least 50% of acute to avoid spikes of 4.0
+        chronicLoad = Math.max(chronicLoadRaw, acuteLoad / 1.1);
+        isColdStart = true;
     }
 
+    let ratio = chronicLoad === 0 ? (acuteLoad > 0 ? 1.5 : 0) : acuteLoad / chronicLoad;
+
     let status: 'Óptimo' | 'Alto Riesgo' | 'Carga Baja' = 'Óptimo';
-    if (ratio > 1.3) status = 'Alto Riesgo'; // Tightened threshold for safety
-    else if (ratio < 0.8 && ratio > 0) status = 'Carga Baja';
-    else if (ratio === 0 && acuteLoad > 0) status = 'Alto Riesgo';
+
+    if (isColdStart && ratio > 1.3) {
+        status = 'Óptimo'; // Suppress alert during initial 2 weeks unless extreme
+    } else if (ratio > 1.5) {
+        status = 'Alto Riesgo';
+    } else if (ratio < 0.8 && ratio > 0) {
+        status = 'Carga Baja';
+    }
 
     return {
         acuteLoad: Math.round(acuteLoad),
