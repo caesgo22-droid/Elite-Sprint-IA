@@ -24,7 +24,7 @@ const HomeDashboard: React.FC = () => {
   const [therapyNotes, setTherapyNotes] = useState('');
 
   const fetchNexus = async (force: boolean = false) => {
-    const CACHE_KEY = 'nexus_cache_v1';
+    const CACHE_KEY = 'nexus_cache_v2';
     const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
 
     const apiKey = getEnv("GEMINI_API_KEY") || getEnv("VITE_GEMINI_API_KEY") || getEnv("API_KEY");
@@ -37,13 +37,23 @@ const HomeDashboard: React.FC = () => {
     if (!force) {
       const cached = localStorage.getItem(CACHE_KEY);
       if (cached) {
-        const { timestamp, data, snapshotACWR } = JSON.parse(cached);
-        const isRecent = Date.now() - timestamp < CACHE_DURATION;
-        const acwrChanged = snapshotACWR && Math.abs(snapshotACWR - acwrStats.ratio) > 0.1; // Invalidate if ACWR shifted > 0.1
+        try {
+          const { timestamp, data, snapshotACWR } = JSON.parse(cached);
+          const isRecent = Date.now() - timestamp < CACHE_DURATION;
 
-        if (isRecent && !acwrChanged && data) {
-          setNexusInsight(data);
-          return;
+          // STRICT CHECK: If snapshot is missing or differs significantly, it's STALE.
+          const acwrChanged = !snapshotACWR || Math.abs(snapshotACWR - acwrStats.ratio) > 0.05;
+
+          if (isRecent && !acwrChanged && data) {
+            setNexusInsight(data);
+            return;
+          } else if (acwrChanged) {
+            console.log("Nexus Cache invalidated due to ACWR change or missing snapshot.");
+            localStorage.removeItem(CACHE_KEY); // FORCE CLEAR
+            setNexusInsight(null);
+          }
+        } catch (e) {
+          localStorage.removeItem(CACHE_KEY);
         }
       }
     }
@@ -79,14 +89,17 @@ const HomeDashboard: React.FC = () => {
 
       const cached = localStorage.getItem(CACHE_KEY);
       if (cached) {
-        const { data, snapshotACWR } = JSON.parse(cached);
-        const acwrChanged = snapshotACWR && Math.abs(snapshotACWR - acwrStats.ratio) > 0.1;
+        try {
+          const { data, snapshotACWR } = JSON.parse(cached);
+          const acwrChanged = !snapshotACWR || Math.abs(snapshotACWR - acwrStats.ratio) > 0.05;
 
-        if (!acwrChanged && data) {
-          setNexusInsight(data);
-        } else {
-          // If ACWR has changed significantly, the old AI warning is dangerous. 
-          // Clear it so the user sees the real data from the Plan/Context instead of hallucinated warnings.
+          if (!acwrChanged && data) {
+            setNexusInsight(data);
+          } else {
+            console.warn("Nexus API failed and cache is stale. Clearing alert.");
+            setNexusInsight(null);
+          }
+        } catch (e) {
           setNexusInsight(null);
         }
       }
