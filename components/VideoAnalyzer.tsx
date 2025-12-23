@@ -133,72 +133,87 @@ const VideoAnalyzer: React.FC = () => {
         video.pause();
 
         try {
-            const duration = video.duration;
-            // Scan continuously at 10 FPS for smoother data
-            const fps = 10;
-            const scanSteps = Math.ceil(duration * fps);
+            // Start from beginning
+            video.currentTime = 0;
+            await new Promise(r => { video.onseeked = r; });
+
+            video.playbackRate = 1.0;
+            await video.play();
+
+            const duration = video.duration || 10;
             const tempHistory: any[] = [];
             const frames: string[] = [];
+            const targetInterval = 1000 / 15; // 15 FPS capture
+            let lastCaptureTime = -1000;
 
-            // We must process frames sequentially for VIDEO mode
-            for (let i = 0; i <= scanSteps; i++) {
-                const time = (duration / scanSteps) * i;
-                video.currentTime = time;
-
-                // Wait for seek to complete
-                // Wait for seek to complete
-                await new Promise<void>((resolve) => {
-                    let resolved = false;
-                    const onSeeked = () => {
-                        if (resolved) return;
-                        resolved = true;
-                        video.removeEventListener('seeked', onSeeked);
+            // Linear capture loop using requestVideoFrameCallback
+            await new Promise<void>((resolve) => {
+                const captureLoop = () => {
+                    if (!videoRef.current || video.paused || video.ended) {
                         resolve();
-                    };
-                    video.addEventListener('seeked', onSeeked);
-                    setTimeout(() => {
-                        if (!resolved) {
-                            resolved = true;
-                            video.removeEventListener('seeked', onSeeked);
-                            resolve();
-                        }
-                    }, 1000);
-                });
-
-                // In VIDEO mode, timestamps generally need to be increasing, but detectForVideo handles random access
-                // nicely if we treat it as a stream or just respect the timestamp.
-                // However, for pure analysis accuracy, sequential is best.
-
-                // Small settle time for video decoder
-                await new Promise(r => setTimeout(r, 50));
-
-                const result = poseLandmarker.detectForVideo(video, time * 1000); // Use detectForVideo with Ms timestamp
-
-                if (result?.landmarks?.[0]) {
-                    const landmarks = result.landmarks[0];
-                    const com = physicsEngine.current.calculateCenterOfMass(landmarks);
-                    const mechanics = physicsEngine.current.calculateSprintMechanics(landmarks);
-                    const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, time * 1000, com);
-
-                    tempHistory.push({ landmarks, mechanics, advanced, com, timestamp: time * 1000 });
-
-                    // Capture thumbnails occasionally (e.g. every 1 second or so for the UI)
-                    if (i % fps === 0) {
-                        const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
-                        const thumbWidth = isMobile ? 320 : 160;
-                        const thumbHeight = isMobile ? 180 : 90;
-
-                        const canvas = document.createElement('canvas');
-                        canvas.width = thumbWidth;
-                        canvas.height = thumbHeight;
-                        canvas.getContext('2d')?.drawImage(video, 0, 0, thumbWidth, thumbHeight);
-                        frames.push(canvas.toDataURL('image/jpeg', 0.5));
+                        return;
                     }
-                }
-                setStatusMessage(`Escaneando: ${Math.round((i / scanSteps) * 100)}%`);
-            }
 
-            if (tempHistory.length === 0) throw new Error("Atleta no detectado. Intenta con un video con mejor iluminación.");
+                    const now = video.currentTime * 1000;
+
+                    // Throttle to target FPS
+                    if (now - lastCaptureTime >= targetInterval) {
+                        lastCaptureTime = now;
+
+                        try {
+                            const result = poseLandmarker.detectForVideo(video, now);
+
+                            if (result?.landmarks?.[0]) {
+                                const landmarks = result.landmarks[0];
+                                const com = physicsEngine.current.calculateCenterOfMass(landmarks);
+                                const mechanics = physicsEngine.current.calculateSprintMechanics(landmarks);
+                                const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, now, com);
+
+                                tempHistory.push({ landmarks, mechanics, advanced, com, timestamp: now });
+
+                                // UI Thumbnails every ~10 frames
+                                if (tempHistory.length % 10 === 0) {
+                                    const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+                                    const thumbWidth = isMobile ? 320 : 160;
+                                    const thumbHeight = isMobile ? 180 : 90;
+                                    const canvas = document.createElement('canvas');
+                                    canvas.width = thumbWidth;
+                                    canvas.height = thumbHeight;
+                                    canvas.getContext('2d')?.drawImage(video, 0, 0, thumbWidth, thumbHeight);
+                                    frames.push(canvas.toDataURL('image/jpeg', 0.5));
+                                }
+                            }
+                        } catch (e) {
+                            // Ignore temporal errors
+                        }
+
+                        setStatusMessage(`Escaneando: ${Math.round((video.currentTime / duration) * 100)}%`);
+                    }
+
+                    // Continue loop
+                    if (video.currentTime < duration) {
+                        if ('requestVideoFrameCallback' in video) {
+                            (video as any).requestVideoFrameCallback(captureLoop);
+                        } else {
+                            requestAnimationFrame(captureLoop);
+                        }
+                    } else {
+                        resolve();
+                    }
+                };
+
+                // Start the loop
+                if ('requestVideoFrameCallback' in video) {
+                    (video as any).requestVideoFrameCallback(captureLoop);
+                } else {
+                    requestAnimationFrame(captureLoop);
+                }
+            });
+
+            video.pause();
+
+            if (tempHistory.length < 5) throw new Error("No se detectó suficiente movimiento. Asegúrate de que el atleta aparezca completo en el video.");
+
             setCapturedFrames(frames);
 
             const { touchdownFrame, maxFlexionFrame, toeOffFrame } = physicsEngine.current.detectSprintPhases(tempHistory);
