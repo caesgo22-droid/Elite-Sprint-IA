@@ -280,123 +280,74 @@ const AthleteProfileDetail: React.FC<{
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             {/* Athlete Profile Header Card */}
-            <div className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden">
+            <div className="bg-indigo-950 border border-indigo-500/30 rounded-[2rem] p-6 shadow-2xl relative overflow-hidden">
                 {/* Back Button */}
-                <button onClick={() => switchAthlete(null)} className="absolute top-8 left-8 p-3 bg-slate-800/80 rounded-2xl text-slate-400 hover:text-white transition-all z-20 hover:bg-slate-700">
-                    <ArrowLeft size={24} />
+                <button onClick={() => switchAthlete(null)} className="absolute top-6 left-6 p-2 bg-indigo-900/50 rounded-full text-indigo-300 hover:text-white transition-colors z-20">
+                    <ArrowLeft size={20} />
                 </button>
 
-                <div className="relative z-10 flex flex-col xl:flex-row gap-10">
-                    {/* Left Section: Photo & Identity */}
-                    <div className="flex flex-col items-center xl:items-start gap-6 shrink-0">
+                <div className="mt-8 relative z-10">
+                    <div className="flex flex-col md:flex-row items-center gap-6 mb-6">
                         <div
                             onClick={() => photoInputRef.current?.click()}
-                            className="w-40 h-40 rounded-[3rem] bg-indigo-900 border-4 border-slate-950 shadow-2xl overflow-hidden cursor-pointer hover:border-indigo-400 transition-all group relative ring-8 ring-indigo-500/5"
+                            className="w-24 h-24 rounded-[2rem] bg-indigo-900 border-4 border-slate-900 shadow-xl overflow-hidden shrink-0 cursor-pointer hover:border-indigo-400 transition-all group relative"
                         >
                             {profile.photoURL ? (
                                 <img src={profile.photoURL} className="w-full h-full object-cover" />
                             ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-900 to-indigo-700">
-                                    <UserCircle2 className="text-white/40" size={80} />
+                                <div className="w-full h-full flex items-center justify-center">
+                                    <UserCircle2 className="text-white" size={48} />
                                 </div>
                             )}
-                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Plus size={32} className="text-white" />
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Plus size={24} className="text-white" />
                             </div>
                         </div>
 
-                        <div className="text-center xl:text-left">
-                            <h2 className="text-5xl font-black text-white uppercase tracking-tighter mb-2 leading-none">
-                                {profile.name || 'Invitado'}
-                            </h2>
-                            <div className="flex flex-wrap justify-center xl:justify-start gap-4 text-xs font-black text-slate-400 uppercase tracking-widest">
-                                <span className="flex items-center gap-1.5"><CalendarCheck size={14} className="text-indigo-400" /> {profile.age || 20} Años</span>
-                                <span className="flex items-center gap-1.5"><Maximize2 size={14} className="text-cyan-400" /> {profile.height || '--'} cm</span>
-                                <span className="flex items-center gap-1.5"><Dumbbell size={14} className="text-emerald-400" /> {profile.weight || '--'} kg</span>
+                        <div className="text-center md:text-left flex-1">
+                            <div className="flex flex-col md:flex-row md:items-center gap-3 mb-2">
+                                <h2 className="text-4xl font-black text-white uppercase tracking-tighter">{profile.name || 'Invitado'}</h2>
+                                <div className="flex gap-2 flex-wrap justify-center md:justify-start">
+                                    <span className={`px-3 py-1 bg-indigo-500/20 rounded-full text-[9px] font-black border border-indigo-500/30 uppercase ${acwrStats.status === 'Alto Riesgo' ? 'text-red-400 border-red-500/30' :
+                                            acwrStats.status === 'Carga Baja' ? 'text-blue-400 border-blue-500/30' : 'text-indigo-300'
+                                        }`}>
+                                        ACWR: {acwrStats.ratio.toFixed(2)} {acwrStats.status.toUpperCase()}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="flex flex-wrap justify-center md:justify-start gap-4 text-[10px] font-bold text-slate-300 uppercase">
+                                <span className="flex items-center gap-1"><CalendarCheck size={12} /> {profile.age || 20} AÑOS</span>
+                                <span className="flex items-center gap-1"><Maximize2 size={12} /> {profile.height || '--'} CM</span>
+                                <span className="flex items-center gap-1"><Dumbbell size={12} /> {profile.weight || '--'} KG</span>
+                                <span className="flex items-center gap-1 text-emerald-400"><Zap size={12} /> {trainingDaysCount} DÍAS/SEM</span>
                             </div>
                         </div>
                     </div>
 
-                    {/* Right Section: Stats & Metrics */}
-                    <div className="flex-1 space-y-8">
-                        {/* Upper Stats Grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            {/* ACWR Status */}
-                            <div className={`p-4 rounded-3xl border ${acwrStats.status === 'Alto Riesgo' ? 'bg-red-500/10 border-red-500/20 text-red-400' :
-                                acwrStats.status === 'Carga Baja' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' :
-                                    'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                                }`}>
-                                <div className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-70">Control de Fatiga (ACWR)</div>
-                                <div className="flex items-end gap-2">
-                                    <span className="text-2xl font-black">{acwrStats.ratio.toFixed(2)}</span>
-                                    <span className="text-[10px] font-black uppercase mb-1">{acwrStats.status}</span>
-                                </div>
-                            </div>
-
-                            {/* Training Availability */}
-                            <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-3xl text-emerald-400">
-                                <div className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-70">Disponibilidad</div>
-                                <div className="flex items-center gap-2">
-                                    <Zap size={20} className="fill-emerald-400" />
-                                    <span className="text-2xl font-black">{trainingDaysCount} Días/Semana</span>
-                                </div>
-                            </div>
-
-                            {/* Current Focus */}
-                            <div className="bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-3xl text-indigo-400 lg:col-span-2">
-                                <div className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-70">Enfoque Actual de Entrenamiento</div>
-                                <div className="text-xl font-black text-white">{currentPlan?.phase || 'Plan General Periodizado'}</div>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="bg-slate-900/50 border border-slate-700/50 p-4 rounded-2xl">
+                            <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">Próx. COMPETENCIA</div>
+                            <div className="text-xs font-black text-white uppercase truncate">{profile.competitions?.[0] ? profile.competitions[0].name : 'No programada'}</div>
+                            <div className="text-[9px] text-yellow-500 font-bold mt-1 uppercase">{profile.competitions?.[0] ? profile.competitions[0].date : '-'}</div>
+                        </div>
+                        <div className="bg-slate-900/50 border border-slate-700/50 p-4 rounded-2xl">
+                            <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">LESIONES ACTIVAS</div>
+                            <div className="text-xs font-black text-red-400">{profile.injuries?.filter(i => i.status === 'Activa').length || 0} Reportadas</div>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                                {profile.injuries?.filter(i => i.status === 'Activa').slice(0, 2).map((inj, i) => (
+                                    <span key={i} className="text-[8px] text-slate-300 bg-red-500/10 px-1 rounded truncate">{inj.type}</span>
+                                ))}
                             </div>
                         </div>
-
-                        {/* Lower Info Grid */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Active Injuries */}
-                            <div className="bg-slate-800/30 border border-slate-700/30 rounded-3xl p-6">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Lesiones Activas</h3>
-                                    <span className="px-2 py-0.5 bg-red-500/20 rounded-lg text-[9px] font-black text-red-500 uppercase">{profile.injuries?.filter(i => i.status === 'Activa').length || 0} Reportadas</span>
-                                </div>
-                                <div className="space-y-3">
-                                    {profile.injuries?.filter(i => i.status === 'Activa').length ? (
-                                        profile.injuries.filter(i => i.status === 'Activa').map((inj, i) => (
-                                            <div key={i} className="flex items-center justify-between bg-slate-900/50 p-3 rounded-2xl border border-slate-700/50">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]"></div>
-                                                    <span className="text-sm font-black text-white">{inj.type}</span>
-                                                </div>
-                                                <span className="text-[10px] font-bold text-slate-500 uppercase">{inj.date}</span>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <div className="text-center py-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/10 text-[10px] font-black text-emerald-500/70 uppercase">
-                                            Ninguna lesión activa reportada
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Upcoming Competitions & Events */}
-                            <div className="bg-slate-800/30 border border-slate-700/30 rounded-3xl p-6">
-                                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Pruebas en que Compite / Eventos</h3>
-                                <div className="space-y-3">
-                                    {profile.competitions?.length ? (
-                                        profile.competitions.map((comp, i) => (
-                                            <div key={i} className="flex items-center justify-between bg-slate-900/50 p-3 rounded-2xl border border-yellow-500/20">
-                                                <div className="flex items-center gap-3">
-                                                    <Trophy size={16} className="text-yellow-500" />
-                                                    <span className="text-sm font-black text-white">{comp.name}</span>
-                                                </div>
-                                                <span className="text-[10px] font-black text-yellow-500 bg-yellow-500/10 px-2 py-1 rounded-lg">{comp.date}</span>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <div className="text-center py-4 bg-slate-900/50 rounded-2xl border border-slate-700/50 text-[10px] font-black text-slate-400/70 uppercase">
-                                            No hay competencias programadas
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+                        <div className="bg-slate-900/50 border border-slate-700/50 p-4 rounded-2xl">
+                            <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">ENFOQUE ACTUAL</div>
+                            <div className="text-xs font-black text-white">{currentPlan?.phase || 'Plan General'}</div>
+                            <div className="text-[9px] text-emerald-400 font-bold mt-1">Sincronizado</div>
+                        </div>
+                        <div className="bg-slate-900/50 border border-slate-700/50 p-4 rounded-2xl">
+                            <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">ÚLTIMO REGISTRO</div>
+                            <div className="text-xs font-black text-white">{athleteRef?.lastActive || 'Inactivo'}</div>
+                            <div className="text-[9px] text-slate-500 font-bold mt-1 uppercase">Sincronizado</div>
                         </div>
                     </div>
                 </div>
