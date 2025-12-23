@@ -37,8 +37,11 @@ const HomeDashboard: React.FC = () => {
     if (!force) {
       const cached = localStorage.getItem(CACHE_KEY);
       if (cached) {
-        const { timestamp, data } = JSON.parse(cached);
-        if (Date.now() - timestamp < CACHE_DURATION && data) {
+        const { timestamp, data, snapshotACWR } = JSON.parse(cached);
+        const isRecent = Date.now() - timestamp < CACHE_DURATION;
+        const acwrChanged = snapshotACWR && Math.abs(snapshotACWR - acwrStats.ratio) > 0.1; // Invalidate if ACWR shifted > 0.1
+
+        if (isRecent && !acwrChanged && data) {
           setNexusInsight(data);
           return;
         }
@@ -64,7 +67,8 @@ const HomeDashboard: React.FC = () => {
         setNexusInsight(insight);
         localStorage.setItem(CACHE_KEY, JSON.stringify({
           timestamp: Date.now(),
-          data: insight
+          data: insight,
+          snapshotACWR: acwrStats.ratio
         }));
       } else {
         throw new Error("Invalid insight format from AI");
@@ -80,8 +84,18 @@ const HomeDashboard: React.FC = () => {
   };
 
   useEffect(() => {
+    // If ACWR ratio changes significantly, we might want to force refresh, but for now just listening to logs/analysis is better.
+    // We add acwrStats to dependencies so if it updates (due to logs), we try to fetch.
+    // We pass 'force=true' implicitly if we want to ensure "Live" updates, but to save costs we'll stick to cache unless explicitly requested OR if the cache is obviously extremely old relative to data.
+    // BETTER: We just call fetchNexus(), and let it decide. 
+    // CRITICAL FIX: If the user just added a log, `logs` changed -> fetchNexus runs.
+    // BUT the cache check inside fetchNexus prevents re-generation.
+    // We need to invalidate cache if the data set has grown.
+
+    // Simple verification: if we have more logs than what "might" be in cache? No, hard to know.
+    // Strategy: If ACWR status is ALARMING (High Risk), we should be more aggressive with updates.
     fetchNexus();
-  }, [logs.length, lastAnalysis]);
+  }, [logs.length, lastAnalysis, acwrStats.ratio]);
 
   const handleOpenKey = async () => {
     const aistudio = getAIStudio();

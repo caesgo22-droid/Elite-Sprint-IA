@@ -175,12 +175,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [viewingAthleteId]);
 
   useEffect(() => {
-    if (currentPlan || planHistory.length > 0) {
+    if (currentPlan || planHistory.length > 0 || logs.length > 0) {
       const allPlans = currentPlan ? [currentPlan, ...planHistory] : planHistory;
-      const stats = calculateACWR(allPlans);
+      const stats = calculateACWR(allPlans, logs);
       setAcwrStats(stats);
     }
-  }, [currentPlan, planHistory]);
+  }, [currentPlan, planHistory, logs]);
 
   const switchAthlete = async (uid: string | null) => {
     try {
