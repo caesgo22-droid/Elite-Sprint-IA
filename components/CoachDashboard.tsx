@@ -306,16 +306,16 @@ const AthleteProfileDetail: React.FC<{
 
                         <div className="text-center md:text-left flex-1">
                             <div className="flex flex-col md:flex-row md:items-center gap-3 mb-2">
-                                <h2 className="text-4xl font-black text-white uppercase tracking-tighter">{profile.name || 'Invitado'}</h2>
+                                <h2 className="text-4xl font-bold text-white uppercase tracking-tighter">{profile.name || 'Invitado'}</h2>
                                 <div className="flex gap-2 flex-wrap justify-center md:justify-start">
-                                    <span className={`px-3 py-1 bg-slate-800/80 rounded-full text-[9px] font-black border uppercase ${acwrStats.status === 'Alto Riesgo' ? 'text-red-400 border-red-500/50 bg-red-500/10' :
-                                            acwrStats.status === 'Carga Baja' ? 'text-blue-400 border-blue-500/50 bg-blue-500/10' : 'text-cyan-400 border-cyan-500/50 bg-cyan-500/10'
+                                    <span className={`px-3 py-1 bg-slate-800/80 rounded-full text-[9px] font-bold border uppercase ${acwrStats.status === 'Alto Riesgo' ? 'text-red-400 border-red-500/50 bg-red-500/10' :
+                                        acwrStats.status === 'Carga Baja' ? 'text-blue-400 border-blue-500/50 bg-blue-500/10' : 'text-cyan-400 border-cyan-500/50 bg-cyan-500/10'
                                         }`}>
                                         ACWR: {acwrStats.ratio.toFixed(2)} {acwrStats.status.toUpperCase()}
                                     </span>
                                 </div>
                             </div>
-                            <div className="flex flex-wrap justify-center md:justify-start gap-4 text-[10px] font-bold text-slate-400 uppercase">
+                            <div className="flex flex-wrap justify-center md:justify-start gap-4 text-[10px] font-medium text-slate-400 uppercase">
                                 <span className="flex items-center gap-1"><CalendarCheck size={12} className="text-cyan-400" /> {profile.age || 20} AÑOS</span>
                                 <span className="flex items-center gap-1"><Maximize2 size={12} className="text-cyan-400" /> {profile.height || '--'} CM</span>
                                 <span className="flex items-center gap-1"><Dumbbell size={12} className="text-cyan-400" /> {profile.weight || '--'} KG</span>
@@ -326,13 +326,13 @@ const AthleteProfileDetail: React.FC<{
 
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
                         <div className="bg-slate-800/50 border border-slate-700/50 p-4 rounded-2xl">
-                            <div className="text-[9px] text-slate-500 font-bold uppercase mb-1">Próx. Competencia</div>
-                            <div className="text-xs font-black text-white uppercase truncate">{profile.competitions?.[0] ? profile.competitions[0].name : 'No programada'}</div>
+                            <div className="text-[9px] text-slate-500 font-semibold uppercase mb-1">Próx. Competencia</div>
+                            <div className="text-xs font-semibold text-white uppercase truncate">{profile.competitions?.[0] ? profile.competitions[0].name : 'No programada'}</div>
                             <div className="text-[9px] text-yellow-500 font-bold mt-1 uppercase">{profile.competitions?.[0] ? profile.competitions[0].date : '-'}</div>
                         </div>
                         <div className="bg-slate-800/50 border border-slate-700/50 p-4 rounded-2xl">
-                            <div className="text-[9px] text-slate-500 font-bold uppercase mb-1">Lesiones Activas</div>
-                            <div className="text-xs font-black text-red-400">{profile.injuries?.filter(i => i.status === 'Activa').length || 0} Reportadas</div>
+                            <div className="text-[9px] text-slate-500 font-semibold uppercase mb-1">Lesiones Activas</div>
+                            <div className="text-xs font-semibold text-red-400">{profile.injuries?.filter(i => i.status === 'Activa').length || 0} Reportadas</div>
                             <div className="mt-1 flex flex-wrap gap-1">
                                 {profile.injuries?.filter(i => i.status === 'Activa').slice(0, 2).map((inj, i) => (
                                     <span key={i} className="text-[8px] text-slate-300 bg-red-500/10 px-1 rounded truncate">{inj.type}</span>
@@ -340,34 +340,42 @@ const AthleteProfileDetail: React.FC<{
                             </div>
                         </div>
                         <div className="bg-slate-800/50 border border-slate-700/50 p-4 rounded-2xl">
-                            <div className="text-[9px] text-slate-500 font-bold uppercase mb-1">Enfoque Actual</div>
-                            <div className="text-xs font-black text-white">{currentPlan?.phase || 'Plan General'}</div>
+                            <div className="text-[9px] text-slate-500 font-semibold uppercase mb-1">Enfoque Actual</div>
+                            <div className="text-xs font-semibold text-white">{currentPlan?.phase || 'Plan General'}</div>
                             <div className="text-[9px] text-emerald-400 font-bold mt-1">Sincronizado</div>
                         </div>
                         <div className="bg-slate-800/50 border border-slate-700/50 p-4 rounded-2xl">
-                            <div className="text-[9px] text-slate-500 font-bold uppercase mb-1">Último Registro</div>
-                            <div className="text-xs font-black text-white">{athleteRef?.lastActive || 'Inactivo'}</div>
+                            <div className="text-[9px] text-slate-500 font-semibold uppercase mb-1">Último Registro</div>
+                            <div className="text-xs font-semibold text-white">{athleteRef?.lastActive || 'Inactivo'}</div>
                             <div className="text-[9px] text-slate-500 font-bold mt-1 uppercase">Sincronizado</div>
                         </div>
                     </div>
 
                     {/* Pruebas/Eventos en que Compite */}
-                    {profile.competitions && profile.competitions.length > 0 && (
-                        <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-4">
-                            <div className="flex items-center gap-2 mb-3">
-                                <Trophy size={16} className="text-yellow-500" />
-                                <h3 className="text-sm font-black text-white uppercase tracking-tight">Pruebas en que Compite</h3>
+                    {(() => {
+                        const athleteEvents = Object.entries(profile.pbs || {})
+                            .filter(([_, pb]) => pb && pb.time && parseFloat(pb.time) > 0)
+                            .map(([event]) => event);
+
+                        return athleteEvents.length > 0 && (
+                            <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-4">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <Trophy size={16} className="text-yellow-500" />
+                                    <h3 className="text-sm font-semibold text-white uppercase tracking-tight">Pruebas en que Compite</h3>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {athleteEvents.map((event, i) => (
+                                        <div key={i} className="flex items-center gap-2 bg-slate-900/50 border border-yellow-500/20 px-3 py-2 rounded-xl">
+                                            <span className="text-xs font-semibold text-white">{event}</span>
+                                            {profile.pbs[event as '100m' | '200m' | '400m']?.time && (
+                                                <span className="text-[9px] font-medium text-yellow-500">PB: {profile.pbs[event as '100m' | '200m' | '400m'].time}s</span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                            <div className="flex flex-wrap gap-2">
-                                {profile.competitions.map((comp, i) => (
-                                    <div key={i} className="flex items-center gap-2 bg-slate-900/50 border border-yellow-500/20 px-3 py-2 rounded-xl">
-                                        <span className="text-xs font-black text-white">{comp.name}</span>
-                                        <span className="text-[9px] font-bold text-yellow-500">{comp.date}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
+                        );
+                    })()}
                 </div>
 
                 <input
