@@ -1,8 +1,8 @@
+
 import * as React from 'react';
-import { useMemo } from 'react';
-import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, ComposedChart, Line, Legend } from 'recharts';
-import { BarChart3, Activity, AlertCircle, Trophy, Stethoscope } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { Injury } from '../types';
+import { Trophy, Activity, AlertCircle, Stethoscope, Info } from 'lucide-react';
 
 interface MacrocycleChartProps {
     history: any[];
@@ -12,6 +12,35 @@ interface MacrocycleChartProps {
     therapyLogs?: any[];
 }
 
+// Helper to calculate smooth bezier curves
+const getPathFromPoints = (points: { x: number; y: number }[], closeBottom = false, height = 480) => {
+    if (points.length === 0) return "";
+
+    const first = points[0];
+    let d = `M ${first.x} ${first.y}`;
+
+    for (let i = 0; i < points.length - 1; i++) {
+        const p0 = i > 0 ? points[i - 1] : points[0];
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        const p3 = i !== points.length - 2 ? points[i + 2] : p2;
+
+        const cp1x = p1.x + (p2.x - p0.x) / 6;
+        const cp1y = p1.y + (p2.y - p0.y) / 6;
+
+        const cp2x = p2.x - (p3.x - p1.x) / 6;
+        const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+        d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+    }
+
+    if (closeBottom) {
+        d += ` L ${points[points.length - 1].x} ${height} L ${points[0].x} ${height} Z`;
+    }
+
+    return d;
+};
+
 export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
     history,
     currentPlan,
@@ -19,8 +48,13 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
     competitions,
     therapyLogs
 }) => {
-    const data = useMemo(() => {
+    const [tooltip, setTooltip] = useState<{ x: number; y: number; content: React.ReactNode } | null>(null);
+
+    // 1. Process Data
+    const { chartPoints, milestones, metrics, maxLoad } = useMemo(() => {
+        // Collect data similar to previous implementation
         const allPlans = [...history].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        // Show last 4 weeks + current + 3 projected = 8 data points ideally
         const recentHistory = allPlans.slice(-4);
 
         const calcLoad = (plan: any) => {
@@ -34,46 +68,32 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
             return load;
         };
 
-        const chartData: any[] = [];
+        const rawPoints: any[] = [];
         let rollingLoads: number[] = [];
 
+        // Historical Data
         recentHistory.forEach((plan, i) => {
-            const weekDate = new Date(plan.createdAt);
             const load = calcLoad(plan);
             rollingLoads.push(load);
-
-            // Simplified ACWR for visualization
-            const acute = load;
-            const chronic = rollingLoads.length > 1 ? rollingLoads.reduce((a, b) => a + b, 0) / rollingLoads.length : load;
-            const acwr = chronic > 0 ? acute / chronic : 1;
-
-            chartData.push({
-                name: `Sem ${-1 * (recentHistory.length - i)}`,
-                realLoad: load,
-                projectedLoad: null,
-                isCurrent: false,
-                fullDate: weekDate.toLocaleDateString(),
-                weekStart: weekDate,
-                acwr: parseFloat(acwr.toFixed(2))
+            rawPoints.push({
+                type: 'history',
+                load,
+                date: new Date(plan.createdAt),
+                label: `S${-1 * (recentHistory.length - i)}`
             });
         });
 
+        // Current Data
         const currentLoad = currentPlan ? calcLoad(currentPlan) : 0;
         rollingLoads.push(currentLoad);
-        const acuteNow = currentLoad;
-        const chronicNow = rollingLoads.reduce((a, b) => a + b, 0) / rollingLoads.length;
-        const acwrNow = chronicNow > 0 ? acuteNow / chronicNow : 1;
-
-        chartData.push({
-            name: 'ACTUAL',
-            realLoad: currentLoad,
-            projectedLoad: currentLoad,
-            isCurrent: true,
-            fullDate: 'Esta Semana',
-            weekStart: new Date(),
-            acwr: parseFloat(acwrNow.toFixed(2))
+        rawPoints.push({
+            type: 'current',
+            load: currentLoad,
+            date: new Date(),
+            label: 'Actual'
         });
 
+        // Projected Data
         let lastLoad = currentLoad || 150;
         const phase = currentPlan?.phase || 'General Prep';
         for (let i = 1; i <= 3; i++) {
@@ -87,211 +107,398 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
                 nextLoad = lastLoad * 1.02;
             }
 
-            chartData.push({
-                name: `Sem +${i}`,
-                realLoad: null,
-                projectedLoad: Math.round(nextLoad),
-                isCurrent: false,
-                fullDate: 'Proyección',
-                weekStart: new Date(Date.now() + (i * 7 * 24 * 60 * 60 * 1000)),
-                acwr: null
+            rawPoints.push({
+                type: 'projected',
+                load: Math.round(nextLoad),
+                date: new Date(Date.now() + (i * 7 * 24 * 60 * 60 * 1000)),
+                label: `S${i}`
             });
             lastLoad = nextLoad;
         }
-        return chartData;
-    }, [history, currentPlan]);
 
-    const milestones = useMemo(() => {
-        const marks: { week: string; type: 'injury' | 'competition' | 'therapy'; label: string; icon: any }[] = [];
+        // Metrics Calculation
+        const acute = currentLoad;
+        const chronic = rollingLoads.length > 0 ? rollingLoads.reduce((a, b) => a + b, 0) / rollingLoads.length : 1;
+        const acwr = chronic > 0 ? acute / chronic : 0;
+        const planLoad = 2200; // Mock or calculate from plan target
+        const loadDeviation = planLoad > 0 ? ((currentLoad - planLoad) / planLoad) * 100 : 0;
 
+        // Scaling
+        const maxDataLoad = Math.max(...rawPoints.map(p => p.load), 100);
+        const padding = maxDataLoad * 0.2;
+        const scaleMax = maxDataLoad + padding;
+
+        const width = 800;
+        const height = 480;
+        const marginX = 50;
+        const effectiveWidth = width - (marginX * 2);
+
+        const chartPoints = rawPoints.map((p, i) => ({
+            ...p,
+            x: marginX + (i * (effectiveWidth / (rawPoints.length - 1))),
+            y: height - ((p.load / scaleMax) * (height - 50)) - 30 // 30px bottom padding
+        }));
+
+        // Milestones
+        const computedMilestones: any[] = [];
+
+        // Injuries
         injuries?.filter(inj => inj.diagnosedDate).forEach(inj => {
-            const injDate = new Date(inj.diagnosedDate!);
-            data.forEach(d => {
-                if (d.weekStart) {
-                    const weekStart = new Date(d.weekStart);
-                    const weekEnd = new Date(weekStart);
-                    weekEnd.setDate(weekEnd.getDate() + 7);
-                    if (injDate >= weekStart && injDate < weekEnd) {
-                        marks.push({ week: d.name, type: 'injury', label: `Lesión: ${inj.type}`, icon: AlertCircle });
-                    }
-                }
+            const date = new Date(inj.diagnosedDate!);
+            const weekPoint = chartPoints.find(p => {
+                const wStart = new Date(p.date);
+                wStart.setDate(wStart.getDate() - 3);
+                const wEnd = new Date(p.date);
+                wEnd.setDate(wEnd.getDate() + 4);
+                return date >= wStart && date <= wEnd;
             });
+
+            if (weekPoint) {
+                computedMilestones.push({
+                    type: 'injury',
+                    x: weekPoint.x,
+                    y: weekPoint.y,
+                    label: inj.type,
+                    date: date.toLocaleDateString()
+                });
+            }
         });
 
+        // Competitions
         competitions?.forEach(comp => {
-            const compDate = new Date(comp.date);
-            data.forEach(d => {
-                if (d.weekStart) {
-                    const weekStart = new Date(d.weekStart);
-                    const weekEnd = new Date(weekStart);
-                    weekEnd.setDate(weekEnd.getDate() + 7);
-                    if (compDate >= weekStart && compDate < weekEnd) {
-                        marks.push({ week: d.name, type: 'competition', label: `Comp: ${comp.name}`, icon: Trophy });
-                    }
-                }
+            const date = new Date(comp.date);
+            const weekPoint = chartPoints.find(p => {
+                const wStart = new Date(p.date);
+                wStart.setDate(wStart.getDate() - 3);
+                const wEnd = new Date(p.date);
+                wEnd.setDate(wEnd.getDate() + 4);
+                return date >= wStart && date <= wEnd;
             });
+
+            if (weekPoint) {
+                computedMilestones.push({
+                    type: 'competition',
+                    x: weekPoint.x,
+                    y: weekPoint.y - 40, // Float above
+                    label: comp.name,
+                    date: date.toLocaleDateString()
+                });
+            }
         });
 
+        // Therapy
         therapyLogs?.filter(log => log.type === 'Recovery' || log.event === 'Therapy').forEach(log => {
-            const logDate = new Date(log.date);
-            data.forEach(d => {
-                if (d.weekStart) {
-                    const weekStart = new Date(d.weekStart);
-                    const weekEnd = new Date(weekStart);
-                    weekEnd.setDate(weekEnd.getDate() + 7);
-                    if (logDate >= weekStart && logDate < weekEnd) {
-                        if (!marks.some(m => m.week === d.name && m.type === 'therapy')) {
-                            marks.push({ week: d.name, type: 'therapy', label: 'Terapia/Recuperación', icon: Stethoscope });
-                        }
-                    }
-                }
+            const date = new Date(log.date);
+            const weekPoint = chartPoints.find(p => {
+                const wStart = new Date(p.date);
+                wStart.setDate(wStart.getDate() - 3);
+                const wEnd = new Date(p.date);
+                wEnd.setDate(wEnd.getDate() + 4);
+                return date >= wStart && date <= wEnd;
             });
+            if (weekPoint && !computedMilestones.find(m => m.type === 'therapy' && m.x === weekPoint.x)) {
+                computedMilestones.push({
+                    type: 'therapy',
+                    x: weekPoint.x,
+                    y: weekPoint.y,
+                    label: 'Terapia',
+                    date: date.toLocaleDateString()
+                });
+            }
         });
 
-        return marks;
-    }, [data, injuries, competitions, therapyLogs]);
+        return {
+            chartPoints,
+            milestones: computedMilestones,
+            metrics: { currentLoad, planLoad, loadDeviation, acwr },
+            maxLoad: scaleMax
+        };
+    }, [history, currentPlan, injuries, competitions, therapyLogs]);
+
+    // Paths
+    const projectedData = chartPoints; // Use all points for one smooth line, but visual diff handled by masks or split
+    // Actually, to match design having dash line for projected, we might split visually
+    // The design shows a continuous filled area with gradient, and a line on top.
+
+    // We will separate the "Real" path (history + current) and "Projected" path (current + future)
+    const realPoints = chartPoints.filter(p => p.type !== 'projected');
+    // Ensure connectivity: include the 'current' point as first point of projected
+    const projectedPoints = [
+        chartPoints.find(p => p.type === 'current')!,
+        ...chartPoints.filter(p => p.type === 'projected')
+    ].filter(Boolean);
+
+    const fullPathPoints = chartPoints.map(p => ({ x: p.x, y: p.y }));
+    const areaPath = getPathFromPoints(fullPathPoints, true);
+
+    // Line paths
+    const realLinePath = getPathFromPoints(realPoints.map(p => ({ x: p.x, y: p.y })));
+    const projectedLinePath = getPathFromPoints(projectedPoints.map(p => ({ x: p.x, y: p.y })));
 
     return (
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden group/chart">
-            <div className="flex justify-between items-center mb-6">
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col min-h-[500px]">
+            {/* Header */}
+            <div className="flex justify-between items-center z-10 relative mb-4">
                 <div>
-                    <h3 className="text-lg font-black text-white uppercase tracking-tighter flex items-center gap-2">
-                        <BarChart3 size={18} className="text-cyan-400" /> Macrociclo Maestro
-                    </h3>
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Timeline 8 Semanas • Carga vs ACWR</p>
+                    <h2 className="text-[10px] font-bold tracking-widest text-cyan-400 uppercase mb-0.5">Entrenamiento</h2>
+                    <h1 className="text-xl font-black tracking-tight text-white leading-tight">Macrociclo</h1>
                 </div>
-                <div className="flex gap-3 text-[9px] font-black uppercase">
-                    <span className="flex items-center gap-1.5 text-cyan-400"><div className="w-2 h-2 bg-cyan-500 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.5)]"></div> Carga</span>
-                    <span className="flex items-center gap-1.5 text-indigo-400"><div className="w-2 h-2 bg-indigo-500 rounded-sm"></div> ACWR</span>
+                <button className="p-1.5 rounded-full hover:bg-slate-800 transition-colors text-slate-400">
+                    <Info size={20} />
+                </button>
+            </div>
+
+            {/* Legend */}
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[9px] font-bold uppercase tracking-wide text-slate-400 bg-slate-900/50 p-2 rounded-xl border border-slate-700/50 backdrop-blur-sm justify-between mb-4 z-10 relative">
+                <div className="flex items-center space-x-1">
+                    <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
+                    <span>Plan</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.5)]"></span>
+                    <span className="text-slate-200">Real</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                    <span className="w-3 h-0 border-t-2 border-dotted border-slate-500"></span>
+                    <span>Límites</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500/20 flex items-center justify-center text-[7px] text-red-500 border border-red-500/50">I</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/20 flex items-center justify-center text-[7px] text-emerald-500 border border-emerald-500/50">T</span>
                 </div>
             </div>
 
-            <div className="h-64 w-full">
-                {data.length > 0 && (
-                    <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={data} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
-                            <defs>
-                                <linearGradient id="colorRealMacro" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.2} />
-                                    <stop offset="95%" stopColor="#22d3ee" stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} strokeOpacity={0.5} />
-                            <XAxis
-                                dataKey="name"
-                                tick={{ fontSize: 10, fill: '#64748b', fontWeight: '900' }}
-                                axisLine={false}
-                                tickLine={false}
-                                interval={0}
-                            />
-                            <YAxis yAxisId="left" hide domain={[0, 'auto']} />
-                            <YAxis yAxisId="right" orientation="right" hide domain={[0, 2.5]} />
+            {/* Chart Area */}
+            <div className="flex-grow relative w-full overflow-visible z-10 flex flex-col justify-center -mt-1 -mb-1">
+                <div className="h-full w-full relative px-1">
+                    <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 800 480">
+                        <defs>
+                            <linearGradient id="projectedGradient" x1="0%" x2="0%" y1="0%" y2="100%">
+                                <stop offset="0%" stopColor="#818cf8" stopOpacity="0.2" />
+                                <stop offset="100%" stopColor="#818cf8" stopOpacity="0" />
+                            </linearGradient>
+                            <linearGradient id="actualGradient" x1="0%" x2="0%" y1="0%" y2="100%">
+                                <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.4" />
+                                <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.05" />
+                            </linearGradient>
+                            <linearGradient id="injuryZoneGradient" x1="0%" x2="0%" y1="0%" y2="100%">
+                                <stop offset="0%" stopColor="#f87171" stopOpacity="0.3" />
+                                <stop offset="100%" stopColor="#f87171" stopOpacity="0.05" />
+                            </linearGradient>
+                            <filter id="glow" height="140%" width="140%" x="-20%" y="-20%">
+                                <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur" />
+                                    <feMergeNode in="SourceGraphic" />
+                                </feMerge>
+                            </filter>
+                        </defs>
 
-                            <Tooltip
-                                contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '16px', padding: '12px', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }}
-                                labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: '900', marginBottom: '8px', textTransform: 'uppercase' }}
-                                content={({ active, payload, label }) => {
-                                    if (active && payload && payload.length) {
-                                        const weekMilestones = milestones.filter(m => m.week === label);
-                                        return (
-                                            <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl shadow-2xl min-w-[180px]">
-                                                <p className="text-[10px] font-black text-slate-500 mb-3 uppercase tracking-widest border-b border-slate-800 pb-2">{label}</p>
-                                                {payload.map((p: any, i: number) => (
-                                                    <div key={i} className="flex items-center justify-between gap-4 mb-2">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className={`w-1.5 h-1.5 rounded-full ${p.name === 'realLoad' ? 'bg-cyan-400' : p.name === 'acwr' ? 'bg-indigo-400' : 'bg-slate-500'}`}></div>
-                                                            <span className="text-[10px] font-bold text-slate-300 uppercase">{p.name === 'realLoad' ? 'Carga Real' : p.name === 'acwr' ? 'ACWR' : 'Proyección'}</span>
-                                                        </div>
-                                                        <span className={`text-xs font-black ${p.name === 'acwr' ? 'text-indigo-400' : p.name === 'realLoad' ? 'text-cyan-400' : 'text-slate-400'}`}>{p.value}</span>
-                                                    </div>
-                                                ))}
-                                                {weekMilestones.length > 0 && (
-                                                    <div className="mt-3 pt-3 border-t border-slate-800 space-y-2">
-                                                        {weekMilestones.map((m, i) => (
-                                                            <div key={i} className={`flex items-start gap-2 p-2 rounded-xl ${m.type === 'injury' ? 'bg-red-500/10 border border-red-500/20' : m.type === 'competition' ? 'bg-yellow-500/10 border border-yellow-500/20' : 'bg-blue-500/10 border border-blue-500/20'}`}>
-                                                                <m.icon size={14} className={m.type === 'injury' ? 'text-red-500' : m.type === 'competition' ? 'text-yellow-500' : 'text-blue-500'} />
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-[10px] font-black text-white leading-tight">{m.label}</span>
-                                                                    {/* Additional context could go here if available in milestones */}
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    }
-                                    return null;
-                                }}
-                            />
-
-                            <Area
-                                yAxisId="left"
-                                type="monotone"
-                                dataKey="realLoad"
-                                name="realLoad"
-                                stroke="#22d3ee"
-                                strokeWidth={4}
-                                fillOpacity={1}
-                                fill="url(#colorRealMacro)"
-                                activeDot={{ r: 8, stroke: '#fff', strokeWidth: 3, fill: '#22d3ee' }}
-                                animationDuration={1000}
-                            />
-
-                            <Line
-                                yAxisId="right"
-                                type="monotone"
-                                dataKey="acwr"
-                                name="acwr"
-                                stroke="#6366f1"
-                                strokeWidth={3}
-                                dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#0f172a' }}
-                                activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: '#6366f1' }}
-                                animationDuration={1000}
-                            />
-
-                            <Area
-                                yAxisId="left"
-                                type="monotone"
-                                dataKey="projectedLoad"
-                                name="projectedLoad"
-                                stroke="#94a3b8"
-                                strokeWidth={2}
-                                strokeDasharray="6 4"
-                                fill="transparent"
-                                animationDuration={1500}
-                            />
-
-                            <ReferenceLine yAxisId="right" y={1.5} stroke="#ef4444" strokeDasharray="3 3" label={{ position: 'right', value: 'RIESGO', fill: '#ef4444', fontSize: 8, fontWeight: 'bold' }} />
-                            <ReferenceLine yAxisId="right" y={0.8} stroke="#3b82f6" strokeDasharray="3 3" label={{ position: 'right', value: 'BAJO', fill: '#3b82f6', fontSize: 8, fontWeight: 'bold' }} />
-
-                            <ReferenceLine yAxisId="left" x="ACTUAL" stroke="#22d3ee" strokeDasharray="4 4" strokeWidth={2} />
-
-                            {milestones.map((m, i) => (
-                                <ReferenceLine
-                                    key={`${m.type}-${i}`}
-                                    yAxisId="left"
-                                    x={m.week}
-                                    stroke={m.type === 'injury' ? '#ef4444' : m.type === 'competition' ? '#eab308' : '#3b82f6'}
-                                    strokeWidth={2}
-                                    strokeOpacity={0.8}
-                                    strokeDasharray={m.type === 'therapy' ? '2 2' : 'none'}
-                                />
+                        {/* Grid Lines */}
+                        <g className="stroke-slate-800/60" strokeDasharray="0" strokeWidth="1">
+                            {chartPoints.map((p, i) => (
+                                <line key={i} x1={p.x} x2={p.x} y1="50" y2="430" />
                             ))}
-                        </ComposedChart>
-                    </ResponsiveContainer>
-                )}
+                        </g>
+
+                        {/* Injury Zones Background */}
+                        {milestones.filter(m => m.type === 'injury').map((m, i) => (
+                            <rect key={i} x={m.x - 20} y="50" width="40" height="400" fill="url(#injuryZoneGradient)" className="animate-pulse" />
+                        ))}
+
+                        {/* Limits (Max/Min Rec) - Visual placeholders for now as data logic is complex */}
+                        <g className="group cursor-pointer">
+                            <line className="text-slate-500/50" stroke="currentColor" strokeDasharray="4 3" strokeWidth="1.5" x1="50" x2="750" y1="90" y2="90"></line>
+                        </g>
+                        <g className="group cursor-pointer">
+                            <line className="text-slate-500/50" stroke="currentColor" strokeDasharray="4 3" strokeWidth="1.5" x1="50" x2="750" y1="380" y2="380"></line>
+                        </g>
+
+                        {/* Current Week Vertical Line */}
+                        {chartPoints.find(p => p.type === 'current') && (
+                            <g>
+                                <line
+                                    x1={chartPoints.find(p => p.type === 'current')!.x}
+                                    x2={chartPoints.find(p => p.type === 'current')!.x}
+                                    y1="40" y2="440"
+                                    className="stroke-white" opacity="0.8" strokeDasharray="6 4" strokeWidth="2"
+                                />
+                                <rect
+                                    x={chartPoints.find(p => p.type === 'current')!.x - 30}
+                                    y="15" width="60" height="20" rx="10"
+                                    className="fill-slate-800 stroke-slate-700" strokeWidth="1"
+                                />
+                                <text
+                                    x={chartPoints.find(p => p.type === 'current')!.x}
+                                    y="28" textAnchor="middle"
+                                    className="fill-white text-[9px] font-bold uppercase tracking-widest"
+                                >
+                                    Actual
+                                </text>
+                            </g>
+                        )}
+
+                        {/* Projected Area */}
+                        <path d={areaPath} fill="url(#projectedGradient)" />
+
+                        {/* Paths */}
+                        <path d={projectedLinePath} fill="none" opacity="0.6" stroke="#818cf8" strokeDasharray="5 5" strokeWidth="2" />
+                        <path d={realLinePath} fill="none" filter="url(#glow)" stroke="#22d3ee" strokeWidth="3" />
+
+                        {/* Area under Real (Gradient) - complex without closing, simple overlay */}
+                        {/* To do this accurately we need to construct closed path for just real points */}
+
+                        {/* Points */}
+                        {rawPoints.map((p, i) => {
+                            const point = chartPoints[i];
+                            const isCurrent = p.type === 'current';
+                            return (
+                                <g key={i}
+                                    className="cursor-pointer group"
+                                    onMouseEnter={() => setTooltip({
+                                        x: point.x, y: point.y, content: (
+                                            <div>
+                                                <div className="text-[10px] font-bold text-slate-400">{p.date.toLocaleDateString()}</div>
+                                                <div className="font-black text-cyan-400 text-xs">{Math.round(p.load)} Load</div>
+                                            </div>
+                                        )
+                                    })}
+                                    onMouseLeave={() => setTooltip(null)}
+                                >
+                                    <circle
+                                        cx={point.x} cy={point.y}
+                                        r={isCurrent ? 4 : 3}
+                                        className={isCurrent ? "fill-cyan-400 stroke-white" : "fill-slate-900 stroke-cyan-400"}
+                                        strokeWidth="2"
+                                    />
+                                    {/* X Label */}
+                                    <text
+                                        x={point.x} y="465" textAnchor="middle"
+                                        className={`text-[9px] font-medium uppercase ${isCurrent ? 'fill-cyan-400 font-bold' : 'fill-slate-500'}`}
+                                    >
+                                        {p.label}
+                                    </text>
+                                </g>
+                            );
+                        })}
+
+                        {/* Milestones */}
+                        {milestones.map((m, i) => (
+                            <g key={i} transform={`translate(${m.x}, ${m.y})`} className="cursor-pointer group">
+                                {m.type === 'injury' && (
+                                    <>
+                                        <line className="stroke-red-500" strokeDasharray="2 2" strokeWidth="1" x1="0" x2="0" y1="0" y2="60" />
+                                        <circle className="fill-red-500/10 stroke-red-500" cx="0" cy="0" r="10" strokeWidth="1.5" />
+                                        <text className="fill-red-500 text-[8px] font-bold" textAnchor="middle" x="0" y="3">I</text>
+                                    </>
+                                )}
+                                {m.type === 'therapy' && (
+                                    <>
+                                        <line className="stroke-emerald-500" strokeDasharray="2 2" strokeWidth="1" x1="0" x2="0" y1="0" y2="40" />
+                                        <circle className="fill-emerald-500/10 stroke-emerald-500" cx="0" cy="0" r="9" strokeWidth="1.5" />
+                                        <text className="fill-emerald-500 text-[8px] font-bold" textAnchor="middle" x="0" y="3">T</text>
+                                    </>
+                                )}
+                                {m.type === 'competition' && (
+                                    <>
+                                        <line className="stroke-yellow-500" strokeDasharray="2 2" strokeWidth="1" x1="0" x2="0" y1="0" y2="40" />
+                                        <circle className="fill-yellow-500/10 stroke-yellow-500" cx="0" cy="0" r="12" strokeWidth="1.5" />
+                                        <Trophy size={14} x={-7} y={-7} className="text-yellow-500" />
+                                    </>
+                                )}
+
+                                {/* Hover Tooltip SVG */}
+                                <g className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" transform="translate(-40, -40)">
+                                    <rect className="fill-slate-800 stroke-slate-600 drop-shadow-md" height="24" rx="4" strokeWidth="1" width="80"></rect>
+                                    <text className="fill-gray-100 text-[9px] font-semibold" textAnchor="middle" x="40" y="16">{m.label}</text>
+                                </g>
+                            </g>
+                        ))}
+
+                    </svg>
+
+                    {/* JS Tooltip Overlay */}
+                    {tooltip && (
+                        <div
+                            className="absolute bg-slate-900 border border-slate-700 p-2 rounded-xl shadow-xl pointer-events-none z-50 animate-in fade-in zoom-in-95 duration-200"
+                            style={{ left: tooltip.x + 20, top: tooltip.y - 40 }}
+                        >
+                            {tooltip.content}
+                        </div>
+                    )}
+                </div>
             </div>
 
-            <div className="flex justify-between items-center mt-4">
-                <div className="flex gap-2">
-                    <span className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1"><AlertCircle size={10} className="text-red-500" /> Zona de Riesgo {'>'} 1.5</span>
+            {/* Footer Stats */}
+            <footer className="p-4 pt-1 z-10 shrink-0 border-t border-slate-800 mt-4">
+                <div className="grid grid-cols-2 gap-3">
+                    {/* Carga Actual */}
+                    <div className="p-3 rounded-2xl bg-slate-800/50 border border-slate-700 flex flex-col justify-between h-28">
+                        <div className="flex items-center space-x-2 mb-1 text-slate-400">
+                            <Activity size={16} />
+                            <span className="text-[9px] font-bold uppercase tracking-wider">Carga Actual</span>
+                        </div>
+                        <div className="flex items-center space-x-3 mt-1">
+                            <div className="flex flex-col gap-1 p-1 bg-slate-700 rounded-full">
+                                <div className="w-2 h-2 rounded-full bg-red-500/20 border border-red-500/30"></div>
+                                <div className="w-2 h-2 rounded-full bg-yellow-500/20 border border-yellow-500/30"></div>
+                                <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(52,211,153,0.8)] border border-white/20"></div>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-xl font-black text-white leading-none">{(metrics.currentLoad / 1000).toFixed(1)}k</span>
+                                <div className="flex items-center gap-1 mt-0.5">
+                                    <span className="text-[8px] text-slate-500 uppercase">Plan:</span>
+                                    <span className="text-[9px] font-bold text-slate-400">{(metrics.planLoad / 1000).toFixed(1)}k</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <span className="text-[8px] text-slate-500 uppercase">Desv:</span>
+                                    <span className={`text-[9px] font-bold ${metrics.loadDeviation > 0 ? 'text-emerald-400' : 'text-yellow-400'}`}>
+                                        {metrics.loadDeviation > 0 ? '+' : ''}{Math.round(metrics.loadDeviation)}%
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ACWR Gauge */}
+                    <div className="p-3 rounded-2xl bg-slate-800/50 border border-slate-700 flex flex-col justify-between h-28 relative overflow-hidden">
+                        <div className="flex items-center space-x-2 mb-0 text-slate-400 relative z-10">
+                            <Activity size={16} />
+                            <span className="text-[9px] font-bold uppercase tracking-wider">Riesgo (ACWR)</span>
+                        </div>
+
+                        <div className="relative flex flex-col items-center justify-end h-full pb-0 z-10">
+                            <svg className="w-full h-16 overflow-visible" viewBox="0 0 100 55">
+                                <defs>
+                                    <linearGradient id="gaugeGradient" x1="0%" x2="100%" y1="0%" y2="0%">
+                                        <stop offset="0%" stopColor="#34d399" />
+                                        <stop offset="50%" stopColor="#fbbf24" />
+                                        <stop offset="100%" stopColor="#f87171" />
+                                    </linearGradient>
+                                </defs>
+                                <path className="opacity-50" d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#334155" strokeLinecap="round" strokeWidth="6" />
+                                <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="url(#gaugeGradient)" strokeLinecap="round" strokeWidth="6" />
+
+                                {/* Needle */}
+                                <g transform={`rotate(${Math.min(180, Math.max(0, (metrics.acwr * 90) - 90))}, 50, 50)`}>
+                                    <polygon className="fill-white" points="50,50 47,15 53,15" />
+                                    <circle className="fill-white" cx="50" cy="50" r="3" />
+                                </g>
+
+                                <text className="text-[7px] fill-emerald-500 font-bold" textAnchor="middle" x="15" y="62">BAJO</text>
+                                <text className="text-[7px] fill-red-500 font-bold" textAnchor="middle" x="85" y="62">ALTO</text>
+                            </svg>
+                            <div className="absolute -bottom-1 text-center w-full">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${metrics.acwr > 1.3 ? 'text-red-400 bg-red-400/10' : metrics.acwr < 0.8 ? 'text-yellow-400 bg-yellow-400/10' : 'text-emerald-400 bg-emerald-400/10'}`}>
+                                    {metrics.acwr.toFixed(2)} - {metrics.acwr > 1.3 ? 'Alto' : metrics.acwr < 0.8 ? 'Bajo' : 'Estable'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div className="bg-indigo-500/10 border border-indigo-500/20 px-4 py-1.5 rounded-2xl flex items-center gap-2">
-                    <Activity size={12} className="text-indigo-400" />
-                    <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider">Modulado por IA</span>
-                </div>
-            </div>
+            </footer>
         </div>
     );
 };
