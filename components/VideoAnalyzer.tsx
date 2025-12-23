@@ -118,6 +118,11 @@ const VideoAnalyzer: React.FC = () => {
         setStatusMessage("Inicializando Scan...");
         physicsEngine.current.reset();
 
+        // 1. Reset MediaPipe before starting a new sequence (Critical for VIDEO mode)
+        try {
+            poseLandmarker.reset();
+        } catch (e) { console.warn("Error resetting landmarker:", e); }
+
         // Pause usage of the live overlay loop to prevent conflicts
         const video = videoRef.current;
         const videoWasPlaying = !video.paused;
@@ -137,12 +142,23 @@ const VideoAnalyzer: React.FC = () => {
                 video.currentTime = time;
 
                 // Wait for seek to complete
+                // Wait for seek to complete
                 await new Promise<void>((resolve) => {
+                    let resolved = false;
                     const onSeeked = () => {
+                        if (resolved) return;
+                        resolved = true;
                         video.removeEventListener('seeked', onSeeked);
                         resolve();
                     };
                     video.addEventListener('seeked', onSeeked);
+                    setTimeout(() => {
+                        if (!resolved) {
+                            resolved = true;
+                            video.removeEventListener('seeked', onSeeked);
+                            resolve();
+                        }
+                    }, 1000);
                 });
 
                 // In VIDEO mode, timestamps generally need to be increasing, but detectForVideo handles random access
@@ -387,6 +403,9 @@ const VideoAnalyzer: React.FC = () => {
             if (video && !video.paused && showSkeleton) {
                 // Only detect if frame has changed
                 if (video.currentTime !== lastVideoTime) {
+                    if (video.currentTime < lastVideoTime) {
+                        try { poseLandmarker.reset(); } catch (e) { }
+                    }
                     lastVideoTime = video.currentTime;
                     try {
                         const result = poseLandmarker.detectForVideo(video, performance.now());
@@ -410,10 +429,8 @@ const VideoAnalyzer: React.FC = () => {
             const video = videoRef.current;
             if (video && showSkeleton && !loading) {
                 try {
-                    // For static frames or seek events, detectForVideo still works well if we pass a timestamp
-                    // Ideally we use the video timestamp, but detectForVideo expects specific timing.
-                    // Often for static analysis, detect() is actually fine, BUT we initialized with VIDEO mode.
-                    // In VIDEO mode, passing timestamp is required.
+                    // Reset to ensure robust detection after seek
+                    poseLandmarker.reset();
                     const result = poseLandmarker.detectForVideo(video, performance.now());
                     if (result?.landmarks?.[0]) {
                         drawSkeleton(result.landmarks[0]);
