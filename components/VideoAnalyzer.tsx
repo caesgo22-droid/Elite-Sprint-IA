@@ -112,7 +112,11 @@ const VideoAnalyzer: React.FC = () => {
 
     const handleAutoCapture = async () => {
         if (!previewUrl || !videoRef.current || !poseLandmarker) return;
+
+        // Critical: Set this synchronously to stop the loop immediately
+        isAnalyzing.current = true;
         setLoading(true);
+
         setCapturedFrames([]);
         setDegradedMode(false);
         setStatusMessage("Inicializando Scan...");
@@ -339,7 +343,12 @@ const VideoAnalyzer: React.FC = () => {
             showToast(e.message || "Fallo en el análisis.", 'error');
         } finally {
             setLoading(false);
-            if (videoWasPlaying) video.play();
+            isAnalyzing.current = false; // Allow loop to resume
+
+            // Wait a tick to let the loop re-start cleanly if needed
+            setTimeout(() => {
+                if (videoWasPlaying && videoRef.current) videoRef.current.play();
+            }, 100);
         }
     };
 
@@ -392,13 +401,21 @@ const VideoAnalyzer: React.FC = () => {
         });
     };
 
+    const isAnalyzing = useRef(false);
+
     useEffect(() => {
-        if (!videoRef.current || !poseLandmarker || loading) return; // Don't run detect loop if analyzing
+        if (!videoRef.current || !poseLandmarker) return;
 
         let animationFrameId: number;
         let lastVideoTime = -1;
 
         const loop = () => {
+            // Synchronous check to prevent race condition with handleAutoCapture
+            if (isAnalyzing.current) {
+                // If usage resumed while analysis is running, just stop the loop
+                return;
+            }
+
             const video = videoRef.current;
             if (video && !video.paused && showSkeleton) {
                 // Only detect if frame has changed
@@ -427,7 +444,7 @@ const VideoAnalyzer: React.FC = () => {
         // Handle seeking for static frame updates
         const onSeeked = () => {
             const video = videoRef.current;
-            if (video && showSkeleton && !loading) {
+            if (video && showSkeleton && !isAnalyzing.current) {
                 try {
                     // Reset to ensure robust detection after seek
                     poseLandmarker.reset();
@@ -448,7 +465,7 @@ const VideoAnalyzer: React.FC = () => {
             cancelAnimationFrame(animationFrameId);
             video.removeEventListener('seeked', onSeeked);
         };
-    }, [showSkeleton, previewUrl, poseLandmarker, loading]);
+    }, [showSkeleton, previewUrl, poseLandmarker]); // Removed loading dependency as we use ref now
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500 pb-20 px-2">
