@@ -194,20 +194,26 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
                                     if (active && payload && payload.length) {
                                         const weekMilestones = milestones.filter(m => m.week === label);
                                         return (
-                                            <div className="bg-slate-950 border border-slate-800 p-3 rounded-2xl shadow-2xl">
-                                                <p className="text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest">{label}</p>
+                                            <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl shadow-2xl min-w-[180px]">
+                                                <p className="text-[10px] font-black text-slate-500 mb-3 uppercase tracking-widest border-b border-slate-800 pb-2">{label}</p>
                                                 {payload.map((p: any, i: number) => (
-                                                    <div key={i} className="flex items-center justify-between gap-4 mb-1">
-                                                        <span className="text-[10px] font-bold text-slate-300 uppercase">{p.name === 'realLoad' ? 'Carga Real' : p.name === 'acwr' ? 'ACWR' : 'Proyección'}</span>
-                                                        <span className={`text-xs font-black ${p.name === 'acwr' ? 'text-indigo-400' : 'text-cyan-400'}`}>{p.value}</span>
+                                                    <div key={i} className="flex items-center justify-between gap-4 mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`w-1.5 h-1.5 rounded-full ${p.name === 'realLoad' ? 'bg-cyan-400' : p.name === 'acwr' ? 'bg-indigo-400' : 'bg-slate-500'}`}></div>
+                                                            <span className="text-[10px] font-bold text-slate-300 uppercase">{p.name === 'realLoad' ? 'Carga Real' : p.name === 'acwr' ? 'ACWR' : 'Proyección'}</span>
+                                                        </div>
+                                                        <span className={`text-xs font-black ${p.name === 'acwr' ? 'text-indigo-400' : p.name === 'realLoad' ? 'text-cyan-400' : 'text-slate-400'}`}>{p.value}</span>
                                                     </div>
                                                 ))}
                                                 {weekMilestones.length > 0 && (
-                                                    <div className="mt-2 pt-2 border-t border-slate-800">
+                                                    <div className="mt-3 pt-3 border-t border-slate-800 space-y-2">
                                                         {weekMilestones.map((m, i) => (
-                                                            <div key={i} className="flex items-center gap-2 mt-1">
-                                                                <m.icon size={12} className={m.type === 'injury' ? 'text-red-500' : m.type === 'competition' ? 'text-yellow-500' : 'text-blue-500'} />
-                                                                <span className="text-[10px] font-bold text-white">{m.label}</span>
+                                                            <div key={i} className={`flex items-start gap-2 p-2 rounded-xl ${m.type === 'injury' ? 'bg-red-500/10 border border-red-500/20' : m.type === 'competition' ? 'bg-yellow-500/10 border border-yellow-500/20' : 'bg-blue-500/10 border border-blue-500/20'}`}>
+                                                                <m.icon size={14} className={m.type === 'injury' ? 'text-red-500' : m.type === 'competition' ? 'text-yellow-500' : 'text-blue-500'} />
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[10px] font-black text-white leading-tight">{m.label}</span>
+                                                                    {/* Additional context could go here if available in milestones */}
+                                                                </div>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -228,7 +234,8 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
                                 strokeWidth={4}
                                 fillOpacity={1}
                                 fill="url(#colorRealMacro)"
-                                activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: '#22d3ee' }}
+                                activeDot={{ r: 8, stroke: '#fff', strokeWidth: 3, fill: '#22d3ee' }}
+                                animationDuration={1000}
                             />
 
                             <Line
@@ -240,6 +247,7 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
                                 strokeWidth={3}
                                 dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#0f172a' }}
                                 activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: '#6366f1' }}
+                                animationDuration={1000}
                             />
 
                             <Area
@@ -247,10 +255,11 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
                                 type="monotone"
                                 dataKey="projectedLoad"
                                 name="projectedLoad"
-                                stroke="#475569"
+                                stroke="#94a3b8"
                                 strokeWidth={2}
                                 strokeDasharray="6 4"
                                 fill="transparent"
+                                animationDuration={1500}
                             />
 
                             <ReferenceLine yAxisId="right" y={1.5} stroke="#ef4444" strokeDasharray="3 3" label={{ position: 'right', value: 'RIESGO', fill: '#ef4444', fontSize: 8, fontWeight: 'bold' }} />
@@ -258,11 +267,16 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
 
                             <ReferenceLine yAxisId="left" x="ACTUAL" stroke="#22d3ee" strokeDasharray="4 4" strokeWidth={2} />
 
-                            {milestones.filter(m => m.type === 'injury').map((m, i) => (
-                                <ReferenceLine key={`inj-${i}`} yAxisId="left" x={m.week} stroke="#ef4444" strokeWidth={2} strokeOpacity={0.8} />
-                            ))}
-                            {milestones.filter(m => m.type === 'competition').map((m, i) => (
-                                <ReferenceLine key={`comp-${i}`} yAxisId="left" x={m.week} stroke="#eab308" strokeWidth={2} strokeOpacity={0.8} />
+                            {milestones.map((m, i) => (
+                                <ReferenceLine
+                                    key={`${m.type}-${i}`}
+                                    yAxisId="left"
+                                    x={m.week}
+                                    stroke={m.type === 'injury' ? '#ef4444' : m.type === 'competition' ? '#eab308' : '#3b82f6'}
+                                    strokeWidth={2}
+                                    strokeOpacity={0.8}
+                                    strokeDasharray={m.type === 'therapy' ? '2 2' : 'none'}
+                                />
                             ))}
                         </ComposedChart>
                     </ResponsiveContainer>

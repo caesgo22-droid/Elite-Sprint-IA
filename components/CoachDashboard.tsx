@@ -370,30 +370,9 @@ const AthleteProfileDetail: React.FC<{
                     therapyLogs={logs}
                 />
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
-                        <div className="flex items-center gap-2 mb-4">
-                            <Trophy className="text-yellow-500" size={18} />
-                            <h3 className="text-lg font-black text-white uppercase tracking-tighter">Récords Personales</h3>
-                        </div>
-                        <div className="h-48 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={pbData} layout="vertical" margin={{ left: -20, right: 30 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
-                                    <XAxis type="number" hide />
-                                    <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={10} fontWeight="900" width={50} axisLine={false} tickLine={false} />
-                                    <Tooltip contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px' }} />
-                                    <Bar dataKey="time" radius={[0, 6, 6, 0]} fill="#06b6d4">
-                                        <LabelList dataKey="time" position="right" fill="#22d3ee" fontSize={10} fontWeight="900" offset={10} />
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-
-                    <PerformanceTrends analysisHistory={analysisHistory} />
-                </div>
             </div>
+
+
 
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
                 <div className="flex justify-between items-center mb-6">
@@ -459,65 +438,10 @@ const AthleteProfileDetail: React.FC<{
                     ))}
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 
-const PerformanceTrends: React.FC<{ analysisHistory: any[] }> = ({ analysisHistory }) => {
-    const bioChartData = useMemo(() => {
-        return analysisHistory
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-            .map(item => ({
-                date: new Date(item.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
-                velocity: item.velocity,
-                score: item.score,
-            }));
-    }, [analysisHistory]);
 
-    return (
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
-            <div className="flex items-center gap-2 mb-4">
-                <Zap className="text-cyan-400" size={18} />
-                <h3 className="text-lg font-black text-white uppercase tracking-tighter">Evolución de Rendimiento</h3>
-            </div>
-            <div className="grid grid-cols-1 gap-6">
-                <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl">
-                    <h3 className="text-sm font-black text-white mb-4 flex items-center gap-2"><Zap size={16} className="text-cyan-400" /> Evolución de Velocidad (m/s)</h3>
-                    <div className="h-48 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={bioChartData}>
-                                <defs>
-                                    <linearGradient id="colorVelStaff" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#22d3ee" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                                <XAxis dataKey="date" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
-                                <YAxis domain={['dataMin - 0.5', 'dataMax + 0.5']} tick={{ fontSize: 9 }} axisLine={false} tickLine={false} width={25} />
-                                <Tooltip />
-                                <Area type="monotone" dataKey="velocity" stroke="#22d3ee" fillOpacity={1} fill="url(#colorVelStaff)" strokeWidth={2} />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-                <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl">
-                    <h3 className="text-sm font-black text-white mb-4 flex items-center gap-2"><Activity size={16} className="text-emerald-400" /> Score Técnico</h3>
-                    <div className="h-40 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={bioChartData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                                <XAxis dataKey="date" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
-                                <YAxis domain={[0, 100]} tick={{ fontSize: 9 }} axisLine={false} tickLine={false} width={25} />
-                                <Tooltip />
-                                <Line type="step" dataKey="score" stroke="#10b981" strokeWidth={3} dot={{ r: 3 }} />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 export default CoachDashboard;

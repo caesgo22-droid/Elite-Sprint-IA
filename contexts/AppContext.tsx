@@ -101,6 +101,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [analysisHistory, setAnalysisHistory] = useState<BiomechanicalAnalysis[]>([]);
   const [acwrStats, setAcwrStats] = useState<LoadStats | null>(null);
   const [nexusInsight, setNexusInsight] = useState<NexusInsight | null>(null);
+  const [deletedAnalyses, setDeletedAnalyses] = useState<string[]>(() => {
+    const saved = localStorage.getItem('deleted_biomech_analyses');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   const t = TRANSLATIONS[language];
 
@@ -134,7 +138,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setCurrentPlan(data.currentPlan);
         setLogs(data.logs || []);
         const analysisHist = await getAnalysisHistory(uid);
-        setAnalysisHistory(analysisHist as BiomechanicalAnalysis[]);
+        const filteredHist = (analysisHist as BiomechanicalAnalysis[]).filter(a => !deletedAnalyses.includes(a.id));
+        setAnalysisHistory(filteredHist);
         const pHist = await getPlanHistory(uid);
         setPlanHistory(pHist as TrainingPlan[]);
         setNexusInsight(null);
@@ -331,6 +336,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const deleteAnalysis = (id: string) => {
     setAnalysisHistory(prev => prev.filter(a => a.id !== id));
+    setDeletedAnalyses(prev => {
+      const next = [...prev, id];
+      localStorage.setItem('deleted_biomech_analyses', JSON.stringify(next));
+      return next;
+    });
     if (targetId && isInitialized) deleteAnalysisFromHistory(targetId, id);
   };
 

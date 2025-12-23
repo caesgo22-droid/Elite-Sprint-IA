@@ -130,54 +130,65 @@ const VideoAnalyzer: React.FC = () => {
                 const time = (duration / scanSteps) * i;
                 video.currentTime = time;
 
-                await new Promise((resolve) => {
-                    const timeout = setTimeout(() => {
-                        video.removeEventListener('seeked', onSeeked);
-                        console.warn("Seeked timeout - proceeding with caution");
-                        resolve(false);
-                    }, 2000); // 2s max wait per frame
+                let detected = false;
+                let retries = 0;
+                const maxRetries = 3;
 
-                    const onSeeked = () => {
-                        clearTimeout(timeout);
-                        video.removeEventListener('seeked', onSeeked);
-                        resolve(true);
-                    };
-                    video.addEventListener('seeked', onSeeked);
-                });
+                while (!detected && retries < maxRetries) {
+                    await new Promise((resolve) => {
+                        const timeout = setTimeout(() => {
+                            video.removeEventListener('seeked', onSeeked);
+                            resolve(false);
+                        }, 2000);
 
-                // Give the browser a bit more time to render the frame before detection
-                await new Promise(r => setTimeout(r, 100));
-                const result = poseLandmarker.detect(video);
+                        const onSeeked = () => {
+                            clearTimeout(timeout);
+                            video.removeEventListener('seeked', onSeeked);
+                            resolve(true);
+                        };
+                        video.addEventListener('seeked', onSeeked);
+                    });
 
-                if (result?.landmarks?.[0]) {
-                    let landmarks = result.landmarks[0];
+                    // Settle time
+                    await new Promise(r => setTimeout(r, 150 + (retries * 100)));
+                    const result = poseLandmarker.detect(video);
 
-                    if (tempHistory.length > 0) {
-                        const prev = tempHistory[tempHistory.length - 1].landmarks;
-                        landmarks = landmarks.map((curr: any, idx: number) => ({
-                            ...curr,
-                            x: (curr.x + prev[idx].x) / 2,
-                            y: (curr.y + prev[idx].y) / 2,
-                            z: (curr.z + prev[idx].z) / 2,
-                        }));
+                    if (result?.landmarks?.[0]) {
+                        detected = true;
+                        let landmarks = result.landmarks[0];
+
+                        if (tempHistory.length > 0) {
+                            const prev = tempHistory[tempHistory.length - 1].landmarks;
+                            landmarks = landmarks.map((curr: any, idx: number) => ({
+                                ...curr,
+                                x: (curr.x + prev[idx].x) / 2,
+                                y: (curr.y + prev[idx].y) / 2,
+                                z: (curr.z + prev[idx].z) / 2,
+                            }));
+                        }
+
+                        const com = physicsEngine.current.calculateCenterOfMass(landmarks);
+                        const mechanics = physicsEngine.current.calculateSprintMechanics(landmarks);
+                        const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, time * 1000, com);
+
+                        tempHistory.push({ landmarks, mechanics, advanced, com, timestamp: time * 1000 });
+
+                        const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+                        const thumbWidth = isMobile ? 320 : 160;
+                        const thumbHeight = isMobile ? 180 : 90;
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = thumbWidth;
+                        canvas.height = thumbHeight;
+                        canvas.getContext('2d')?.drawImage(video, 0, 0, thumbWidth, thumbHeight);
+                        frames.push(canvas.toDataURL('image/jpeg', 0.5));
+                    } else {
+                        retries++;
+                        if (retries < maxRetries) {
+                            // Try slightly different time if detection fails
+                            video.currentTime = Math.max(0, time + (retries * 0.05));
+                        }
                     }
-
-                    const com = physicsEngine.current.calculateCenterOfMass(landmarks);
-                    const mechanics = physicsEngine.current.calculateSprintMechanics(landmarks);
-                    const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, time * 1000, com);
-
-                    tempHistory.push({ landmarks, mechanics, advanced, com, timestamp: time * 1000 });
-
-                    // ✅ OPTIMIZED: Adaptive resolution based on device
-                    const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
-                    const thumbWidth = isMobile ? 320 : 160;
-                    const thumbHeight = isMobile ? 180 : 90;
-
-                    const canvas = document.createElement('canvas');
-                    canvas.width = thumbWidth;
-                    canvas.height = thumbHeight;
-                    canvas.getContext('2d')?.drawImage(video, 0, 0, thumbWidth, thumbHeight);
-                    frames.push(canvas.toDataURL('image/jpeg', 0.5)); // Low quality for thumbnails
                 }
                 setStatusMessage(`Escaneando: ${Math.round((i / scanSteps) * 100)}%`);
             }
