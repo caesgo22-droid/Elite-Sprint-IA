@@ -131,14 +131,22 @@ const VideoAnalyzer: React.FC = () => {
                 video.currentTime = time;
 
                 await new Promise((resolve) => {
+                    const timeout = setTimeout(() => {
+                        video.removeEventListener('seeked', onSeeked);
+                        console.warn("Seeked timeout - proceeding with caution");
+                        resolve(false);
+                    }, 2000); // 2s max wait per frame
+
                     const onSeeked = () => {
+                        clearTimeout(timeout);
                         video.removeEventListener('seeked', onSeeked);
                         resolve(true);
                     };
                     video.addEventListener('seeked', onSeeked);
                 });
 
-                await new Promise(r => setTimeout(r, 50));
+                // Give the browser a bit more time to render the frame before detection
+                await new Promise(r => setTimeout(r, 100));
                 const result = poseLandmarker.detect(video);
 
                 if (result?.landmarks?.[0]) {

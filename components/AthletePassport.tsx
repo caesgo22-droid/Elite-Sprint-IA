@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useState, useMemo } from 'react';
 import { UserProfile } from '../types';
-import { Shield, Info, ChevronLeft, ChevronRight, X, HelpCircle, Zap } from 'lucide-react';
+import { Shield, Info, ChevronLeft, ChevronRight, X, HelpCircle, Zap, Plus } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 
 const DEFINITIONS: Record<string, { title: string; desc: string }> = {
@@ -14,7 +14,7 @@ const DEFINITIONS: Record<string, { title: string; desc: string }> = {
 };
 
 export const AthletePassport: React.FC = () => {
-    const { userProfile, analysisHistory, logs, acwrStats } = useApp();
+    const { userProfile, analysisHistory, logs, acwrStats, updateProfile } = useApp();
     const [activeSlide, setActiveSlide] = useState(0);
     const [showInfo, setShowInfo] = useState<string | null>(null);
 
@@ -95,15 +95,38 @@ export const AthletePassport: React.FC = () => {
                         <ChevronRight size={24} />
                     </button>
 
-                    <div className="relative w-full h-full rounded-full bg-slate-800 border-2 border-slate-700 shadow-xl flex items-center justify-center overflow-hidden">
+                    <div
+                        onClick={() => document.getElementById('avatar-upload')?.click()}
+                        className="relative w-full h-full rounded-full bg-slate-800 border-2 border-slate-700 shadow-xl flex items-center justify-center overflow-hidden cursor-pointer hover:border-yellow-500 transition-all hover:scale-105 active:scale-95 group"
+                    >
                         {userProfile.photoURL ? (
                             <img src={userProfile.photoURL} alt="Avatar" className="w-full h-full object-cover" />
                         ) : (
-                            <span className="text-3xl font-black text-slate-500">
+                            <span className="text-3xl font-black text-slate-500 group-hover:text-yellow-500 transition-colors">
                                 {userProfile.name?.charAt(0).toUpperCase() || "I"}
                             </span>
                         )}
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Plus size={20} className="text-white" />
+                        </div>
                     </div>
+                    <input
+                        id="avatar-upload"
+                        type="file"
+                        accept="image/*"
+                        hidden
+                        onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                    const base64 = reader.result as string;
+                                    updateProfile({ ...userProfile, photoURL: base64 });
+                                }
+                                reader.readAsDataURL(file);
+                            }
+                        }}
+                    />
                 </div>
 
                 <div className="text-center mb-4 px-1">

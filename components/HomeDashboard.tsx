@@ -175,23 +175,14 @@ const HomeDashboard: React.FC = () => {
     <div className="space-y-4 animate-in fade-in duration-500 pb-10 px-2">
       <div className="mb-2"><AthletePassport /></div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <button onClick={() => setShowTherapyModal(true)} className="bg-slate-900 border border-slate-800 p-3 rounded-2xl flex items-center gap-3 hover:bg-slate-800 transition-all shadow-md group">
           <div className="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20 group-hover:bg-blue-500/20 transition-colors">
             <Stethoscope size={18} className="text-blue-400" />
           </div>
           <div className="text-left overflow-hidden">
             <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest truncate">Bitácora</div>
-            <div className="text-[11px] font-bold text-white truncate">Terapia</div>
-          </div>
-        </button>
-        <button onClick={() => navigate('/plan')} className="bg-slate-900 border border-slate-800 p-3 rounded-2xl flex items-center gap-3 hover:bg-slate-800 transition-all shadow-md group">
-          <div className="p-2 bg-cyan-500/10 rounded-xl border border-cyan-500/20 group-hover:bg-cyan-500/20 transition-colors">
-            <Plus size={18} className="text-cyan-400" />
-          </div>
-          <div className="text-left overflow-hidden">
-            <div className="text-[10px] font-black text-cyan-400 uppercase tracking-widest truncate">Entreno</div>
-            <div className="text-[11px] font-bold text-white truncate">Nuevo Log</div>
+            <div className="text-[11px] font-bold text-white truncate">Registro de Terapia</div>
           </div>
         </button>
       </div>
