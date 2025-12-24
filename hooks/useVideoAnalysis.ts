@@ -63,10 +63,20 @@ export const useVideoAnalysis = () => {
         }
     };
 
+    const [ghostMode, setGhostMode] = useState(false);
+    const [syncOffset, setSyncOffset] = useState(0); // in milliseconds
+    const [comparisonAnalysis, setComparisonAnalysis] = useState<any | null>(null);
+
+    const toggleGhostMode = () => setGhostMode(prev => !prev);
+    const adjustSyncOffset = (delta: number) => setSyncOffset(prev => prev + delta);
+
     const resetAnalysis = () => {
         setFeedback(null);
         setProgress(0);
         setErrorMsg(null);
+        setGhostMode(false);
+        setSyncOffset(0);
+        setComparisonAnalysis(null);
     };
 
     return {
@@ -74,6 +84,12 @@ export const useVideoAnalysis = () => {
         progress,
         feedback,
         errorMsg,
+        ghostMode,
+        syncOffset,
+        comparisonAnalysis,
+        setComparisonAnalysis,
+        toggleGhostMode,
+        adjustSyncOffset,
         runAnalysis,
         resetAnalysis
     };

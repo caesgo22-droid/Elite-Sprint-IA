@@ -324,6 +324,14 @@ const VideoAnalyzer: React.FC = () => {
 
                 if (!aiResult) throw new Error("Sin respuesta de IA");
 
+                // Extract just the relevant cycle for Ghost Mode (Touchdown to Flight) to save space
+                // We use the indexes found by the detector if possible, otherwise just a chunk around the keyframe
+                const startIndex = scanHistory.findIndex(h => h.timestamp === phases[0].timestamp);
+                const endIndex = scanHistory.findIndex(h => h.timestamp === phases[3].timestamp);
+                const cycleSegment = (startIndex !== -1 && endIndex !== -1)
+                    ? scanHistory.slice(Math.max(0, startIndex - 5), endIndex + 5)
+                    : scanHistory; // Fallback to full if sync fails, though risky for size
+
                 analysis = {
                     ...aiResult,
                     id: Date.now().toString(),
@@ -342,7 +350,8 @@ const VideoAnalyzer: React.FC = () => {
                     reviewStatus: userProfile.role === 'athlete' ? 'Pending' : 'Reviewed',
                     videoFingerprint: videoFingerprint || undefined,
                     asymmetry: stats.asymmetry,
-                    stepCount: stats.stepCount
+                    stepCount: stats.stepCount,
+                    cycleHistory: cycleSegment // Save for Ghost Mode
                 };
 
             } catch (e: any) {
@@ -363,6 +372,13 @@ const VideoAnalyzer: React.FC = () => {
                     }
                 );
 
+                // Also save cycle in fallback
+                const startIndex = scanHistory.findIndex(h => h.timestamp === phases[0].timestamp);
+                const endIndex = scanHistory.findIndex(h => h.timestamp === phases[3].timestamp);
+                const cycleSegment = (startIndex !== -1 && endIndex !== -1)
+                    ? scanHistory.slice(Math.max(0, startIndex - 5), endIndex + 5)
+                    : scanHistory;
+
                 analysis = {
                     ...localResult,
                     id: Date.now().toString(),
@@ -371,7 +387,8 @@ const VideoAnalyzer: React.FC = () => {
                     timestamp: primaryFrame.timestamp / 1000,
                     category: analysisMode,
                     reviewStatus: userProfile.role === 'athlete' ? 'Pending' : 'Reviewed',
-                    videoFingerprint: videoFingerprint || undefined
+                    videoFingerprint: videoFingerprint || undefined,
+                    cycleHistory: cycleSegment
                 };
             }
 
