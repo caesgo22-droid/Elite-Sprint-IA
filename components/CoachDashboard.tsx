@@ -38,7 +38,7 @@ const CoachDashboard: React.FC = () => {
                     let risk: 'High' | 'Low' | 'Optimal' = 'Optimal';
                     let acwrRatio = 0;
                     if (data.currentPlan) {
-                        const acwr = calculateACWR([data.currentPlan as any, ...pHist as any]);
+                        const acwr = calculateACWR([data.currentPlan as any, ...pHist as any], data.logs);
                         acwrRatio = acwr.ratio;
                         if (acwr.status === 'Alto Riesgo') risk = 'High';
                         else if (acwr.status === 'Carga Baja') risk = 'Low';
