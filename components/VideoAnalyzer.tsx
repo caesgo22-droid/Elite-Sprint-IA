@@ -203,8 +203,8 @@ const VideoAnalyzer: React.FC = () => {
             // We play the video fully to gather metrics
             const scanHistory = await performScan(video);
 
-            if (scanHistory.length < 10) {
-                throw new Error("No se detectó suficiente movimiento. Asegúrate de encuadrar bien al atleta.");
+            if (scanHistory.length < 3) {
+                throw new Error(`Detección insuficiente. Se capturaron ${scanHistory.length} poses. Asegúrate de que el atleta esté visible y en movimiento (mínimo 1-2 segundos).`);
             }
 
             // PHASE 2: EXTRACT KEY FRAMES
