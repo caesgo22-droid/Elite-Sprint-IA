@@ -44,6 +44,7 @@ interface AppContextType {
   nexusInsight: NexusInsight | null;
   setNexusInsight: (insight: NexusInsight | null) => void;
   deleteAnalysis: (id: string) => void;
+  deletedAnalyses: string[]; // Exported for components fetching raw data
   resetPlan: () => Promise<void>;
 
   viewingAthleteId: string | null;
@@ -378,6 +379,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     updateRoster,
     loginAsGuest,
     deleteAnalysis,
+    deletedAnalyses, // Export
     resetPlan
   }), [
     user,

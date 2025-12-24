@@ -13,7 +13,7 @@ import { useToasts } from '../contexts/ToastContext';
 
 const CoachDashboard: React.FC = () => {
     const { showToast } = useToasts();
-    const { adminProfile, updateRoster, viewingAthleteId, switchAthlete, t } = useApp();
+    const { adminProfile, updateRoster, viewingAthleteId, switchAthlete, t, deletedAnalyses } = useApp();
     const navigate = useNavigate();
     const [emailQuery, setEmailQuery] = useState('');
     const [searching, setSearching] = useState(false);
@@ -45,6 +45,7 @@ const CoachDashboard: React.FC = () => {
 
                     const fourteenDaysAgo = Date.now() - (14 * 24 * 60 * 60 * 1000);
                     const pendingReviews = aHist.filter((a: any) => {
+                        if (deletedAnalyses.includes(a.id)) return false; // Respect local deletion
                         const savedAt = a.savedAt ? new Date(a.savedAt).getTime() : 0;
                         return a.reviewStatus === 'Pending' && savedAt > fourteenDaysAgo;
                     }).length;
@@ -354,7 +355,7 @@ const AthleteProfileDetail: React.FC<{
                     {/* Pruebas/Eventos en que Compite */}
                     {(() => {
                         const athleteEvents = Object.entries(profile.pbs || {})
-                            .filter(([_, pb]) => pb && pb.time && parseFloat(pb.time) > 0)
+                            .filter(([_, pb]) => pb && (pb as any).time && parseFloat((pb as any).time) > 0)
                             .map(([event]) => event);
 
                         return athleteEvents.length > 0 && (
