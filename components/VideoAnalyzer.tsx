@@ -117,8 +117,19 @@ const VideoAnalyzer: React.FC = () => {
                     return;
                 }
                 setPreviewUrl(videoUrl);
-                setVideoFingerprint(`${file.name}-${file.size}-${file.lastModified}`);
-                setActiveAnalysis(null);
+                const fingerprint = `${file.name}-${file.size}-${file.lastModified}`;
+                setVideoFingerprint(fingerprint);
+
+                // Check for existing analysis immediately
+                const existing = analysisHistory.find(a => a.videoFingerprint === fingerprint);
+
+                if (existing) {
+                    setActiveAnalysis(existing);
+                    showToast("Análisis previo cargado exitosamente.", "success");
+                } else {
+                    setActiveAnalysis(null);
+                }
+
                 setCapturedFrames([]);
                 setSessionAnalyses([]);
             };
@@ -228,25 +239,35 @@ const VideoAnalyzer: React.FC = () => {
             }
 
             // PHASE 2: EXTRACT KEY FRAMES
-            setStatusMessage("Extrayendo Frames Clave...");
-            video.pause(); // Ensure paused
+            setStatusMessage("Analizando Ciclo de Carrera (V2.0)...");
+            video.pause();
 
-            const { touchdownFrame, maxFlexionFrame, toeOffFrame } = physicsEngine.current.detectSprintPhases(scanHistory);
+            // Run V2 Detector
+            const { touchdownFrame, maxFlexionFrame, toeOffFrame, flightFrame, stats } = physicsEngine.current.detectSprintPhases(scanHistory);
+
             const phases = [
                 touchdownFrame || scanHistory[0],
-                maxFlexionFrame || scanHistory[Math.floor(scanHistory.length / 2)],
-                toeOffFrame || scanHistory[scanHistory.length - 1]
+                maxFlexionFrame || scanHistory[Math.floor(scanHistory.length / 3)],
+                toeOffFrame || scanHistory[Math.floor(scanHistory.length * 2 / 3)],
+                flightFrame || scanHistory[scanHistory.length - 1]
             ];
 
             const framesBase64: string[] = [];
 
-            // Capture specific timestamps with high quality
+            // Capture all 4 High-Res Frames
+            const phaseNames = ["Impacto", "Amortiguación", "Despegue", "Vuelo"];
             for (let i = 0; i < phases.length; i++) {
                 const timeSec = phases[i].timestamp / 1000;
-                setStatusMessage(`Capturando Frame ${i + 1}/3...`);
+                setStatusMessage(`Capturando: ${phaseNames[i]}...`);
                 const frame = await captureFrameAtTimestamp(video, timeSec);
                 framesBase64.push(frame);
             }
+
+            // Inject new V2 Physics Data into the primary frame for AI
+            const primaryFrame = phases[2]; // Toe-off usually has best mechanics view
+            primaryFrame.advanced.groundContactTime = `${stats.realGCT.toFixed(3)}s`;
+            primaryFrame.advanced.frequency = `${(1 / (stats.realGCT * 2.2)).toFixed(1)} Hz`; // Approx Freq based on GCT
+            primaryFrame.advanced.forceFactor = Math.round(stats.legStiffness || 80); // Inject Stiffness into Force Factor field
 
             // Create filmstrip for UI
             setCapturedFrames(framesBase64);
@@ -263,7 +284,6 @@ const VideoAnalyzer: React.FC = () => {
             // PHASE 3: ANALYZE
             setStatusMessage(analysisMode === 'External' ? "Auditoría Master (Gemini 2.0)..." : "Analizando Técnica...");
 
-            const primaryFrame = phases[2]; // Use max extension/toe-off for basic kinetics display or average
             const currentSession = currentPlan?.sessions?.find((s: any) => s.day === new Date().toLocaleDateString('es-ES', { weekday: 'long' }));
 
             let analysis: BiomechanicalAnalysis | null = null;
@@ -481,23 +501,7 @@ const VideoAnalyzer: React.FC = () => {
                 </div>
             ) : (
                 <div className="space-y-6">
-                    {existingAnalysis && !activeAnalysis && (
-                        <div className="bg-emerald-900/20 border border-emerald-500/30 p-4 rounded-2xl flex items-center justify-between mb-4 animate-in slide-in-from-top-2">
-                            <div className="flex items-center gap-3">
-                                <CheckCheck className="text-emerald-400" size={20} />
-                                <div>
-                                    <div className="text-xs font-black text-white uppercase">Video ya analizado</div>
-                                    <div className="text-[10px] text-emerald-300 font-bold uppercase tracking-tight">Detectamos un análisis previo.</div>
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => setActiveAnalysis(existingAnalysis)}
-                                className="bg-emerald-600 text-white text-[10px] font-black uppercase px-4 py-2 rounded-lg"
-                            >
-                                Ver Resultado
-                            </button>
-                        </div>
-                    )}
+                    {/* Auto-load handles the existing analysis notification */}
                     <div className="relative rounded-[2rem] overflow-hidden bg-black aspect-video border border-slate-800 shadow-2xl group">
                         <video ref={videoRef} src={previewUrl} className="w-full h-full object-contain" muted playsInline />
                         <canvas ref={overlayRef} className="absolute inset-0 pointer-events-none w-full h-full" />
@@ -542,7 +546,7 @@ const VideoAnalyzer: React.FC = () => {
                     <div className="bg-slate-900/95 p-4 rounded-3xl border border-slate-800 flex gap-3 sticky bottom-20 z-10 backdrop-blur-xl shadow-2xl">
                         <button onClick={handleAutoCapture} disabled={loading} className={`flex-1 ${analysisMode === 'External' ? 'bg-indigo-600' : 'bg-cyan-600'} text-white font-black py-5 rounded-2xl flex items-center justify-center gap-4 text-sm transition-all shadow-xl disabled:opacity-50 uppercase tracking-widest`}>
                             {loading ? <Loader2 className="animate-spin" /> : <ScanLine />}
-                            {loading ? 'Procesando...' : 'Analizar Técnica'}
+                            {loading ? 'Procesando...' : (activeAnalysis ? 'Re-analizar (Forzar)' : 'Analizar Técnica')}
                         </button>
                         <button onClick={() => { setPreviewUrl(null); setActiveAnalysis(null); }} className="p-5 bg-slate-800 rounded-2xl text-slate-400 hover:text-white border border-slate-700"><X size={20} /></button>
                     </div>
