@@ -1,21 +1,24 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode, lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './contexts/AppContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { Layout } from './components/ui/Layout';
-import HomeDashboard from './components/HomeDashboard';
-import PlanManager from './components/PlanManager';
-import VideoAnalyzer from './components/VideoAnalyzer';
-import { LiveCoach } from './components/LiveCoach';
-import PerformanceTracker from './components/PerformanceTracker';
-import StaffHub from './components/StaffHub';
-import CoachDashboard from './components/CoachDashboard';
-import { BioTrendConnect } from './components/BioTrendConnect';
-import { AthleteCV } from './components/AthleteCV';
-import { DeepRecovery } from './components/DeepRecovery';
-import { AuthScreen } from './components/AuthScreen';
-import GeminiLive from './components/GeminiLive';
+import HomeDashboard from './components/HomeDashboard'; // Keep eager - critical path
+import LoadingFallback from './components/LoadingFallback';
 import { Loader2 } from 'lucide-react';
+
+// Lazy load heavy components
+const PlanManager = lazy(() => import('./components/PlanManager'));
+const VideoAnalyzer = lazy(() => import('./components/VideoAnalyzer'));
+const LiveCoach = lazy(() => import('./components/LiveCoach').then(m => ({ default: m.LiveCoach })));
+const PerformanceTracker = lazy(() => import('./components/PerformanceTracker'));
+const StaffHub = lazy(() => import('./components/StaffHub'));
+const CoachDashboard = lazy(() => import('./components/CoachDashboard'));
+const BioTrendConnect = lazy(() => import('./components/BioTrendConnect').then(m => ({ default: m.BioTrendConnect })));
+const AthleteCV = lazy(() => import('./components/AthleteCV').then(m => ({ default: m.AthleteCV })));
+const DeepRecovery = lazy(() => import('./components/DeepRecovery').then(m => ({ default: m.DeepRecovery })));
+const AuthScreen = lazy(() => import('./components/AuthScreen').then(m => ({ default: m.AuthScreen })));
+const GeminiLive = lazy(() => import('./components/GeminiLive'));
 
 const AppContent: React.FC = () => {
   const { user, loadingAuth } = useApp();
@@ -30,26 +33,32 @@ const AppContent: React.FC = () => {
   }
 
   if (!user) {
-    return <AuthScreen />;
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <AuthScreen />
+      </Suspense>
+    );
   }
 
   return (
     <HashRouter>
       <Layout>
-        <Routes>
-          <Route path="/" element={<HomeDashboard />} />
-          <Route path="/plan" element={<PlanManager />} />
-          <Route path="/video" element={<VideoAnalyzer />} />
-          <Route path="/tracker" element={<PerformanceTracker />} />
-          <Route path="/staff" element={<StaffHub />} />
-          <Route path="/coach-dashboard" element={<CoachDashboard />} />
-          <Route path="/chat" element={<LiveCoach />} />
-          <Route path="/trends" element={<BioTrendConnect />} />
-          <Route path="/cv" element={<AthleteCV />} />
-          <Route path="/recovery" element={<DeepRecovery />} />
-          <Route path="/live" element={<GeminiLive />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense fallback={<LoadingFallback />}>
+          <Routes>
+            <Route path="/" element={<HomeDashboard />} />
+            <Route path="/plan" element={<PlanManager />} />
+            <Route path="/video" element={<VideoAnalyzer />} />
+            <Route path="/tracker" element={<PerformanceTracker />} />
+            <Route path="/staff" element={<StaffHub />} />
+            <Route path="/coach-dashboard" element={<CoachDashboard />} />
+            <Route path="/chat" element={<LiveCoach />} />
+            <Route path="/trends" element={<BioTrendConnect />} />
+            <Route path="/cv" element={<AthleteCV />} />
+            <Route path="/recovery" element={<DeepRecovery />} />
+            <Route path="/live" element={<GeminiLive />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </Layout>
     </HashRouter>
   );
