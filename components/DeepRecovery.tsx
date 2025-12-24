@@ -2,29 +2,20 @@ import React, { useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Battery, Moon, Activity, Zap, Thermometer, BrainCircuit, HeartPulse, CheckCircle2 } from 'lucide-react';
-import { calculateReadiness, generatePrescription, WellnessData, DailyPrescription } from '../utils/recoveryEngine';
+import { useRecoveryEngine } from '../hooks/useRecoveryEngine'; // Hook Import
 
 export const DeepRecovery: React.FC = () => {
     const navigate = useNavigate();
-    const { acwrStats } = useApp();
+    const {
+        readiness,
+        prescription,
+        wellnessData,
+        updateWellness,
+        calculateDailyReadiness,
+        resetRecovery
+    } = useRecoveryEngine(); // New Hook
 
-    // State for inputs
-    const [wellness, setWellness] = useState<WellnessData>({
-        sleepHours: 7.5,
-        sleepQuality: 7,
-        fatigue: 5,
-        soreness: 3,
-        stress: 4,
-        mood: 7
-    });
-
-    const [prescription, setPrescription] = useState<DailyPrescription | null>(null);
-
-    const handleCalculate = () => {
-        const readiness = calculateReadiness(wellness, acwrStats.ratio);
-        const result = generatePrescription(readiness, wellness);
-        setPrescription(result);
-    };
+    // Removed local state (wellness, prescription) and handleCalculate fn
 
     const getScoreColor = (score: number) => {
         if (score >= 90) return 'text-emerald-400';
@@ -57,39 +48,39 @@ export const DeepRecovery: React.FC = () => {
                         <div className="space-y-6">
                             <InputSlider
                                 label="Sleep Duration"
-                                value={wellness.sleepHours}
-                                onChange={v => setWellness({ ...wellness, sleepHours: v })}
+                                value={wellnessData.sleepHours}
+                                onChange={(v: number) => updateWellness('sleepHours', v)}
                                 min={3} max={12} step={0.5} unit="h" icon={Moon} color="text-indigo-400"
                             />
                             <InputSlider
                                 label="Sleep Quality (1-10)"
-                                value={wellness.sleepQuality}
-                                onChange={v => setWellness({ ...wellness, sleepQuality: v })}
+                                value={wellnessData.sleepQuality}
+                                onChange={(v: number) => updateWellness('sleepQuality', v)}
                                 min={1} max={10} step={1} unit="" icon={BrainCircuit} color="text-indigo-400"
                             />
                             <div className="h-px bg-slate-800 my-4"></div>
                             <InputSlider
                                 label="Fatigue (10 = Exhausted)"
-                                value={wellness.fatigue}
-                                onChange={v => setWellness({ ...wellness, fatigue: v })}
+                                value={wellnessData.fatigue}
+                                onChange={(v: number) => updateWellness('fatigue', v)}
                                 min={1} max={10} step={1} unit="" icon={Battery} color="text-yellow-400"
                             />
                             <InputSlider
                                 label="Muscle Soreness (10 = Pain)"
-                                value={wellness.soreness}
-                                onChange={v => setWellness({ ...wellness, soreness: v })}
+                                value={wellnessData.soreness}
+                                onChange={(v: number) => updateWellness('soreness', v)}
                                 min={1} max={10} step={1} unit="" icon={Activity} color="text-red-400"
                             />
                             <InputSlider
                                 label="Mental Stress (10 = High)"
-                                value={wellness.stress}
-                                onChange={v => setWellness({ ...wellness, stress: v })}
+                                value={wellnessData.stress}
+                                onChange={(v: number) => updateWellness('stress', v)}
                                 min={1} max={10} step={1} unit="" icon={Zap} color="text-orange-400"
                             />
                         </div>
 
                         <button
-                            onClick={handleCalculate}
+                            onClick={calculateDailyReadiness}
                             className="w-full mt-8 bg-pink-600 hover:bg-pink-500 text-white font-black py-4 rounded-xl uppercase tracking-widest text-sm shadow-xl shadow-pink-900/20 transition-all active:scale-95"
                         >
                             Generate Prescription
@@ -142,7 +133,7 @@ export const DeepRecovery: React.FC = () => {
                     </div>
 
                     <button
-                        onClick={() => setPrescription(null)}
+                        onClick={resetRecovery}
                         className="w-full mt-4 text-slate-500 font-bold py-3 uppercase tracking-widest text-[10px]"
                     >
                         Recalculate

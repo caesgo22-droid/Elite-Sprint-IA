@@ -15,13 +15,26 @@ import { VideoAnnotationOverlay } from './VideoAnnotationOverlay';
 import { addVideoAnnotation, getVideoAnnotations } from '../services/firebase';
 import { VideoAnnotation } from '../types';
 import { useToasts } from '../contexts/ToastContext';
+import { useVideoAnalysis } from '../hooks/useVideoAnalysis'; // Hook Import
 
 const getAIStudio = () => (window as any).aistudio;
 
 const VideoAnalyzer: React.FC = () => {
     const { showToast } = useToasts();
+    // Replaced local analysis state with hook
+    const {
+        analyzing,
+        progress,
+        feedback: hookAnalysis,
+        errorMsg,
+        runAnalysis,
+        resetAnalysis
+    } = useVideoAnalysis();
+
     const { saveAnalysis, userProfile, updateAnalysis, analysisHistory, deleteAnalysis, currentPlan, lastAnalysis } = useApp();
     const [sessionAnalyses, setSessionAnalyses] = useState<BiomechanicalAnalysis[]>([]);
+    // loading state is now handled by 'analyzing' from hook, but we keep 'loading' if used for other things (e.g. MediaPipe init). 
+    // We will sync them or refactor further. For now keeping local 'loading' for auto-capture UI.
     const [loading, setLoading] = useState(false);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [statusMessage, setStatusMessage] = useState("");
