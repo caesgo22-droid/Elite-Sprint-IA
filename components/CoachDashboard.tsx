@@ -198,14 +198,16 @@ const CoachDashboard: React.FC = () => {
 };
 
 const AthleteProfileDetail: React.FC<{
-    uid: string;
     athleteRef: any;
     switchAthlete: (id: string | null) => void;
     adminProfile: UserProfile;
     t: any;
     navigate: any;
 }> = ({ uid, athleteRef, switchAthlete, adminProfile, t, navigate }) => {
-    const { userProfile, currentPlan, planHistory, logs, acwrStats, updateProfile, analysisHistory } = useApp();
+    // Use logs from athleteRef if available (passed from Dashboard) to ensure consistency with Roster ACWR
+    const { userProfile, currentPlan, planHistory, logs: contextLogs, acwrStats, updateProfile, analysisHistory } = useApp();
+    const logs = athleteRef?.logs || contextLogs;
+
     const [briefings, setBriefings] = useState<StaffBriefing[]>([]);
     const [newBriefing, setNewBriefing] = useState('');
     const [showBriefingForm, setShowBriefingForm] = useState(false);

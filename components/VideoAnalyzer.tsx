@@ -195,43 +195,66 @@ const VideoAnalyzer: React.FC = () => {
             video.playbackRate = 1.0;
             isScanning.current = true;
 
-            await video.play();
+            try {
+                await video.play();
+            } catch (e) {
+                console.error("Play error:", e);
+                reject("No se pudo reproducir el video autom" + "\u00e1" + "ticamente.");
+                return;
+            }
 
             const processFrame = (now: number, metadata?: any) => {
-                if (!isScanning.current || video.ended) return;
+                if (!isScanning.current) return;
 
-                // Use the video's presentation time if available (more accurate)
+                // Handle video ending based on playback state or duration
+                if (video.ended || video.paused) {
+                    if (tempHistory.length > 5) { // If we have data, we are good
+                        cleanup();
+                        resolve(tempHistory);
+                        return;
+                    } else if (video.ended) {
+                        // Ended but no data?
+                        cleanup();
+                        resolve(tempHistory); // Will fail validation in handleAutoCapture
+                        return;
+                    }
+                    // If paused but not ended, resume? (Done in next raf)
+                }
+
                 const timestamp = metadata ? metadata.mediaTime * 1000 : video.currentTime * 1000;
 
                 try {
-                    const result = poseLandmarker.detectForVideo(video, timestamp);
-                    if (result?.landmarks?.[0]) {
-                        const landmarks = result.landmarks[0];
-                        const com = physicsEngine.current.calculateCenterOfMass(landmarks);
-                        const mechanics = physicsEngine.current.calculateSprintMechanics(landmarks);
-                        const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, timestamp, com);
+                    // Critical: Ensure timestamp is positive
+                    if (timestamp >= 0) {
+                        const result = poseLandmarker.detectForVideo(video, timestamp);
+                        if (result?.landmarks?.[0]) {
+                            const landmarks = result.landmarks[0];
+                            const com = physicsEngine.current.calculateCenterOfMass(landmarks);
 
-                        tempHistory.push({ landmarks, mechanics, advanced, com, timestamp });
+                            // Only process if we have a valid skeleton (visibility check?)
+                            // Simplified for now
+                            const mechanics = physicsEngine.current.calculateSprintMechanics(landmarks);
+                            const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, timestamp, com);
 
-                        // Draw live skeleton (Critical: ensure canvas is synced)
-                        if (showSkeleton) requestAnimationFrame(() => drawSkeleton(landmarks));
+                            tempHistory.push({ landmarks, mechanics, advanced, com, timestamp });
+
+                            if (showSkeleton) requestAnimationFrame(() => drawSkeleton(landmarks));
+                        }
                     }
                 } catch (e) {
-                    console.warn("Detection error:", e);
+                    console.warn("Detection error frame:", e);
                 }
 
-                if (isScanning.current && !video.paused && !video.ended) {
+                if (isScanning.current && !video.ended) {
                     if ('requestVideoFrameCallback' in video) {
                         (video as any).requestVideoFrameCallback(processFrame);
                     } else {
                         requestAnimationFrame(() => processFrame(performance.now()));
                     }
-                } else if (video.paused && !video.ended) {
-                    // resumes if paused but not ended
-                    requestAnimationFrame(() => processFrame(performance.now()));
                 }
             };
 
+            // Start Loop
             if ('requestVideoFrameCallback' in video) {
                 (video as any).requestVideoFrameCallback(processFrame);
             } else {

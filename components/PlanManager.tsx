@@ -20,7 +20,8 @@ const PlanManager: React.FC = () => {
         updateSession,
         viewingRecovery,
         calculateSessionRecovery,
-        closeRecoveryView
+        closeRecoveryView,
+        logs // Added logs
     } = useTrainingPlan();
 
     // Local UI State
