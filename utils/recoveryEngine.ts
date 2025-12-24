@@ -1,51 +1,96 @@
-export const calculateRecovery = (sessionIntensity: string, duration: number, bodyWeight: number, rpe: number) => {
-    // 1. Determine Session Type Impact
-    let type: 'Neural' | 'Metabolic' | 'Structural' = 'Metabolic';
-    
-    // Logic: High intensity + short duration = Neural. Long or hard = Structural/Metabolic.
-    if (sessionIntensity === 'Max' && duration < 45) {
-        type = 'Neural'; // Speed/Power work
-    } else if (rpe > 8) {
-        type = 'Structural'; // Heavy damage (DOMS likely)
+
+export interface WellnessData {
+    sleepQuality: number; // 1-10
+    sleepHours: number;
+    fatigue: number; // 1-10 (RPE-like, 10 is exhausted)
+    soreness: number; // 1-10
+    stress: number; // 1-10
+    mood: number; // 1-10
+}
+
+export interface RecoveryProtocol {
+    id: string;
+    title: string;
+    description: string;
+    durationMin: number;
+    type: 'Active' | 'Passive' | 'Cold' | 'Heat' | 'Manual';
+    priority: 'High' | 'Medium' | 'Low';
+}
+
+export interface DailyPrescription {
+    readinessScore: number; // 0-100
+    status: 'Optimal' | 'Good' | 'Fair' | 'Poor';
+    protocols: RecoveryProtocol[];
+    coachNote: string;
+}
+
+/**
+ * Calculates a daily readiness score (0-100) based on wellness inputs.
+ * Higher score = Better readiness.
+ */
+export const calculateReadiness = (data: WellnessData, acwrRatio: number = 1.0): number => {
+    // 1. Sleep Score (30%)
+    // Ideal: 8-10h, Quality 8-10
+    const sleepScore = Math.min(100, (data.sleepHours / 9) * 100) * 0.5 + (data.sleepQuality * 10) * 0.5;
+
+    // 2. Physical State (40%)
+    // Fatigue & Soreness are negative metrics (10 = bad)
+    const rawPhysical = ((10 - data.fatigue) + (10 - data.soreness)) / 2; // 0-10 scale
+    const physicalScore = rawPhysical * 10;
+
+    // 3. Mental State (20%)
+    // Stress is negative, Mood is positive
+    const rawMental = ((10 - data.stress) + data.mood) / 2;
+    const mentalScore = rawMental * 10;
+
+    // 4. Load Penalty (10%)
+    // If ACWR is > 1.3 or < 0.8, penalty applies
+    let loadPenalty = 0;
+    if (acwrRatio > 1.3) loadPenalty = 20;
+    else if (acwrRatio < 0.8) loadPenalty = 10;
+
+    // Weighted Sum
+    let readiness = (sleepScore * 0.3) + (physicalScore * 0.4) + (mentalScore * 0.3) - loadPenalty;
+
+    return Math.max(0, Math.min(100, Math.round(readiness)));
+};
+
+/**
+ * Generates a recovery prescription based on the readiness score and specific symptoms.
+ */
+export const generatePrescription = (readiness: number, data: WellnessData): DailyPrescription => {
+    let status: DailyPrescription['status'] = 'Optimal';
+    let protocols: RecoveryProtocol[] = [];
+    let note = "You are ready to smash it!";
+
+    if (readiness >= 90) {
+        status = 'Optimal';
+        protocols.push({ id: 'act-1', title: 'Light Mobility', description: '5 min dynamic flow to maintain range of motion.', durationMin: 5, type: 'Active', priority: 'Low' });
+        protocols.push({ id: 'pas-1', title: 'Mental Viz', description: 'Visualize your race plan.', durationMin: 10, type: 'Passive', priority: 'Medium' });
+    } else if (readiness >= 70) {
+        status = 'Good';
+        note = "Good to go. Maintain focus on sleep.";
+        protocols.push({ id: 'act-2', title: 'Foam Rolling', description: 'Focus on calves and quads.', durationMin: 10, type: 'Manual', priority: 'Medium' });
+    } else if (readiness >= 50) {
+        status = 'Fair';
+        note = "Accumulating fatigue. Prioritize recovery tonight.";
+        protocols.push({ id: 'cold-1', title: 'Contrast Bath', description: '1 min hot / 1 min cold x 5 rounds.', durationMin: 12, type: 'Cold', priority: 'High' });
+        protocols.push({ id: 'pas-2', title: 'Nap', description: '20-30 min power nap.', durationMin: 20, type: 'Passive', priority: 'High' });
+    } else {
+        status = 'Poor';
+        note = "RED FLAG. High risk state. Reduce intensity significantly.";
+        protocols.push({ id: 'pas-3', title: 'Deep Sleep Focus', description: 'Aim for 9h+ sleep. No screens 1h before bed.', durationMin: 540, type: 'Passive', priority: 'High' });
+        protocols.push({ id: 'cold-2', title: 'Ice Bath', description: '10-12 min at 10-12°C.', durationMin: 12, type: 'Cold', priority: 'High' });
+        protocols.push({ id: 'act-3', title: 'Walk / Flush', description: 'Very low intensity walk to flush lactate.', durationMin: 15, type: 'Active', priority: 'Medium' });
     }
 
-    // 2. Nutrition Math (Precision Nutrition Logic)
-    let carbsFactor = 0.8; // Default g/kg
-    if (type === 'Metabolic' && duration > 60) carbsFactor = 1.2; // Glycogen depletion
-    if (type === 'Neural') carbsFactor = 0.5; // Less glycogen, more CNS focus
-
-    const carbs = Math.round(bodyWeight * carbsFactor);
-    const protein = 30; // Standard optimal protein bolus for synthesis
-    const fluids = Math.round(duration * 12); // Approx 12ml per min of sweat loss
-
-    // 3. Protocols (Recovery Science)
-    const protocols: string[] = [];
-    protocols.push("Hidratación con Electrolitos (Sodio/Potasio)");
-    
-    if (type === 'Neural') {
-        protocols.push("Ambiente oscuro/silencio (Restauración del Sistema Nervioso Central)");
-        protocols.push("Magnesio (400mg) o Glicinato pre-sueño");
-        protocols.push("Evitar pantallas/luz azul 1h antes de dormir");
-    } else if (type === 'Structural') {
-        protocols.push("Proteína de asimilación lenta (Caseína) antes de dormir");
-        protocols.push("Sueño extendido (+30-60min) para reparación de tejidos");
-        protocols.push("Compresión o elevación de piernas si hay inflamación");
-    } else { // Metabolic (Lactate/Volume)
-        protocols.push("Masaje de descarga, Foam Roller o Pistola de percusión");
-        protocols.push("Baño de contraste (Frio/Calor) o Inmersión en agua fría (10min @ 12°C)");
-        protocols.push("Comida rica en antioxidantes (Frutos rojos, Vitamina C)");
+    // Symptom specific logic overrides
+    if (data.soreness >= 7) {
+        protocols.unshift({ id: 'spec-1', title: 'Compression Boots', description: '30 min session.', durationMin: 30, type: 'Passive', priority: 'High' });
+    }
+    if (data.stress >= 7) {
+        protocols.push({ id: 'spec-2', title: 'Breathwork', description: 'Box breathing 4-4-4-4 for 5 mins.', durationMin: 5, type: 'Passive', priority: 'High' });
     }
 
-    return {
-        sessionType: type,
-        nutrition: {
-            carbs: `${carbs}g`,
-            protein: `${protein}g`,
-            hydration: `${fluids}ml`,
-            notes: type === 'Neural' 
-                ? "Prioriza calidad de nutrientes y grasas saludables. No necesitas carga masiva de carbos." 
-                : "Ventana de oportunidad abierta. Recarga glucógeno rápido (IG Alto) en los próximos 45min."
-        },
-        protocols
-    };
+    return { readinessScore: readiness, status, protocols, coachNote: note };
 };

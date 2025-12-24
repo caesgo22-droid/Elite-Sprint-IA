@@ -12,17 +12,20 @@ export const LiveCoach: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [showStaffSelector, setShowStaffSelector] = useState(false);
+  const [activePersona, setActivePersona] = useState<string>('Coach'); // Default to Head Coach
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatHistory, loading]);
 
-  const handleSend = async (textOverride?: string, roleplayContext?: string) => {
+  const handleSend = async (textOverride?: string, personaOverride?: string) => {
     const textToSend = textOverride || input;
+    const personaToUse = personaOverride || activePersona;
+
     if (!textToSend.trim() || loading) return;
 
     // If roleplay, inject instruction prefix
-    const finalMessage = roleplayContext ? `[CONSULTA A STAFF - ${roleplayContext}]: ${textToSend}` : textToSend;
+    const finalMessage = personaToUse !== 'Coach' ? `[CONSULTA A ${personaToUse.toUpperCase()}]: ${textToSend}` : textToSend;
 
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
@@ -51,7 +54,7 @@ export const LiveCoach: React.FC = () => {
       acwr: acwrStats
     };
 
-    const response = await chatWithCoach(apiHistory, finalMessage, context);
+    const response = await chatWithCoach(apiHistory, finalMessage, context, personaToUse);
 
     if (response.functionCall) {
       const fc = response.functionCall;
@@ -78,20 +81,25 @@ export const LiveCoach: React.FC = () => {
       <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Consultar a:</h4>
       <div className="grid grid-cols-2 gap-2">
         {userProfile.coaches?.length > 0 ? userProfile.coaches.map((c, idx) => {
-          // Handle both string (legacy) and Coach object formats
           const coachName = typeof c === 'string' ? c : c.name;
           const coachRole = typeof c === 'string' ? 'Coach' : c.role;
           const coachId = typeof c === 'string' ? `coach-${idx}` : c.id;
 
+          // Map Role to Persona Key
+          let personaKey = 'Coach';
+          if (coachRole.toLowerCase().includes('fisio')) personaKey = 'Physio';
+          if (coachRole.toLowerCase().includes('psic') || coachRole.toLowerCase().includes('mental')) personaKey = 'Psychologist';
+          if (coachRole.toLowerCase().includes('bio') || coachRole.toLowerCase().includes('mec')) personaKey = 'Biomechanist';
+
           return (
             <button
               key={coachId}
-              onClick={() => handleSend(input, `${coachName} (${coachRole})`)}
+              onClick={() => handleSend(input, personaKey)}
               disabled={!input.trim()}
               className="text-left p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs transition-colors border border-slate-700 hover:border-cyan-500"
             >
               <div className="font-bold text-white">{coachName}</div>
-              <div className="text-cyan-400">{coachRole}</div>
+              <div className="text-cyan-400 italic">{coachRole}</div>
             </button>
           );
         }) : <div className="col-span-2 text-xs text-slate-500 text-center py-2">No hay staff registrado. Ve a Staff y agrega miembros.</div>}

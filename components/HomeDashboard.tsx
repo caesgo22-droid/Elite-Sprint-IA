@@ -1,7 +1,11 @@
+
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { BrainCircuit, Activity, RefreshCw, Key, ShieldCheck, ArrowRight, CalendarCheck, AlertTriangle, Zap, Stethoscope, Plus, ChevronRight, History, X, Trophy, Dumbbell } from 'lucide-react';
+import {
+  Dumbbell, Play, Calendar, TrendingUp, Award, Settings, LogOut, Plus,
+  ChevronRight, CalendarCheck, Zap, ArrowRight, BrainCircuit, RefreshCw, X, History, Stethoscope, Activity, HeartPulse, Trophy
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { generateNexusInsight } from '../services/geminiService';
 import { AthletePassport } from './AthletePassport';
@@ -137,7 +141,7 @@ const HomeDashboard: React.FC = () => {
       type: 'Recovery' as any,
       location: 'Clínica / Fisioterapia',
       time: 0,
-      notes: `Bitácora de Terapia [${type}]: ${notes || 'Sesión de descarga registrada.'}`
+      notes: `Bitácora de Terapia[${type}]: ${notes || 'Sesión de descarga registrada.'} `
     };
     addLog(therapyLog);
     setShowTherapyModal(false);
@@ -173,24 +177,26 @@ const HomeDashboard: React.FC = () => {
 
   return (
     <div className="space-y-4 animate-in fade-in duration-500 pb-10 px-2">
-      <div className="mb-2"><AthletePassport /></div>
+      <div className="mb-2" onClick={() => navigate('/cv')}>
+        <AthletePassport />
+      </div>
 
       <div className="grid grid-cols-1 gap-3">
-        <button onClick={() => setShowTherapyModal(true)} className="bg-slate-900 border border-slate-800 p-3 rounded-2xl flex items-center gap-3 hover:bg-slate-800 transition-all shadow-md group">
-          <div className="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20 group-hover:bg-blue-500/20 transition-colors">
-            <Stethoscope size={18} className="text-blue-400" />
+        <button onClick={() => navigate('/recovery')} className="bg-slate-900 border border-slate-800 p-3 rounded-2xl flex items-center gap-3 hover:bg-slate-800 transition-all shadow-md group">
+          <div className="p-2 bg-pink-500/10 rounded-xl border border-pink-500/20 group-hover:bg-pink-500/20 transition-colors">
+            <HeartPulse size={18} className="text-pink-400" />
           </div>
           <div className="text-left overflow-hidden">
-            <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest truncate">Bitácora</div>
-            <div className="text-[11px] font-bold text-white truncate">Registro de Terapia</div>
+            <div className="text-[10px] font-black text-pink-400 uppercase tracking-widest truncate">Recovery Center</div>
+            <div className="text-[11px] font-bold text-white truncate">Centro de Recuperación</div>
           </div>
         </button>
       </div>
 
-      <div className={`bg-gradient-to-br border rounded-[2rem] p-5 relative overflow-hidden shadow-xl transition-all duration-700 ${nexusInsight ? getStatusColor(nexusInsight.status) : 'from-slate-900 to-slate-950 border-slate-800'}`}>
+      <div className={`bg - gradient - to - br border rounded - [2rem] p - 5 relative overflow - hidden shadow - xl transition - all duration - 700 ${nexusInsight ? getStatusColor(nexusInsight.status) : 'from-slate-900 to-slate-950 border-slate-800'} `}>
         <div className="absolute top-0 right-0 p-4">
           <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10">
-            <div className={`h-1.5 w-1.5 rounded-full animate-pulse ${nexusInsight?.status === 'Peak' ? 'bg-emerald-400' : 'bg-purple-400'}`}></div>
+            <div className={`h - 1.5 w - 1.5 rounded - full animate - pulse ${nexusInsight?.status === 'Peak' ? 'bg-emerald-400' : 'bg-purple-400'} `}></div>
             <span className="text-[8px] font-black uppercase tracking-widest text-white/80">Nexus Intelligence</span>
           </div>
         </div>
@@ -253,6 +259,22 @@ const HomeDashboard: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* BioTrends Shortcut */}
+      <button onClick={() => navigate('/trends')} className="w-full bg-slate-900 border border-slate-800 p-4 rounded-[2rem] flex items-center justify-between group hover:border-purple-500/50 transition-all shadow-lg">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-purple-500/10 rounded-xl border border-purple-500/20 group-hover:bg-purple-500/20 transition-colors">
+            <Activity size={20} className="text-purple-400" />
+          </div>
+          <div className="text-left">
+            <h3 className="font-bold text-[13px] text-white uppercase tracking-tight leading-none group-hover:text-purple-300 transition-colors">Bio-Trends</h3>
+            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Race Modeling & Analytics</p>
+          </div>
+        </div>
+        <div className="w-8 h-8 rounded-full bg-slate-950 flex items-center justify-center border border-slate-800 group-hover:border-purple-500/30 transition-colors">
+          <ChevronRight size={16} className="text-slate-500 group-hover:text-purple-400" />
+        </div>
+      </button>
 
       <div className="bg-slate-900 border border-slate-800 rounded-[2rem] p-5 shadow-xl relative z-10 overflow-hidden">
         <div className="flex items-center justify-between mb-4">
@@ -348,160 +370,164 @@ const HomeDashboard: React.FC = () => {
         )}
       </div>
 
-      {showTherapyModal && (
-        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setShowTherapyModal(false)}>
-          <div className="bg-slate-900 border border-blue-500/30 p-6 rounded-[2rem] w-full max-w-sm relative shadow-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="w-14 h-14 bg-blue-500/10 rounded-2xl border border-blue-500/20 flex items-center justify-center mx-auto mb-4">
-              <Stethoscope size={28} className="text-blue-400" />
-            </div>
-            <h4 className="text-lg font-black text-white mb-1 text-center uppercase tracking-tight">Registro de Terapia</h4>
-            <p className="text-[10px] text-slate-400 leading-relaxed mb-4 text-center">Registra los detalles de tu sesión de recuperación.</p>
-
-            {/* Therapy Type Selection */}
-            <div className="mb-4">
-              <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Tipo de Terapia</label>
-              <div className="grid grid-cols-3 gap-1.5 mb-2">
-                {['Descarga', 'Fisio', 'Pistola', 'Hielo', 'Contraste', 'Otros'].map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setTherapyType(t)}
-                    className={`p-2 rounded-xl text-[9px] font-bold uppercase transition-all ${therapyType === t
-                      ? 'bg-blue-500/20 border-blue-500/50 text-blue-300 border'
-                      : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
-                      }`}
-                  >
-                    {t}
-                  </button>
-                ))}
+      {
+        showTherapyModal && (
+          <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setShowTherapyModal(false)}>
+            <div className="bg-slate-900 border border-blue-500/30 p-6 rounded-[2rem] w-full max-w-sm relative shadow-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="w-14 h-14 bg-blue-500/10 rounded-2xl border border-blue-500/20 flex items-center justify-center mx-auto mb-4">
+                <Stethoscope size={28} className="text-blue-400" />
               </div>
-              {therapyType === 'Otros' && (
-                <input
-                  type="text"
-                  value={customTherapyType}
-                  onChange={(e) => setCustomTherapyType(e.target.value)}
-                  placeholder="Especificar tipo..."
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-xs text-white placeholder-slate-600 outline-none focus:border-blue-500/50"
-                />
-              )}
-            </div>
+              <h4 className="text-lg font-black text-white mb-1 text-center uppercase tracking-tight">Registro de Terapia</h4>
+              <p className="text-[10px] text-slate-400 leading-relaxed mb-4 text-center">Registra los detalles de tu sesión de recuperación.</p>
 
-            {/* Muscle Group Selection */}
-            <div className="mb-4">
-              <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Grupo Muscular</label>
-              <div className="grid grid-cols-3 gap-1.5 mb-2">
-                {['Isquiotibiales', 'Cuádriceps', 'Gemelos', 'Espalda', 'Glúteos', 'Otros'].map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setTherapyMuscle(m)}
-                    className={`p-2 rounded-xl text-[8px] font-bold uppercase transition-all ${therapyMuscle === m
-                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 border'
-                      : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
-                      }`}
-                  >
-                    {m}
-                  </button>
-                ))}
-              </div>
-              {therapyMuscle === 'Otros' && (
-                <input
-                  type="text"
-                  value={customTherapyMuscle}
-                  onChange={(e) => setCustomTherapyMuscle(e.target.value)}
-                  placeholder="Especificar músculo..."
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-xs text-white placeholder-slate-600 outline-none focus:border-emerald-500/50"
-                />
-              )}
-            </div>
-
-            {/* Grade (for injury-related therapy) */}
-            <div className="mb-4">
-              <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-2">¿Es por Lesión? (Opcional)</label>
-              <div className="grid grid-cols-4 gap-1.5">
-                {[{ label: 'No', value: 0 }, { label: 'G1', value: 1 }, { label: 'G2', value: 2 }, { label: 'G3', value: 3 }].map((g) => (
-                  <button
-                    key={g.label}
-                    onClick={() => setTherapyGrade(g.value)}
-                    className={`p-2 rounded-xl text-[9px] font-bold uppercase transition-all ${therapyGrade === g.value
-                      ? g.value === 0 ? 'bg-slate-600 border-slate-500 text-white border' : 'bg-red-500/20 border-red-500/50 text-red-300 border'
-                      : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
-                      }`}
-                  >
-                    {g.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Notes */}
-            <div className="mb-4">
-              <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Notas Adicionales</label>
-              <textarea
-                value={therapyNotes}
-                onChange={(e) => setTherapyNotes(e.target.value)}
-                placeholder="Ej: Trabajo de liberación en fascia, 20 minutos..."
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-xs text-white placeholder-slate-600 min-h-[60px] resize-none outline-none focus:border-blue-500/50"
-              />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => {
-                  const finalType = therapyType === 'Otros' ? customTherapyType || 'Terapia' : therapyType;
-                  const finalMuscle = therapyMuscle === 'Otros' ? customTherapyMuscle || 'General' : therapyMuscle;
-                  const detailedNotes = `[${finalType}] ${finalMuscle}${therapyGrade > 0 ? ` - Grado ${therapyGrade}` : ''}. ${therapyNotes}`;
-                  handleTherapyLog(finalType, detailedNotes);
-                  setTherapyType('Descarga');
-                  setTherapyMuscle('General');
-                  setTherapyGrade(0);
-                  setTherapyNotes('');
-                  setCustomTherapyType('');
-                  setCustomTherapyMuscle('');
-                }}
-                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3 rounded-xl uppercase tracking-widest text-[10px] transition-all"
-              >
-                Guardar Registro
-              </button>
-              <button onClick={() => { setShowTherapyModal(false); setShowTherapyHistory(true); }} className="w-full bg-slate-950 border border-slate-800 text-blue-400 font-bold py-2.5 rounded-xl uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
-                <History size={14} /> Ver Historial
-              </button>
-              <button onClick={() => setShowTherapyModal(false)} className="w-full text-slate-500 font-bold py-2 uppercase tracking-widest text-[10px]">Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showTherapyHistory && (
-        <div className="fixed inset-0 z-[100] bg-black/98 backdrop-blur-xl flex flex-col p-6 animate-in fade-in duration-300" onClick={() => setShowTherapyHistory(false)}>
-          <div className="w-full max-w-md mx-auto flex-1 flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-black text-white uppercase tracking-tighter">Historial de Terapia</h3>
-              <button onClick={() => setShowTherapyHistory(false)} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-              {logs.filter(l => l.event === 'Therapy').length > 0 ? (
-                [...logs].filter(l => l.event === 'Therapy').reverse().map((log) => (
-                  <div key={log.id} className="bg-slate-900 border border-slate-800 p-4 rounded-3xl space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest bg-blue-500/10 px-2 py-0.5 rounded">{log.date}</span>
-                      <Stethoscope size={14} className="text-slate-600" />
-                    </div>
-                    <p className="text-xs text-white font-medium leading-relaxed">{log.notes}</p>
-                  </div>
-                ))
-              ) : (
-                <div className="h-64 flex flex-col items-center justify-center text-slate-500 space-y-2">
-                  <History size={40} className="text-slate-800" />
-                  <p className="text-xs font-bold uppercase tracking-widest">Sin registros previos</p>
+              {/* Therapy Type Selection */}
+              <div className="mb-4">
+                <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Tipo de Terapia</label>
+                <div className="grid grid-cols-3 gap-1.5 mb-2">
+                  {['Descarga', 'Fisio', 'Pistola', 'Hielo', 'Contraste', 'Otros'].map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setTherapyType(t)}
+                      className={`p - 2 rounded - xl text - [9px] font - bold uppercase transition - all ${therapyType === t
+                          ? 'bg-blue-500/20 border-blue-500/50 text-blue-300 border'
+                          : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
+                        } `}
+                    >
+                      {t}
+                    </button>
+                  ))}
                 </div>
-              )}
-            </div>
+                {therapyType === 'Otros' && (
+                  <input
+                    type="text"
+                    value={customTherapyType}
+                    onChange={(e) => setCustomTherapyType(e.target.value)}
+                    placeholder="Especificar tipo..."
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-xs text-white placeholder-slate-600 outline-none focus:border-blue-500/50"
+                  />
+                )}
+              </div>
 
-            <button onClick={() => setShowTherapyHistory(false)} className="mt-6 w-full bg-blue-600 text-white font-black py-4 rounded-2xl uppercase tracking-widest text-[10px]">Cerrar</button>
+              {/* Muscle Group Selection */}
+              <div className="mb-4">
+                <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Grupo Muscular</label>
+                <div className="grid grid-cols-3 gap-1.5 mb-2">
+                  {['Isquiotibiales', 'Cuádriceps', 'Gemelos', 'Espalda', 'Glúteos', 'Otros'].map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setTherapyMuscle(m)}
+                      className={`p - 2 rounded - xl text - [8px] font - bold uppercase transition - all ${therapyMuscle === m
+                          ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 border'
+                          : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
+                        } `}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+                {therapyMuscle === 'Otros' && (
+                  <input
+                    type="text"
+                    value={customTherapyMuscle}
+                    onChange={(e) => setCustomTherapyMuscle(e.target.value)}
+                    placeholder="Especificar músculo..."
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-xs text-white placeholder-slate-600 outline-none focus:border-emerald-500/50"
+                  />
+                )}
+              </div>
+
+              {/* Grade (for injury-related therapy) */}
+              <div className="mb-4">
+                <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-2">¿Es por Lesión? (Opcional)</label>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[{ label: 'No', value: 0 }, { label: 'G1', value: 1 }, { label: 'G2', value: 2 }, { label: 'G3', value: 3 }].map((g) => (
+                    <button
+                      key={g.label}
+                      onClick={() => setTherapyGrade(g.value)}
+                      className={`p - 2 rounded - xl text - [9px] font - bold uppercase transition - all ${therapyGrade === g.value
+                          ? g.value === 0 ? 'bg-slate-600 border-slate-500 text-white border' : 'bg-red-500/20 border-red-500/50 text-red-300 border'
+                          : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
+                        } `}
+                    >
+                      {g.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div className="mb-4">
+                <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Notas Adicionales</label>
+                <textarea
+                  value={therapyNotes}
+                  onChange={(e) => setTherapyNotes(e.target.value)}
+                  placeholder="Ej: Trabajo de liberación en fascia, 20 minutos..."
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-xs text-white placeholder-slate-600 min-h-[60px] resize-none outline-none focus:border-blue-500/50"
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    const finalType = therapyType === 'Otros' ? customTherapyType || 'Terapia' : therapyType;
+                    const finalMuscle = therapyMuscle === 'Otros' ? customTherapyMuscle || 'General' : therapyMuscle;
+                    const detailedNotes = `[${finalType}] ${finalMuscle}${therapyGrade > 0 ? ` - Grado ${therapyGrade}` : ''}. ${therapyNotes} `;
+                    handleTherapyLog(finalType, detailedNotes);
+                    setTherapyType('Descarga');
+                    setTherapyMuscle('General');
+                    setTherapyGrade(0);
+                    setTherapyNotes('');
+                    setCustomTherapyType('');
+                    setCustomTherapyMuscle('');
+                  }}
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3 rounded-xl uppercase tracking-widest text-[10px] transition-all"
+                >
+                  Guardar Registro
+                </button>
+                <button onClick={() => { setShowTherapyModal(false); setShowTherapyHistory(true); }} className="w-full bg-slate-950 border border-slate-800 text-blue-400 font-bold py-2.5 rounded-xl uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
+                  <History size={14} /> Ver Historial
+                </button>
+                <button onClick={() => setShowTherapyModal(false)} className="w-full text-slate-500 font-bold py-2 uppercase tracking-widest text-[10px]">Cancelar</button>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+
+      {
+        showTherapyHistory && (
+          <div className="fixed inset-0 z-[100] bg-black/98 backdrop-blur-xl flex flex-col p-6 animate-in fade-in duration-300" onClick={() => setShowTherapyHistory(false)}>
+            <div className="w-full max-w-md mx-auto flex-1 flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-black text-white uppercase tracking-tighter">Historial de Terapia</h3>
+                <button onClick={() => setShowTherapyHistory(false)} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                {logs.filter(l => l.event === 'Therapy').length > 0 ? (
+                  [...logs].filter(l => l.event === 'Therapy').reverse().map((log) => (
+                    <div key={log.id} className="bg-slate-900 border border-slate-800 p-4 rounded-3xl space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest bg-blue-500/10 px-2 py-0.5 rounded">{log.date}</span>
+                        <Stethoscope size={14} className="text-slate-600" />
+                      </div>
+                      <p className="text-xs text-white font-medium leading-relaxed">{log.notes}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="h-64 flex flex-col items-center justify-center text-slate-500 space-y-2">
+                    <History size={40} className="text-slate-800" />
+                    <p className="text-xs font-bold uppercase tracking-widest">Sin registros previos</p>
+                  </div>
+                )}
+              </div>
+
+              <button onClick={() => setShowTherapyHistory(false)} className="mt-6 w-full bg-blue-600 text-white font-black py-4 rounded-2xl uppercase tracking-widest text-[10px]">Cerrar</button>
+            </div>
+          </div>
+        )
+      }
+    </div >
   );
 };
 

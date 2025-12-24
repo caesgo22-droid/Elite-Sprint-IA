@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { TrainingPlan, NexusInsight, UserProfile } from "../types";
-import { COACH_PERSONA, PLAN_GENERATION_PROMPT, VIDEO_ANALYSIS_PROMPT, ANALYSIS_SYSTEM_INSTRUCTION, MASTER_AUDIT_PROMPT, MASTER_ANALYSIS_SYSTEM_INSTRUCTION } from "../utils/prompts";
+import { COACH_PERSONA, PLAN_GENERATION_PROMPT, VIDEO_ANALYSIS_PROMPT, ANALYSIS_SYSTEM_INSTRUCTION, MASTER_AUDIT_PROMPT, MASTER_ANALYSIS_SYSTEM_INSTRUCTION, getSystemInstruction } from "../utils/prompts";
 
 import { getEnv } from "../utils/env";
 
@@ -143,17 +143,39 @@ export const generateNexusInsight = async (logs: any[], readiness: any, analysis
     }
 };
 
+import { PeriodizationEngine } from "../utils/periodizationEngine";
+
 export const generateTrainingPlan = async (profile: UserProfile, readiness: any, currentDate: string, focusEvent?: string, acwr?: any, lastAnalysis?: any, logs?: any[]): Promise<TrainingPlan | null> => {
     const model = getModelInstance("gemini-2.0-flash-exp");
     if (!model) return null;
 
     try {
+        // PERDIODIZATION ENGINE INTEGRATION
+        const structuralPhase = PeriodizationEngine.calculateCurrentPhase(profile.competitions || [], new Date());
+
         const therapyLogs = logs?.filter((l: any) => l.type === 'Recovery' || l.event === 'Therapy').slice(-3);
         const enrichedProfile = {
             ...profile,
             recentTherapy: therapyLogs?.map((l: any) => `${l.date}: ${l.notes || l.activity || l.event}`).join(' | ')
         };
-        const prompt = PLAN_GENERATION_PROMPT(enrichedProfile, readiness, focusEvent || "100m", acwr?.ratio, lastAnalysis);
+
+        // Inject Phase Directives
+        // The prompt function needs to be updated or we append the instruction here.
+        // Assuming PLAN_GENERATION_PROMPT takes standard args, we will append a "STRICT INSTRUCTION" block.
+
+        let prompt = PLAN_GENERATION_PROMPT(enrichedProfile, readiness, focusEvent || "100m", acwr?.ratio, lastAnalysis);
+
+        prompt += `\n\n[MANDATORY PERIODIZATION FRAMEWORK]
+        CURRENT PHASE: ${structuralPhase.name} (Calculated based on Race Date: ${structuralPhase.weeksToRace} weeks out).
+        PRIMARY FOCUS: ${structuralPhase.focus}.
+        INTENSITY: ${structuralPhase.intensity}.
+        VOLUME: ${structuralPhase.volume}.
+        ENERGY SYSTEM: ${structuralPhase.primaryEnergySystem}.
+        
+        CRITICAL INSTRUCTION: You MUST ignore any generic phase requests. Build the plan SPECIFICALLY for the '${structuralPhase.name}' phase.
+        If Phase is 'Taper', volume must be reduced by 40-60%.
+        If Phase is 'Competition', focus on neural activation and rest.
+        `;
 
         const result = await model.generateContent({
             contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -168,6 +190,8 @@ export const generateTrainingPlan = async (profile: UserProfile, readiness: any,
         if (plan && plan.sessions && plan.sessions.length > 0) {
             return {
                 ...plan,
+                phase: structuralPhase.name, // ENFORCE calculated phase
+                startDate: new Date().toISOString(), // Add start date for reference
                 id: Date.now().toString(),
                 createdAt: new Date().toISOString()
             };
@@ -179,7 +203,7 @@ export const generateTrainingPlan = async (profile: UserProfile, readiness: any,
     }
 };
 
-export const chatWithCoach = async (history: any[], message: string, context: any): Promise<any> => {
+export const chatWithCoach = async (history: any[], message: string, context: any, persona: string = 'Coach'): Promise<any> => {
     const model = getModelInstance("gemini-2.0-flash-exp");
     if (!model) return { text: "Sistema Offline." };
 
@@ -189,7 +213,7 @@ export const chatWithCoach = async (history: any[], message: string, context: an
                 ...history,
                 { role: "user", parts: [{ text: `CONTEXTO TÉCNICO: ${JSON.stringify(context)}. PREGUNTA: ${message}` }] }
             ],
-            systemInstruction: COACH_PERSONA,
+            systemInstruction: getSystemInstruction(persona),
         });
         const response = await result.response;
         return { text: response.text() };

@@ -13,8 +13,22 @@ const DEFINITIONS: Record<string, { title: string; desc: string }> = {
     OVR: { title: "Overall Rating", desc: "Índice global de rendimiento Elite (Algoritmo: 40% PAC, 30% TEC, 20% FOR, 10% IQ)." }
 };
 
-export const AthletePassport: React.FC = () => {
-    const { userProfile, analysisHistory, logs, acwrStats, updateProfile } = useApp();
+interface AthletePassportProps {
+    profile?: UserProfile;
+    history?: any[];
+    acwr?: any;
+    logs?: any[];
+}
+
+export const AthletePassport: React.FC<AthletePassportProps> = ({ profile, history, acwr, logs: propLogs }) => {
+    const { userProfile: contextProfile, analysisHistory: contextHistory, logs: contextLogs, acwrStats: contextAcwr, updateProfile } = useApp();
+
+    // Use props if provided (Coach View), else use context (Athlete View)
+    const userProfile = profile || contextProfile;
+    const analysisHistory = history || contextHistory;
+    const acwrStats = acwr || contextAcwr;
+    // const logs = propLogs || contextLogs; // Not used in calculation directly yet but good to have
+
     const [activeSlide, setActiveSlide] = useState(0);
     const [showInfo, setShowInfo] = useState<string | null>(null);
 
@@ -23,7 +37,7 @@ export const AthletePassport: React.FC = () => {
 
     const scores = useMemo(() => {
         return availableEvents.map(evt => {
-            const pbTime = parseFloat(userProfile.pbs[evt as '100m' | '200m' | '400m']?.time || '0');
+            const pbTime = parseFloat(userProfile.pbs?.[evt as '100m' | '200m' | '400m']?.time || '0');
 
             // PAC Score logic based on event
             let pac = 50;
@@ -33,14 +47,14 @@ export const AthletePassport: React.FC = () => {
                 else pac = Math.max(50, Math.min(99, 100 - (pbTime - 43.0) * 3));
             }
 
-            const lastTech = analysisHistory[0]?.score || 60;
+            const lastTech = analysisHistory?.[0]?.score || 60;
             let form = 60;
             if (acwrStats) {
                 if (acwrStats.status === 'Óptimo') form = 90;
                 else if (acwrStats.status === 'Carga Baja') form = 70;
                 else form = 50;
             }
-            const iq = Math.min(99, 50 + (userProfile.yearsExperience * 5));
+            const iq = Math.min(99, 50 + ((userProfile.yearsExperience || 1) * 5));
             const ovr = Math.round((pac * 0.4) + (lastTech * 0.3) + (form * 0.2) + (iq * 0.1));
 
             return {
@@ -62,6 +76,19 @@ export const AthletePassport: React.FC = () => {
     const prevSlide = (e: React.MouseEvent) => {
         e.stopPropagation();
         setActiveSlide((prev) => (prev - 1 + availableEvents.length) % availableEvents.length);
+    };
+
+    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (profile) return; // Read-only mode if props are passed (Coach can't change athlete photo here easily)
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64 = reader.result as string;
+                updateProfile({ ...userProfile, photoURL: base64 });
+            }
+            reader.readAsDataURL(file);
+        }
     };
 
     return (
@@ -96,8 +123,8 @@ export const AthletePassport: React.FC = () => {
                     </button>
 
                     <div
-                        onClick={() => document.getElementById('avatar-upload')?.click()}
-                        className="relative w-full h-full rounded-full bg-slate-800 border-2 border-slate-700 shadow-xl flex items-center justify-center overflow-hidden cursor-pointer hover:border-yellow-500 transition-all hover:scale-105 active:scale-95 group"
+                        onClick={() => !profile && document.getElementById('avatar-upload')?.click()}
+                        className={`relative w-full h-full rounded-full bg-slate-800 border-2 border-slate-700 shadow-xl flex items-center justify-center overflow-hidden transition-all ${!profile ? 'cursor-pointer hover:border-yellow-500 hover:scale-105 active:scale-95' : ''} group`}
                     >
                         {userProfile.photoURL ? (
                             <img src={userProfile.photoURL} alt="Avatar" className="w-full h-full object-cover" />
@@ -106,26 +133,19 @@ export const AthletePassport: React.FC = () => {
                                 {userProfile.name?.charAt(0).toUpperCase() || "I"}
                             </span>
                         )}
-                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Plus size={20} className="text-white" />
-                        </div>
+                        {!profile && (
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Plus size={20} className="text-white" />
+                            </div>
+                        )}
                     </div>
                     <input
                         id="avatar-upload"
                         type="file"
                         accept="image/*"
                         hidden
-                        onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                                const reader = new FileReader();
-                                reader.onloadend = () => {
-                                    const base64 = reader.result as string;
-                                    updateProfile({ ...userProfile, photoURL: base64 });
-                                }
-                                reader.readAsDataURL(file);
-                            }
-                        }}
+                        disabled={!!profile}
+                        onChange={handlePhotoUpload}
                     />
                 </div>
 

@@ -23,6 +23,14 @@ export interface Coach {
   notes?: string;
 }
 
+// Extracted interface
+export interface Competition {
+  id: string;
+  name: string;
+  date: string; // YYYY-MM-DD
+  priority?: 'A' | 'B' | 'C';
+}
+
 export interface UserProfile {
   name: string;
   email?: string; // Critical for Staff lookup
@@ -45,7 +53,7 @@ export interface UserProfile {
   trainingDays: string[];
   hoursPerDay: number;
   preferredTime: 'Morning' | 'Afternoon' | 'Evening';
-  competitions: { id: string; name: string; date: string }[];
+  competitions: Competition[];
 }
 
 export interface SessionFeedback {
@@ -105,6 +113,12 @@ export interface BiomechanicalAnalysis {
   jointAngles: { knee?: string; hip?: string; torso?: string; shin?: string; };
   kinetics?: KineticMetrics; // NEW: Advanced Physics Data
   groundContactTimeEstimate: string; // Legacy AI estimate, kept for fallback
+  biomechanicalAudit?: { // NEW: Deep audit details
+    stiffness: string;
+    reactivePower: string;
+    technicalFlaws: string[];
+    pelvicControl: string;
+  };
   criticalErrors: string[];
   correctiveDrills: string[];
   coachShouts: string[];
@@ -115,6 +129,8 @@ export interface BiomechanicalAnalysis {
   coachNotes?: string; // NEW: Staff feedback on video
   reviewStatus?: 'Pending' | 'Reviewed'; // NEW: For remote coaching queue
   videoFingerprint?: string; // NEW: To avoid duplicate analysis
+  asymmetry?: number; // NEW: % difference between Left/Right
+  stepCount?: number; // NEW: Number of steps detected
 }
 
 export interface PerformanceLog {

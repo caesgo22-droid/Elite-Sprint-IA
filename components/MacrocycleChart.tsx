@@ -297,10 +297,29 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
                             </filter>
                         </defs>
 
+                        {/* Phase Background Regions */}
+                        <g className="opacity-[0.03]">
+                            {chartPoints.map((p, i) => {
+                                if (i === chartPoints.length - 1) return null;
+                                const nextP = chartPoints[i + 1];
+                                // We'll infer phase based on weeks to race or just label
+                                // Simple mapping for visualization:
+                                const weeksOut = (chartPoints.length - 1 - i); // Approximated
+                                let color = "#3b82f6"; // General (Blue)
+                                if (weeksOut <= 2) color = "#ef4444"; // Comp (Red)
+                                else if (weeksOut <= 6) color = "#f59e0b"; // Pre-Comp (Orange)
+                                else if (weeksOut <= 12) color = "#10b981"; // Specific (Green)
+
+                                return (
+                                    <rect key={i} x={p.x} y="40" width={nextP.x - p.x} height="400" fill={color} />
+                                );
+                            })}
+                        </g>
+
                         {/* Grid Lines */}
                         <g className="stroke-slate-800/60" strokeDasharray="0" strokeWidth="1">
                             {chartPoints.map((p, i) => (
-                                <line key={i} x1={p.x} x2={p.x} y1="50" y2="430" />
+                                <line key={i} x1={p.x} x2={p.x} y1="40" y2="440" />
                             ))}
                         </g>
 

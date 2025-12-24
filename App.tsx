@@ -10,6 +10,9 @@ import { LiveCoach } from './components/LiveCoach';
 import PerformanceTracker from './components/PerformanceTracker';
 import StaffHub from './components/StaffHub';
 import CoachDashboard from './components/CoachDashboard';
+import { BioTrendConnect } from './components/BioTrendConnect';
+import { AthleteCV } from './components/AthleteCV';
+import { DeepRecovery } from './components/DeepRecovery';
 import { AuthScreen } from './components/AuthScreen';
 import GeminiLive from './components/GeminiLive';
 import { Loader2 } from 'lucide-react';
@@ -41,6 +44,9 @@ const AppContent: React.FC = () => {
           <Route path="/staff" element={<StaffHub />} />
           <Route path="/coach-dashboard" element={<CoachDashboard />} />
           <Route path="/chat" element={<LiveCoach />} />
+          <Route path="/trends" element={<BioTrendConnect />} />
+          <Route path="/cv" element={<AthleteCV />} />
+          <Route path="/recovery" element={<DeepRecovery />} />
           <Route path="/live" element={<GeminiLive />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -50,9 +56,10 @@ const AppContent: React.FC = () => {
 };
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
-  constructor(props: any) {
+  public state = { hasError: false, error: null as Error | null };
+
+  constructor(props: { children: ReactNode }) {
     super(props);
-    this.state = { hasError: false, error: null };
   }
 
   static getDerivedStateFromError(error: Error) {

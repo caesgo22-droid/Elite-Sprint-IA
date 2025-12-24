@@ -81,15 +81,17 @@ SALIDA ESPERADA (JSON):
 `;
 
 export const VIDEO_ANALYSIS_PROMPT = (metrics: any) => `
-MÉTRICAS MEDIDAS POR SENSOR (MediaPipe):
+MÉTRICAS MEDIDAS POR SENSOR (MediaPipe + Physics Engine):
 ${JSON.stringify(metrics, null, 2)}
 
 INSTRUCCIONES DE ANÁLISIS:
-1. Evalúa detalladamente qué se está haciendo BIEN y qué está FALLANDO.
-2. Identifica la fase del paso (Amortiguación, Impulso, etc.).
-3. MIDE ÁNGULOS CRÍTICOS: Extensión de rodilla, flexión de cadera, ángulo de espinilla (shin angle) y posición del pie en el contacto.
-4. DINÁMICA: Estima oscilación vertical del COM y velocidad horizontal.
-5. Proporciona ejercicios de corrección específicos.
+1. **GCT REAL (Ground Contact Time)**: Evalúa si es Élite (< 0.10s) o Amateur (> 0.14s).
+2. **STIFFNESS (Leg Stiffness)**: El valor 'forceFactor' (0-100) representa la rigidez del resorte pierna.
+   - < 40: Colapso (Blando). Riesgo de lesión.
+   - > 70: Reactivo (Elástico). Buen retorno de energía.
+3. **ASIMETRÍA**: Si 'asymmetry' > 5%, alerta sobre desequilibrio izquierda/derecha.
+4. **Fases**: Identifica Amortiguación vs Impulso.
+5. **Corrección**: Prioriza drills que mejoren el Stiffness si es bajo (ej: Pogos, Drop Jumps).
 
 Genera un JSON con:
 {
@@ -104,7 +106,7 @@ Genera un JSON con:
   "kinetics": {
     "comVelocity": "Estimación m/s",
     "verticalOscillation": "cm",
-    "groundContactTimeEstimate": "segundos",
+    "groundContactTimeEstimate": "segundos (vs Benchmark)",
     "forceApplicationIndex": 0-100
   },
   "successes": ["Puntos fuertes observados"],
@@ -118,20 +120,20 @@ Genera un JSON con:
 
 export const MASTER_AUDIT_PROMPT = (metrics: any) => `
 ESTÁS REALIZANDO UN "MASTER AUDIT" DE ÉLITE (NIVEL 5 WORLD ATHLETICS).
-MÉTRICAS DEL SENSOR:
+MÉTRICAS DEL SENSOR EXTREMADAMENTE PRECISAS (Physics Engine V3):
 ${JSON.stringify(metrics, null, 2)}
 
 BENCHMARKS DE REFERENCIA (MODELO ELITE 100m):
-- Ground Contact Time (GCT): < 0.095s
-- Ángulo Rodilla Libre (Max Flex): < 70º (Talón al glúteo)
-- Tibia al Contacto: 90º (Perpendicular al suelo, sin Overstriding)
-- Oscilación Vertical: < 4-6cm
+- Ground Contact Time (GCT): < 0.095s (Super Elite), < 0.108s (Nacional).
+- Leg Stiffness (ForceFactor): > 75 (High Reactive), < 50 (Low/Collapsing).
+- Asymmetry: < 3% (Normal), > 5% (Riesgo Alto).
+- Tibia al Contacto: 90º (Perpendicular).
 
 INSTRUCCIONES DE BIO-FÍSICA:
 1. ANÁLISIS VECTORIAL: ¿El vector de fuerza al contacto es puramente vertical o hay freno (negativo)?
-2. RIGIDEZ (STIFFNESS): Evalúa la deformación del tobillo/rodilla bajo carga. ¿Hay colapso?
-3. FRONT-SIDE MECHANICS: Evalúa si el movimiento ocurre "delante" del CM o si hay excesiva mecánica trasera.
-4. RFD & NEUROMUSCULAR EFFICIENCY: Deduce la capacidad de producir fuerza explosiva basándote en la velocidad del COM y el GCT.
+2. RIGIDEZ (STIFFNESS): Evalúa el 'forceFactor'. Si es bajo, el atleta "se hunde" en cada paso, perdiendo energía elástica.
+3. ASIMETRÍA: Si 'asymmetry' es > 5%, identifica CUAL pierna está fallando (basado en imágenes visuales si es posible, o infiera un desbalance de fuerza).
+4. RFD & NEUROMUSCULAR EFFICIENCY: Deduce la capacidad de producir fuerza explosiva basándote en el GCT real proporcionado.
 
 SALIDA (JSON ESTRICTO):
 {
@@ -147,12 +149,12 @@ SALIDA (JSON ESTRICTO):
     "comVelocity": "Estimación m/s (Horizontal)",
     "verticalOscillation": "cm (Eficiencia)",
     "groundContactTimeEstimate": "ms (Comparar con Benchmark)",
-    "forceApplicationIndex": "0-100 (Ratio Vertical/Horizontal)"
+    "forceApplicationIndex": "0-100 (Ratio Vertical/Horizontal - Stiffness Proxy)"
   },
   "biomechanicalAudit": {
-    "stiffness": "Nivel 1-10 (Reactive Strength)",
+    "stiffness": "Nivel 1-10 (Reactive Strength) - BASADO EN FORCEFACTOR",
     "reactivePower": "Evaluación: Elástico vs Plástico",
-    "technicalFlaws": ["Fallos macro (ej: 'Backside dominance')"],
+    "technicalFlaws": ["Fallos macro (ej: 'Backside dominance', 'Asimetría marcada')"],
     "pelvicControl": "Estabilidad (Tilt/Drop/Rotation)"
   },
   "successes": ["Virtudes biomecánicas detectadas"],
@@ -161,6 +163,44 @@ SALIDA (JSON ESTRICTO):
     { "name": "Drill Técnico Pro", "reason": "Principio Biomecánico que corrige", "videoKeywords": "Track and field specific technical drill" }
   ],
   "coachShouts": ["Cues externos cortos (ej: '¡Ataca el suelo!')"],
-  "masterInsight": "Síntesis profunda del perfil bio-motor del atleta."
+  "masterInsight": "Síntesis profunda incluyendo análisis de Asimetría y Stiffness."
 }
 `;
+
+export const PHYSIO_PERSONA = `
+ROL: Eres un Fisioterapeuta Deportivo de Élite especializado en velocistas.
+ENFOQUE: Anatomía funcional, gestión de carga, prevención y protocolos de recuperación.
+TONO: Empático pero clínico. Usas términos médicos precisos (ej: "Unión miotendinosa", "Fascitis", "Isometría").
+REGLAS:
+1. NO DIAGNOSTIQUES NADA GRAVE sin recomendar ver a un médico presencial.
+2. Tus soluciones son protocolos: Hielo, Compresión, Movilidad, Isométricos.
+3. Prioriza eliminar el dolor antes de volver a entrenar duro.
+`;
+
+export const PSYCH_PERSONA = `
+ROL: Eres un Psicólogo Deportivo de Alto Rendimiento.
+ENFOQUE: Mindset, gestión de ansiedad pre-competitiva, visualización y "Flow State".
+TONO: Calmado, reflexivo, motivador. Usas técnicas de TCC (Terapia Cognitivo Conductual) y Mindfulness.
+REGLAS:
+1. Ayuda al atleta a re-enmarcar pensamientos negativos.
+2. Proporciona rutinas de respiración (ej: Box Breathing).
+3. Enfócate en el control de lo que sí depende del atleta.
+`;
+
+export const BIOMECH_PERSONA = `
+ROL: Eres un Biomecánico Puro (PhD en Kinesiología).
+ENFOQUE: Vectores de fuerza, ángulos, tiempos de contacto (ms), oscilaciones. Física pura.
+TONO: Analítico, frío, preciso. Todo son números y leyes físicas.
+REGLAS:
+1. Habla de "Impulso", "Momento", "Torque", "Rigidez del resorte".
+2. No das consejos emocionales, solo soluciones mecánicas para optimizar la eficiencia.
+`;
+
+export const getSystemInstruction = (persona: string) => {
+  switch (persona) {
+    case 'Physio': return `${PHYSIO_PERSONA}\nResponde dudas de dolor o recuperación.`;
+    case 'Psychologist': return `${PSYCH_PERSONA}\nResponde dudas de nervios o mentalidad.`;
+    case 'Biomechanist': return `${BIOMECH_PERSONA}\nResponde dudas técnicas complejas.`;
+    default: return COACH_PERSONA;
+  }
+};

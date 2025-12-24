@@ -10,6 +10,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { MacrocycleChart } from './MacrocycleChart';
 import TaskManager from './TaskManager';
 import { useToasts } from '../contexts/ToastContext';
+import { AthletePassport } from './AthletePassport';
 
 const CoachDashboard: React.FC = () => {
     const { showToast } = useToasts();
@@ -288,24 +289,17 @@ const AthleteProfileDetail: React.FC<{
                 </button>
 
                 <div className="mt-8 relative z-10">
-                    <div className="flex flex-col md:flex-row items-center gap-6 mb-6">
-                        <div
-                            onClick={() => photoInputRef.current?.click()}
-                            className="w-24 h-24 rounded-[2rem] bg-slate-800 border-4 border-slate-700 shadow-xl overflow-hidden shrink-0 cursor-pointer hover:border-cyan-400 transition-all group relative"
-                        >
-                            {profile.photoURL ? (
-                                <img src={profile.photoURL} className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                    <UserCircle2 className="text-slate-500" size={48} />
-                                </div>
-                            )}
-                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Plus size={24} className="text-white" />
-                            </div>
+                    <div className="flex flex-col md:flex-row items-start gap-8 mb-6">
+                        {/* Athlete Snapshot Card */}
+                        <div className="flex-shrink-0">
+                            <AthletePassport
+                                profile={profile}
+                                history={athleteRef?.aHist || analysisHistory} // Assuming we might fetch this or have it in context
+                                acwr={athleteRef ? { ratio: athleteRef.acwrRatio, status: athleteRef.risk === 'High' ? 'Alto Riesgo' : athleteRef.risk === 'Low' ? 'Carga Baja' : 'Óptimo' } : acwrStats}
+                            />
                         </div>
 
-                        <div className="text-center md:text-left flex-1">
+                        <div className="text-center md:text-left flex-1 pt-4">
                             <div className="flex flex-col md:flex-row md:items-center gap-3 mb-2">
                                 <h2 className="text-4xl font-bold text-white uppercase tracking-tighter">{profile.name || 'Invitado'}</h2>
                                 <div className="flex gap-2 flex-wrap justify-center md:justify-start">

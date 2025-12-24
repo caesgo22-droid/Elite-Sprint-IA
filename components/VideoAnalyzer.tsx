@@ -11,6 +11,9 @@ import { Loader2, ScanLine, UploadCloud, History, Key, Info, X, ShieldCheck, Ale
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 import { AnalysisResultCard } from './AnalysisResultCard';
 import { AnalysisHistoryList } from './AnalysisHistoryList';
+import { VideoAnnotationOverlay } from './VideoAnnotationOverlay';
+import { addVideoAnnotation, getVideoAnnotations } from '../services/firebase';
+import { VideoAnnotation } from '../types';
 import { useToasts } from '../contexts/ToastContext';
 
 const getAIStudio = () => (window as any).aistudio;
@@ -34,6 +37,10 @@ const VideoAnalyzer: React.FC = () => {
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [playbackRate, setPlaybackRate] = useState(1);
     const [videoFingerprint, setVideoFingerprint] = useState<string | null>(null);
+
+    // Annotation State
+    const [annotations, setAnnotations] = useState<VideoAnnotation[]>([]);
+    const [currentTime, setCurrentTime] = useState(0);
 
     // Refs
     const physicsEngine = useRef<ElitePhysicsEngine>(new ElitePhysicsEngine());
@@ -263,11 +270,14 @@ const VideoAnalyzer: React.FC = () => {
                 framesBase64.push(frame);
             }
 
-            // Inject new V2 Physics Data into the primary frame for AI
+            // Inject new V3 Physics Data into the primary frame for AI
             const primaryFrame = phases[2]; // Toe-off usually has best mechanics view
             primaryFrame.advanced.groundContactTime = `${stats.realGCT.toFixed(3)}s`;
             primaryFrame.advanced.frequency = `${(1 / (stats.realGCT * 2.2)).toFixed(1)} Hz`; // Approx Freq based on GCT
             primaryFrame.advanced.forceFactor = Math.round(stats.legStiffness || 80); // Inject Stiffness into Force Factor field
+            // Inject Asymmetry into a temporary field or handle it in the AI service call
+            (primaryFrame.advanced as any).asymmetry = `${stats.asymmetry}%`;
+            (primaryFrame.advanced as any).stepCount = stats.stepCount;
 
             // Create filmstrip for UI
             setCapturedFrames(framesBase64);
@@ -317,7 +327,9 @@ const VideoAnalyzer: React.FC = () => {
                     },
                     timestamp: primaryFrame.timestamp / 1000,
                     reviewStatus: userProfile.role === 'athlete' ? 'Pending' : 'Reviewed',
-                    videoFingerprint: videoFingerprint || undefined
+                    videoFingerprint: videoFingerprint || undefined,
+                    asymmetry: stats.asymmetry,
+                    stepCount: stats.stepCount
                 };
 
             } catch (e: any) {
@@ -417,8 +429,29 @@ const VideoAnalyzer: React.FC = () => {
         });
     };
 
-    // Live overlay effect (only when NOT scanning for analysis)
-    // We want the skeleton to appear during scrubbing too
+    // Load annotations when activeAnalysis changes
+    useEffect(() => {
+        if (activeAnalysis?.id) {
+            getVideoAnnotations(activeAnalysis.id).then(setAnnotations);
+        } else {
+            setAnnotations([]);
+        }
+    }, [activeAnalysis]);
+
+    const handleSaveAnnotation = async (ann: Omit<VideoAnnotation, 'id' | 'createdAt'>) => {
+        if (!activeAnalysis?.id) return;
+        const newAnn: VideoAnnotation = {
+            ...ann,
+            id: Date.now().toString(),
+            analysisId: activeAnalysis.id,
+            createdAt: new Date().toISOString()
+        };
+        await addVideoAnnotation(activeAnalysis.id, newAnn);
+        setAnnotations(prev => [...prev, newAnn].sort((a, b) => a.videoTimestamp - b.videoTimestamp));
+        showToast("Nota agregada", "success");
+    };
+
+    // Live overlay effect
     useEffect(() => {
         if (!videoRef.current || !poseLandmarker) return;
 
@@ -426,30 +459,31 @@ const VideoAnalyzer: React.FC = () => {
         let lastVideoTime = -1;
 
         const loop = () => {
-            // If we are actively scanning for analysis, let performScan handle the loop/drawing
-            if (isScanning.current) {
-                animationFrameId = requestAnimationFrame(loop);
-                return;
-            }
-
             const video = videoRef.current;
-            if (video && showSkeleton) {
-                if (video.currentTime !== lastVideoTime) {
-                    if (video.currentTime < lastVideoTime) {
-                        try { poseLandmarker.reset(); } catch (e) { }
-                    }
-                    lastVideoTime = video.currentTime;
-                    try {
-                        // Use timestamp based on performance.now() or video time logic
-                        const result = poseLandmarker.detectForVideo(video, performance.now());
-                        if (result?.landmarks?.[0]) {
-                            drawSkeleton(result.landmarks[0]);
-                        } else {
-                            const ctx = overlayRef.current?.getContext('2d');
-                            ctx?.clearRect(0, 0, overlayRef.current!.width, overlayRef.current!.height);
+            if (video) {
+                // Update Current Time for UI syncing
+                setCurrentTime(video.currentTime);
+
+                if (isScanning.current) {
+                    animationFrameId = requestAnimationFrame(loop);
+                    return;
+                }
+
+                if (showSkeleton) {
+                    if (video.currentTime !== lastVideoTime) {
+                        if (video.currentTime < lastVideoTime) {
+                            try { poseLandmarker.reset(); } catch (e) { }
                         }
-                    } catch (e) {
-                        // ignore
+                        lastVideoTime = video.currentTime;
+                        try {
+                            const result = poseLandmarker.detectForVideo(video, performance.now());
+                            if (result?.landmarks?.[0]) {
+                                drawSkeleton(result.landmarks[0]);
+                            } else {
+                                const ctx = overlayRef.current?.getContext('2d');
+                                ctx?.clearRect(0, 0, overlayRef.current!.width, overlayRef.current!.height);
+                            }
+                        } catch (e) { }
                     }
                 }
             }
@@ -462,7 +496,9 @@ const VideoAnalyzer: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500 pb-20 px-2">
+            {/* ... Existing Headers ... */}
             <div className="flex justify-between items-end border-b border-slate-800 pb-4">
+                {/* Same header content... kept briefly for context but assuming no change needed here */}
                 <div>
                     <h2 className="text-xl font-black text-white uppercase tracking-tight">Laboratorio Bio</h2>
                     <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Video Audit v3.0 Elite</p>
@@ -476,6 +512,7 @@ const VideoAnalyzer: React.FC = () => {
                     <button onClick={() => setViewHistory(!viewHistory)} className={`text-[9px] font-black uppercase tracking-widest px-4 py-2 rounded-full border transition-all ${viewHistory ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}>
                         <History size={12} className="inline mr-1" /> {viewHistory ? 'Cerrar Historial' : 'Historial'}
                     </button>
+                    {/* ... rest of header ... */}
                     {viewHistory && selectedIds.length === 2 && (
                         <button onClick={() => setComparisonMode(true)} className="text-[9px] font-black uppercase tracking-widest bg-emerald-600 border border-emerald-400 px-4 py-2 rounded-full text-white animate-pulse">
                             Comparar ({selectedIds.length})
@@ -506,6 +543,16 @@ const VideoAnalyzer: React.FC = () => {
                         <video ref={videoRef} src={previewUrl} className="w-full h-full object-contain" muted playsInline />
                         <canvas ref={overlayRef} className="absolute inset-0 pointer-events-none w-full h-full" />
 
+                        {/* Video Annotation Overlay */}
+                        {activeAnalysis && (
+                            <VideoAnnotationOverlay
+                                currentTime={currentTime}
+                                duration={videoRef.current?.duration || 0}
+                                annotations={annotations}
+                                onSave={handleSaveAnnotation}
+                                onSeek={(t) => { if (videoRef.current) videoRef.current.currentTime = t; }}
+                            />
+                        )}
 
                         <div className="absolute top-4 right-4 flex gap-2">
                             <div className="relative group/overlay">
