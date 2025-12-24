@@ -94,3 +94,42 @@ export const generatePrescription = (readiness: number, data: WellnessData): Dai
 
     return { readinessScore: readiness, status, protocols, coachNote: note };
 };
+
+/**
+ * Calculates post-session recovery protocols based on session intensity and duration.
+ */
+export const calculateRecovery = (intensity: string, durationMin: number, weightKg: number, rpe: number) => {
+    const isHighIntensity = ['High', 'Max'].includes(intensity) || rpe >= 8;
+
+    // Nutrition Logic
+    const nutrition = {
+        carbs: isHighIntensity ? `${(weightKg * 1.2).toFixed(0)}g` : `${(weightKg * 0.8).toFixed(0)}g`,
+        protein: `${(weightKg * 0.4).toFixed(0)}g`,
+        hydration: `${(durationMin * 10 + 500)}ml`,
+        notes: isHighIntensity
+            ? "Priorizar carbohidratos de alto IG post-esfuerzo."
+            : "Mantener hidratación constante y proteína moderada."
+    };
+
+    // Protocols Logic
+    const protocols = [];
+    if (isHighIntensity) {
+        protocols.push("Baño de Hielo (10 min @ 10°C)");
+        protocols.push("Masaje con Foam Roller (Zonas de carga)");
+        protocols.push("Compresión Neumática (30 min)");
+    } else {
+        protocols.push("Movilidad Articular Suave");
+        protocols.push("Estiramiento Estático (20s por grupo)");
+        protocols.push("Ducha de contraste");
+    }
+
+    if (rpe >= 9) {
+        protocols.unshift("REPOSO TOTAL / Siesta de 20 min");
+    }
+
+    return {
+        sessionType: intensity,
+        nutrition,
+        protocols
+    };
+};
