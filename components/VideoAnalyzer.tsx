@@ -450,18 +450,26 @@ const VideoAnalyzer: React.FC = () => {
 
         ctx.clearRect(0, 0, displayWidth, displayHeight);
 
-        const connections = [
-            [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
-            [11, 23], [12, 24], [23, 24],
-            [23, 25], [25, 27], [24, 26], [26, 28],
-            [27, 31], [28, 32], [27, 29], [28, 30]
+        // Color-coded connection groups
+        const torsoConnections = [
+            [11, 12], [11, 23], [12, 24], [23, 24] // Shoulders and core
         ];
 
-        ctx.strokeStyle = '#22d3ee';
+        const armConnections = [
+            [11, 13], [13, 15], [12, 14], [14, 16] // Arms
+        ];
+
+        const legConnections = [
+            [23, 25], [25, 27], [24, 26], [26, 28], // Upper and lower legs
+            [27, 31], [28, 32], [27, 29], [28, 30]  // Feet
+        ];
+
         ctx.lineWidth = 3;
         ctx.lineCap = 'round';
 
-        connections.forEach(([i, j]) => {
+        // Draw torso (cyan)
+        ctx.strokeStyle = '#22d3ee';
+        torsoConnections.forEach(([i, j]) => {
             const p1 = landmarks[i];
             const p2 = landmarks[j];
             if (p1 && p2 && p1.visibility > 0.5 && p2.visibility > 0.5) {
@@ -472,6 +480,33 @@ const VideoAnalyzer: React.FC = () => {
             }
         });
 
+        // Draw arms (magenta)
+        ctx.strokeStyle = '#ff00ff';
+        armConnections.forEach(([i, j]) => {
+            const p1 = landmarks[i];
+            const p2 = landmarks[j];
+            if (p1 && p2 && p1.visibility > 0.5 && p2.visibility > 0.5) {
+                ctx.beginPath();
+                ctx.moveTo(p1.x * displayWidth, p1.y * displayHeight);
+                ctx.lineTo(p2.x * displayWidth, p2.y * displayHeight);
+                ctx.stroke();
+            }
+        });
+
+        // Draw legs (yellow)
+        ctx.strokeStyle = '#fbbf24';
+        legConnections.forEach(([i, j]) => {
+            const p1 = landmarks[i];
+            const p2 = landmarks[j];
+            if (p1 && p2 && p1.visibility > 0.5 && p2.visibility > 0.5) {
+                ctx.beginPath();
+                ctx.moveTo(p1.x * displayWidth, p1.y * displayHeight);
+                ctx.lineTo(p2.x * displayWidth, p2.y * displayHeight);
+                ctx.stroke();
+            }
+        });
+
+        // Draw joints (red dots)
         ctx.fillStyle = '#ff0000';
         landmarks.forEach((p) => {
             if (p.visibility > 0.5) {

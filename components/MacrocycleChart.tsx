@@ -123,10 +123,34 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
             lastLoad = nextLoad;
         }
 
-        // Metrics Calculation
+        // Metrics Calculation - Use actual logs for ACWR consistency
         const acute = currentLoad;
         const chronic = rollingLoads.length > 0 ? rollingLoads.reduce((a, b) => a + b, 0) / rollingLoads.length : 1;
         const acwr = chronic > 0 ? acute / chronic : 0;
+
+        // If therapyLogs are provided, calculate real ACWR from actual activity
+        let realACWR = acwr;
+        if (therapyLogs && therapyLogs.length > 0) {
+            const last7Days = therapyLogs.filter((log: any) => {
+                const logDate = new Date(log.date || log.timestamp);
+                const daysDiff = (Date.now() - logDate.getTime()) / (1000 * 60 * 60 * 24);
+                return daysDiff <= 7;
+            });
+
+            const last28Days = therapyLogs.filter((log: any) => {
+                const logDate = new Date(log.date || log.timestamp);
+                const daysDiff = (Date.now() - logDate.getTime()) / (1000 * 60 * 60 * 24);
+                return daysDiff <= 28;
+            });
+
+            const acuteLoad = last7Days.reduce((sum: number, log: any) => sum + (log.load || 0), 0) / 7;
+            const chronicLoad = last28Days.reduce((sum: number, log: any) => sum + (log.load || 0), 0) / 28;
+
+            if (chronicLoad > 0) {
+                realACWR = acuteLoad / chronicLoad;
+            }
+        }
+
         const planLoad = 2200; // Mock or calculate from plan target
         const loadDeviation = planLoad > 0 ? ((currentLoad - planLoad) / planLoad) * 100 : 0;
 
@@ -545,6 +569,85 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
                     </div>
                 </div>
             </footer>
+
+            {/* Editable Plan Section (Coach Only) */}
+            {editMode && currentPlan && currentPlan.sessions && (
+                <div className="mt-6 space-y-3 border-t border-slate-800 pt-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-sm font-bold text-white uppercase tracking-wider">Editar Sesiones del Plan</h3>
+                        <button
+                            onClick={() => {
+                                if (onUpdatePlan && currentPlan) {
+                                    onUpdatePlan(currentPlan);
+                                    setEditMode(false);
+                                }
+                            }}
+                            className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-xs font-bold text-white uppercase tracking-wider transition-colors"
+                        >
+                            Guardar Cambios
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {currentPlan.sessions.map((session: any, idx: number) => (
+                            <div key={idx} className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                                <div className="flex justify-between items-start mb-3">
+                                    <div>
+                                        <div className="text-xs font-bold text-cyan-400 uppercase">{session.day}</div>
+                                        <div className="text-[10px] text-slate-500 uppercase mt-0.5">{session.type}</div>
+                                    </div>
+                                    <select
+                                        value={session.intensity}
+                                        onChange={(e) => {
+                                            const updated = { ...currentPlan };
+                                            updated.sessions[idx].intensity = e.target.value;
+                                            if (onUpdatePlan) onUpdatePlan(updated);
+                                        }}
+                                        className="px-2 py-1 bg-slate-900 border border-slate-600 rounded text-xs text-white"
+                                    >
+                                        <option value="Low">Baja</option>
+                                        <option value="Medium">Media</option>
+                                        <option value="High">Alta</option>
+                                        <option value="Max">Máxima</option>
+                                    </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <div>
+                                        <label className="text-[9px] text-slate-400 uppercase font-bold block mb-1">Ejercicios</label>
+                                        <textarea
+                                            value={session.drills?.join(', ') || ''}
+                                            onChange={(e) => {
+                                                const updated = { ...currentPlan };
+                                                updated.sessions[idx].drills = e.target.value.split(',').map((d: string) => d.trim());
+                                                if (onUpdatePlan) onUpdatePlan(updated);
+                                            }}
+                                            className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-[10px] text-white resize-none"
+                                            rows={2}
+                                            placeholder="Ejercicio 1, Ejercicio 2..."
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[9px] text-slate-400 uppercase font-bold block mb-1">Notas del Staff</label>
+                                        <textarea
+                                            value={session.staffNotes || ''}
+                                            onChange={(e) => {
+                                                const updated = { ...currentPlan };
+                                                updated.sessions[idx].staffNotes = e.target.value;
+                                                if (onUpdatePlan) onUpdatePlan(updated);
+                                            }}
+                                            className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-[10px] text-white resize-none"
+                                            rows={2}
+                                            placeholder="Instrucciones especiales..."
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
