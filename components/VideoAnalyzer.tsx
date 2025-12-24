@@ -149,11 +149,16 @@ const VideoAnalyzer: React.FC = () => {
 
             const cleanup = () => {
                 video.removeEventListener('ended', onEnded);
-                video.removeEventListener('pause', onEnded); // Safety valve
+                video.removeEventListener('pause', onEnded);
                 isScanning.current = false;
             };
 
             video.addEventListener('ended', onEnded);
+
+            // Critical: Wait for data before starting
+            if (video.readyState < 2) {
+                await new Promise(r => { video.onloadeddata = r; });
+            }
 
             video.currentTime = 0;
             video.playbackRate = 1.0;
@@ -161,31 +166,46 @@ const VideoAnalyzer: React.FC = () => {
 
             await video.play();
 
-            const processFrame = () => {
-                if (!isScanning.current || video.paused || video.ended) return;
+            const processFrame = (now: number, metadata?: any) => {
+                if (!isScanning.current || video.ended) return;
 
-                const now = video.currentTime * 1000;
+                // Use the video's presentation time if available (more accurate)
+                const timestamp = metadata ? metadata.mediaTime * 1000 : video.currentTime * 1000;
+
                 try {
-                    const result = poseLandmarker.detectForVideo(video, now);
+                    const result = poseLandmarker.detectForVideo(video, timestamp);
                     if (result?.landmarks?.[0]) {
                         const landmarks = result.landmarks[0];
                         const com = physicsEngine.current.calculateCenterOfMass(landmarks);
                         const mechanics = physicsEngine.current.calculateSprintMechanics(landmarks);
-                        const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, now, com);
+                        const advanced = physicsEngine.current.estimateStrideParams(landmarks, userProfile.height || 175, timestamp, com);
 
-                        tempHistory.push({ landmarks, mechanics, advanced, com, timestamp: now });
+                        tempHistory.push({ landmarks, mechanics, advanced, com, timestamp });
 
-                        // Draw live skeleton
-                        if (showSkeleton) drawSkeleton(landmarks);
+                        // Draw live skeleton (Critical: ensure canvas is synced)
+                        if (showSkeleton) requestAnimationFrame(() => drawSkeleton(landmarks));
                     }
                 } catch (e) {
-                    // Ignore transient errors
+                    console.warn("Detection error:", e);
                 }
 
-                if (isScanning.current) requestAnimationFrame(processFrame);
+                if (isScanning.current && !video.paused && !video.ended) {
+                    if ('requestVideoFrameCallback' in video) {
+                        (video as any).requestVideoFrameCallback(processFrame);
+                    } else {
+                        requestAnimationFrame(() => processFrame(performance.now()));
+                    }
+                } else if (video.paused && !video.ended) {
+                    // resumes if paused but not ended
+                    requestAnimationFrame(() => processFrame(performance.now()));
+                }
             };
 
-            processFrame();
+            if ('requestVideoFrameCallback' in video) {
+                (video as any).requestVideoFrameCallback(processFrame);
+            } else {
+                requestAnimationFrame(() => processFrame(performance.now()));
+            }
         });
     };
 

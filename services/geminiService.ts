@@ -22,8 +22,14 @@ const cleanAndParseJSON = (text: string) => {
 
 const getModelInstance = (modelName: string) => {
     const apiKey = (window as any).aistudio?.apiKey || getEnv("GEMINI_API_KEY") || getEnv("VITE_GEMINI_API_KEY") || getEnv("API_KEY");
+
     if (!apiKey) {
-        console.warn("⚠️ Google Gemini API Key missing. Video analysis and AI features will be unavailable.");
+        console.error("❌ CRITICAL: No API Key found in env or window.aistudio");
+        console.log("Env Dump:", {
+            VITE_GEMINI: !!getEnv("VITE_GEMINI_API_KEY"),
+            GEMINI: !!getEnv("GEMINI_API_KEY"),
+            AISTUDIO: !!(window as any).aistudio?.apiKey
+        });
         return null;
     }
     const genAI = new GoogleGenerativeAI(apiKey);
