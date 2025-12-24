@@ -101,8 +101,10 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
             if (phase.includes('Specific') || phase.includes('Pre-Comp')) {
                 if (i === 3) nextLoad = lastLoad * 0.7;
                 else nextLoad = lastLoad * 1.05;
-            } else if (phase.includes('Competition') || phase.includes('Tapering')) {
+            } else if (phase.includes('Competition')) {
                 nextLoad = lastLoad * 0.85;
+            } else if (phase.includes('Transition')) {
+                nextLoad = lastLoad * 0.6; // Heavy de-load for transition
             } else {
                 nextLoad = lastLoad * 1.02;
             }
@@ -260,6 +262,10 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
                     <span className="text-slate-200">Real</span>
                 </div>
                 <div className="flex items-center space-x-1">
+                    <span className="w-2 h-2 rounded-full bg-purple-400"></span>
+                    <span>Transición</span>
+                </div>
+                <div className="flex items-center space-x-1">
                     <span className="w-3 h-0 border-t-2 border-dotted border-slate-500"></span>
                     <span>Límites</span>
                 </div>
@@ -304,9 +310,12 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
                                 const nextP = chartPoints[i + 1];
                                 // We'll infer phase based on weeks to race or just label
                                 // Simple mapping for visualization:
-                                const weeksOut = (chartPoints.length - 1 - i); // Approximated
+                                const weeksOut = (chartPoints.length - 1 - i);
                                 let color = "#3b82f6"; // General (Blue)
-                                if (weeksOut <= 2) color = "#ef4444"; // Comp (Red)
+                                const pName = currentPlan?.phase || 'General Prep';
+
+                                if (pName.includes('Transition')) color = "#a855f7"; // Transition (Purple)
+                                else if (weeksOut <= 2) color = "#ef4444"; // Comp (Red)
                                 else if (weeksOut <= 6) color = "#f59e0b"; // Pre-Comp (Orange)
                                 else if (weeksOut <= 12) color = "#10b981"; // Specific (Green)
 

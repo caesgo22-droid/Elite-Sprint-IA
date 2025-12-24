@@ -14,26 +14,35 @@ export class PeriodizationEngine {
      * Calculates the current macrocycle phase based on the NEXT Priority 'A' race.
      */
     public static calculateCurrentPhase(competitions: Competition[], currentDate: Date = new Date()): PeriodizationPhase {
-        // 1. Find the next "A" Race (or next comp if no priority set)
+        // 1. Find the Most Recent Past Race (for Transition check)
+        const pastComps = competitions
+            .filter(c => new Date(c.date).getTime() < currentDate.getTime())
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        const lastRace = pastComps[0];
+        const weeksSinceRace = lastRace ? this.getWeeksDiff(new Date(lastRace.date), currentDate) : 999;
+
+        // 2. Find the next "A" Race
         const nextRace = this.findNextPriorityRace(competitions, currentDate);
 
-        if (!nextRace) {
+        // TRANSITION Logic: If a race was within the last 1-2 weeks, or no races scheduled
+        if (weeksSinceRace <= 2 || !nextRace) {
             return {
-                name: 'General Prep',
-                focus: "Base Building, General Capacity, Mechanics",
-                intensity: "Moderate",
-                volume: "High",
-                weeksToRace: 99,
-                primaryEnergySystem: "Aerobic / Extensive Tempo"
+                name: 'Transition',
+                focus: "Active Recovery, Regeneration, Cross Training",
+                intensity: "Low",
+                volume: "Low",
+                weeksToRace: nextRace ? this.getWeeksDiff(currentDate, new Date(nextRace.date)) : 99,
+                primaryEnergySystem: "Aerobic"
             };
         }
 
         const weeksToRace = this.getWeeksDiff(currentDate, new Date(nextRace.date));
 
-        // 2. Logic Cascade (World Athletics Standard Periodization)
+        // 3. Logic Cascade
         if (weeksToRace <= 2) {
             return {
-                name: 'Competition', // Taper / Peaking
+                name: 'Competition',
                 focus: "Peaking, Neural Activation, Race Modeling",
                 intensity: "Peak (Max)",
                 volume: "Taper (Very Low)",
@@ -58,23 +67,15 @@ export class PeriodizationEngine {
                 weeksToRace,
                 primaryEnergySystem: "Anaerobic Alactic / Mix"
             };
-        } else if (weeksToRace <= 24) {
+        } else {
+            // General Prep for everything else up to 24 weeks or beyond
             return {
                 name: 'General Prep',
-                focus: "Hypertrophy, Aerobic Capacity, Hills, Strength",
+                focus: "Base Building, General Capacity, Strength",
                 intensity: "Moderate",
                 volume: "High",
                 weeksToRace,
-                primaryEnergySystem: "Aerobic / Neuromuscular Base"
-            };
-        } else {
-            return {
-                name: 'Transition', // Or "Early General"
-                focus: "Active Recovery, Cross Training, Fun",
-                intensity: "Low",
-                volume: "Low",
-                weeksToRace,
-                primaryEnergySystem: "Aerobic"
+                primaryEnergySystem: "Aerobic / Extensive Tempo"
             };
         }
     }
