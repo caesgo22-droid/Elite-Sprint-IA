@@ -1,50 +1,52 @@
 import * as React from 'react';
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
-import { generateTrainingPlan } from '../services/geminiService';
-import { Loader2, Zap, Dumbbell, Play, UserCog, X, CheckSquare, Target, Layers, Brain, History, ChevronRight, Share, HeartPulse, Info, Download, Stethoscope, Calendar, Plus, Wrench, BatteryCharging, MessageCircle, MessageSquare, Table2, ScanLine, ChevronDown, ChevronUp, Flag, BarChart3, MapPin, Trophy, Trash2, Activity, User, RotateCcw } from 'lucide-react';
+import { Loader2, UserCog, X, Target, Calendar, Plus, Trophy, History, MapPin, RotateCcw, Info, Trash2 } from 'lucide-react';
 import { TrainingSession, UserProfile, Injury, Coach } from '../types';
-import { calculateACWR } from '../utils/loadCalculator';
-import { calculateRecovery } from '../utils/recoveryEngine';
 import { MacrocycleChart } from './MacrocycleChart';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Label, ComposedChart, Line } from 'recharts';
-
-import { SessionCard, DrillItem } from './SessionCard';
-import { useToasts } from '../contexts/ToastContext';
-
-// MacrocycleChart handled by shared component
+import { SessionCard } from './SessionCard';
+import { useTrainingPlan } from '../hooks/useTrainingPlan'; // New Import
 
 const PlanManager: React.FC = () => {
-    const { showToast } = useToasts();
-    const { user, userProfile, adminProfile, updateProfile, currentPlan, setPlan, resetPlan, updateSession, lastAnalysis, planHistory, logs } = useApp();
+    // Context & Hook
+    const { userProfile, adminProfile, updateProfile, resetPlan } = useApp();
+    const {
+        currentPlan,
+        planHistory,
+        loading,
+        errorMsg,
+        generatePlan,
+        updateSession,
+        viewingRecovery,
+        calculateSessionRecovery,
+        closeRecoveryView
+    } = useTrainingPlan();
+
+    // Local UI State
     const location = useLocation();
     const searchParams = new URLSearchParams(location.search);
-
-    const [loading, setLoading] = useState(false);
     const [showProfileConfig, setShowProfileConfig] = useState(false);
     const [focusEvent, setFocusEvent] = useState(userProfile.events?.[0] || '100m');
+
+    // Generator Inputs
     const [fatigue, setFatigue] = useState(5);
     const [sleep, setSleep] = useState(7);
     const [soreness, setSoreness] = useState(3);
     const [stress, setStress] = useState(4);
     const [hydration, setHydration] = useState(7);
     const [restingHR, setRestingHR] = useState(userProfile.restingHR || 60);
-    const coachEmailRef = useRef<HTMLInputElement>(null);
     const [hrv, setHrv] = useState(userProfile.hrv || 50);
+
     const [expandedDay, setExpandedDay] = useState<string | null>(null);
-    const [tempProfile, setTempProfile] = useState<UserProfile>(userProfile);
-    const [planHistoryState, setPlanHistoryState] = useState<any[]>([]);
-    const [acwr, setAcwr] = useState<{ ratio: number, status: string } | null>(null);
     const [sessionFeedbackModal, setSessionFeedbackModal] = useState<TrainingSession | null>(null);
-    const [activeTooltip, setActiveTooltip] = useState<{ title: string, text: string } | null>(null);
-    const [viewingRecovery, setViewingRecovery] = useState<any>(null);
-    const [showPlanTable, setShowPlanTable] = useState(false);
-    const [showRationale, setShowRationale] = useState(true);
-    const [showRaceDay, setShowRaceDay] = useState(false);
+    const [tempProfile, setTempProfile] = useState<UserProfile>(userProfile);
+
+    // Helpers
+    const isStaff = adminProfile.role === 'staff';
+    const coachEmailRef = useRef<HTMLInputElement>(null);
     const [newCompName, setNewCompName] = useState("");
     const [newCompDate, setNewCompDate] = useState("");
-    const isStaff = adminProfile.role === 'staff';
 
     useEffect(() => {
         const isEditing = searchParams.get('edit') === 'true';
@@ -53,14 +55,9 @@ const PlanManager: React.FC = () => {
         if (isEditing || isNewUser) setShowProfileConfig(true);
     }, [location.search, userProfile]);
 
-    useEffect(() => {
-        setPlanHistoryState(planHistory);
-        if (currentPlan || planHistory.length > 0) {
-            const allPlans = currentPlan ? [currentPlan, ...planHistory] : planHistory;
-            const stats = calculateACWR(allPlans);
-            setAcwr({ ratio: stats.ratio, status: stats.status });
-        }
-    }, [planHistory, currentPlan]);
+    const handleGenerate = () => {
+        generatePlan({ fatigue, sleep, soreness, stress, hydration, restingHR, hrv, focusEvent });
+    };
 
     const handleSaveProfile = () => {
         updateProfile(tempProfile);
@@ -68,63 +65,25 @@ const PlanManager: React.FC = () => {
         if (!tempProfile.events.includes(focusEvent)) setFocusEvent(tempProfile.events[0]);
     };
 
-    const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-    const handleGenerate = async () => {
-        setLoading(true);
-        setErrorMsg(null);
-        try {
-            const plan = await generateTrainingPlan(userProfile, { fatigue, sleep, soreness, stress, hydration, restingHR, hrv }, new Date().toLocaleDateString('es-ES'), focusEvent, acwr || undefined, lastAnalysis, logs);
-            if (plan) {
-                setPlan(plan);
-                showToast("Plan generado con éxito", "success");
-            } else {
-                setErrorMsg("No se pudo generar el plan. Verifique su conexión y la configuración de API Key.");
-                showToast("Error al generar el plan", "error");
-            }
-        } catch (e) {
-            setErrorMsg("Error inesperado al generar el plan.");
-        }
-        setLoading(false);
-    };
-
-    const shareToWhatsapp = () => {
-        if (!currentPlan) return;
-        const text = `*ELITE SPRINT AI - MICRO-CICLO*\n\n*Fase:* ${currentPlan.phase}\n*Objetivo:* ${currentPlan.weeklyGoal}\n\nGenerado por Elite Sprint Coach AI.`;
-        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-        window.open(url, '_blank');
-    };
-
+    // ... (Keep existing UI helpers: updateSessionNote, toggleEvent, etc. - can be moved to util if needed)
     const updateSessionNote = (day: string, note: string) => updateSession(day, { coachNotes: note });
     const toggleEventSelection = (e: string) => { const current = tempProfile.events || []; if (current.includes(e)) setTempProfile({ ...tempProfile, events: current.filter(ev => ev !== e) }); else setTempProfile({ ...tempProfile, events: [...current, e] }); };
     const toggleTrainingDay = (day: string) => {
-        const current = [...new Set(tempProfile.trainingDays || [])]; // Ensure no duplicates
-        if (current.includes(day)) {
-            setTempProfile({ ...tempProfile, trainingDays: current.filter(d => d !== day) });
-        } else {
-            setTempProfile({ ...tempProfile, trainingDays: [...current, day] });
-        }
+        const current = [...new Set(tempProfile.trainingDays || [])];
+        if (current.includes(day)) setTempProfile({ ...tempProfile, trainingDays: current.filter(d => d !== day) });
+        else setTempProfile({ ...tempProfile, trainingDays: [...current, day] });
     };
-    const updateInjury = (index: number, field: keyof Injury, value: any) => { const updated = [...(tempProfile.injuries || [])]; updated[index] = { ...updated[index], [field]: value }; setTempProfile({ ...tempProfile, injuries: updated }); };
-    const showTooltip = (title: string, text: string) => setActiveTooltip({ title, text });
     const updatePB = (event: '100m' | '200m' | '400m', field: 'time' | 'date', value: string) => {
         const newPBs = { ...tempProfile.pbs, [event]: { ...tempProfile.pbs[event], [field]: value } };
         setTempProfile({ ...tempProfile, pbs: newPBs });
     };
+    const updateInjury = (index: number, field: keyof Injury, value: any) => { const updated = [...(tempProfile.injuries || [])]; updated[index] = { ...updated[index], [field]: value }; setTempProfile({ ...tempProfile, injuries: updated }); };
     const addCompetition = () => {
         if (!newCompName || !newCompDate) return;
         const newComp = { id: Date.now().toString(), name: newCompName, date: newCompDate };
-        const currentComps = tempProfile.competitions || [];
-        const updated = [...currentComps, newComp].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        const updated = [...(tempProfile.competitions || []), newComp].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         setTempProfile({ ...tempProfile, competitions: updated });
         setNewCompName(""); setNewCompDate("");
-    };
-
-    const handleCalculateRecovery = (session: TrainingSession) => {
-        if (!session.feedback) return;
-        const weight = (userProfile.weight && userProfile.weight > 0) ? userProfile.weight : 70;
-        const rec = calculateRecovery(session.intensity, session.feedback.duration || 60, weight, session.feedback.rpe || 5);
-        setViewingRecovery(rec);
     };
 
     const InfoButton = ({ title, text }: { title: string, text: string }) => (
@@ -482,7 +441,7 @@ const PlanManager: React.FC = () => {
             ) : (
                 <div className="space-y-6">
                     <MacrocycleChart
-                        history={planHistoryState}
+                        history={planHistory}
                         currentPlan={currentPlan}
                         injuries={userProfile.injuries}
                         competitions={userProfile.competitions}
@@ -502,18 +461,18 @@ const PlanManager: React.FC = () => {
                     </div>
                     <div className="space-y-3">
                         {currentPlan.sessions.map((session: TrainingSession, idx: number) => (
-                            <SessionCard key={idx} session={session} expandedDay={expandedDay} setExpandedDay={setExpandedDay} setSessionFeedbackModal={setSessionFeedbackModal} onShowRecovery={handleCalculateRecovery} isStaff={isStaff} updateSessionNote={updateSessionNote} />
+                            <SessionCard key={idx} session={session} expandedDay={expandedDay} setExpandedDay={setExpandedDay} setSessionFeedbackModal={setSessionFeedbackModal} onShowRecovery={calculateSessionRecovery} isStaff={isStaff} updateSessionNote={updateSessionNote} />
                         ))}
                     </div>
                 </div>
             )}
             {sessionFeedbackModal && <FeedbackModal />}
             {viewingRecovery && (
-                <div className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setViewingRecovery(null)}>
+                <div className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-md flex items-center justify-center p-4" onClick={closeRecoveryView}>
                     <div className="bg-slate-900 border border-emerald-500/30 p-6 rounded-[2.5rem] w-full max-w-sm space-y-6 relative shadow-2xl" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center">
                             <h3 className="text-xl font-black text-white uppercase tracking-tight">Protocolo Pro</h3>
-                            <button onClick={() => setViewingRecovery(null)} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
+                            <button onClick={closeRecoveryView} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
                         </div>
                         <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
                             <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Tipo de Estresor</div>
@@ -550,7 +509,7 @@ const PlanManager: React.FC = () => {
                                 </div>
                             </div>
                         </div>
-                        <button onClick={() => setViewingRecovery(null)} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-4 rounded-2xl uppercase tracking-widest text-xs transition-all">Entendido</button>
+                        <button onClick={closeRecoveryView} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-4 rounded-2xl uppercase tracking-widest text-xs transition-all">Entendido</button>
                     </div>
                 </div>
             )}
