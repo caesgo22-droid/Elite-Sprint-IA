@@ -84,6 +84,7 @@ export const useTrainingPlan = () => {
         generatePlan,
         calculateSessionRecovery,
         closeRecoveryView,
-        updateSession
+        updateSession,
+        logs
     };
 };

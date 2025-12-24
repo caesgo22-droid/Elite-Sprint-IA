@@ -10,6 +10,8 @@ interface MacrocycleChartProps {
     injuries?: Injury[];
     competitions?: { id: string; name: string; date: string }[];
     therapyLogs?: any[];
+    isStaff?: boolean;
+    onUpdatePlan?: (updatedPlan: any) => void;
 }
 
 // Helper to calculate smooth bezier curves
@@ -46,9 +48,12 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
     currentPlan,
     injuries,
     competitions,
-    therapyLogs
+    therapyLogs,
+    isStaff = false, // Add isStaff prop
+    onUpdatePlan // Callback for updates
 }) => {
     const [tooltip, setTooltip] = useState<{ x: number; y: number; content: React.ReactNode } | null>(null);
+    const [editMode, setEditMode] = useState(false);
 
     // 1. Process Data
     const { chartPoints, milestones, metrics, maxLoad, rawPoints } = useMemo(() => {
@@ -246,10 +251,22 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
                     <h2 className="text-[10px] font-bold tracking-widest text-cyan-400 uppercase mb-0.5">Entrenamiento</h2>
                     <h1 className="text-xl font-black tracking-tight text-white leading-tight">Macrociclo</h1>
                 </div>
-                <button className="p-1.5 rounded-full hover:bg-slate-800 transition-colors text-slate-400">
-                    <Info size={20} />
-                </button>
             </div>
+
+            {/* Edit Mode Toggle (Coach Only) */}
+            {isStaff && (
+                <div className="absolute top-4 right-4 z-20 flex gap-2">
+                    <button
+                        onClick={() => setEditMode(!editMode)}
+                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${editMode ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-900/50 border-slate-700 text-slate-400 hover:text-white'}`}
+                    >
+                        {editMode ? 'Modo Edición: ON' : 'Editar Plan'}
+                    </button>
+                    <button className="p-1.5 rounded-full bg-slate-900 border border-slate-800 text-slate-400 hover:text-white">
+                        <Info size={16} />
+                    </button>
+                </div>
+            )}
 
             {/* Legend */}
             <div className="flex flex-wrap gap-x-3 gap-y-1 text-[9px] font-bold uppercase tracking-wide text-slate-400 bg-slate-900/50 p-2 rounded-xl border border-slate-700/50 backdrop-blur-sm justify-between mb-4 z-10 relative">

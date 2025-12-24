@@ -54,6 +54,13 @@ export interface UserProfile {
   hoursPerDay: number;
   preferredTime: 'Morning' | 'Afternoon' | 'Evening';
   competitions: Competition[];
+  trainingPreferences?: {
+    intensityBias?: number; // 0.8 - 1.2
+    volumeBias?: number;    // 0.8 - 1.2
+    techniqueFocus?: 'Balanced' | 'Technique' | 'Power';
+  };
+  lastEditedBy?: string;
+  lastEditedAt?: string;
 }
 
 export interface SessionFeedback {
@@ -131,6 +138,7 @@ export interface BiomechanicalAnalysis {
   videoFingerprint?: string; // NEW: To avoid duplicate analysis
   asymmetry?: number; // NEW: % difference between Left/Right
   stepCount?: number; // NEW: Number of steps detected
+  cycleHistory?: any[]; // NEW: For ghost overlay sequence
 }
 
 export interface PerformanceLog {
@@ -185,7 +193,7 @@ export interface StaffBriefing {
   authorName: string;
   role: string;
   content: string;
-  attachments?: string[];
+  attachments?: { type: 'analysis' | 'link'; id: string; title: string; url?: string }[];
   timestamp: string;
   type: 'Strategy' | 'Physical' | 'Psychology' | 'Technique' | 'General';
   replies?: StaffReply[];
@@ -254,4 +262,31 @@ export interface WeeklyProgressData {
     strideLength?: number;
     velocity?: number;
   };
+}
+
+export interface WellnessData {
+  sleepQuality: number; // 1-10
+  sleepHours: number;
+  fatigue: number; // 1-10 (RPE-like, 10 is exhausted)
+  soreness: number; // 1-10
+  stress: number; // 1-10
+  mood: number; // 1-10
+}
+
+export interface RecoveryProtocol {
+  id: string;
+  title: string;
+  description: string;
+  durationMin: number;
+  type: 'Active' | 'Passive' | 'Cold' | 'Heat' | 'Manual';
+  priority: 'High' | 'Medium' | 'Low';
+}
+
+export interface DailyPrescription {
+  readinessScore: number; // 0-100
+  status: 'Optimal' | 'Good' | 'Fair' | 'Poor' | 'Recovery' | 'Caution'; // Unified statuses
+  protocols: RecoveryProtocol[] | string[];
+  coachNote?: string;
+  sessions?: string[];
+  recoveryTips?: string[];
 }

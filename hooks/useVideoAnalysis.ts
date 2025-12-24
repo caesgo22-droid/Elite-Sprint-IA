@@ -32,7 +32,13 @@ export const useVideoAnalysis = () => {
                 setProgress(prev => Math.min(prev + 10, 90));
             }, 500);
 
-            const result = await analyzeTechnique(userProfile, event, advancedMetrics); // Pass metrics
+            const result = await analyzeTechnique(
+                [videoUrl!],
+                { event },
+                advancedMetrics,
+                'Personal',
+                userProfile
+            );
 
             clearInterval(progInterval);
             setProgress(100);

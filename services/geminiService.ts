@@ -173,8 +173,16 @@ export const generateTrainingPlan = async (profile: UserProfile, readiness: any,
         ENERGY SYSTEM: ${structuralPhase.primaryEnergySystem}.
         
         CRITICAL INSTRUCTION: You MUST ignore any generic phase requests. Build the plan SPECIFICALLY for the '${structuralPhase.name}' phase.
-        If Phase is 'Taper', volume must be reduced by 40-60%.
+        if (Phase is 'Taper', volume must be reduced by 40-60%.
         If Phase is 'Competition', focus on neural activation and rest.
+
+        [AI TUNING PARAMETERS]
+        The coach has explicitly tuned your behavior for this specific athlete:
+        - VOLUME BIAS: ${(profile.trainingPreferences?.volumeBias || 1.0).toFixed(1)}x (Multiply standard volume by this factor).
+        - INTENSITY BIAS: ${(profile.trainingPreferences?.intensityBias || 1.0).toFixed(1)}x (Adjust prescribed intensities by this factor, capping at 100%).
+        - TECHNIQUE FOCUS: ${profile.trainingPreferences?.techniqueFocus || 'Balanced'} (If 'Technique', prioritize drills over raw output. If 'Power', prioritize explosive movements).
+        
+        Apply these biases to the generated sessions.
         `;
 
         const result = await model.generateContent({

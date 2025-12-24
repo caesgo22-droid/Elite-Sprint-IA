@@ -1,28 +1,4 @@
-
-export interface WellnessData {
-    sleepQuality: number; // 1-10
-    sleepHours: number;
-    fatigue: number; // 1-10 (RPE-like, 10 is exhausted)
-    soreness: number; // 1-10
-    stress: number; // 1-10
-    mood: number; // 1-10
-}
-
-export interface RecoveryProtocol {
-    id: string;
-    title: string;
-    description: string;
-    durationMin: number;
-    type: 'Active' | 'Passive' | 'Cold' | 'Heat' | 'Manual';
-    priority: 'High' | 'Medium' | 'Low';
-}
-
-export interface DailyPrescription {
-    readinessScore: number; // 0-100
-    status: 'Optimal' | 'Good' | 'Fair' | 'Poor';
-    protocols: RecoveryProtocol[];
-    coachNote: string;
-}
+import { WellnessData, RecoveryProtocol, DailyPrescription } from "../types";
 
 /**
  * Calculates a daily readiness score (0-100) based on wellness inputs.

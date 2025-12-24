@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import { UserProfile, TrainingPlan, PerformanceLog, ChatMessage, BiomechanicalAnalysis, NexusInsight, LoadStats } from '../types';
-import { auth, saveUserProfile, saveTrainingPlan, addPerformanceLog, updatePerformanceLog, deletePerformanceLog, fetchUserData, saveAnalysisToHistory, getAnalysisHistory, isInitialized, archivePlan, getPlanHistory, deleteAnalysisFromHistory } from '../services/firebase';
+import { auth, saveUserProfile, saveTrainingPlan, addPerformanceLog, updatePerformanceLog, deletePerformanceLog, fetchUserData, saveAnalysisToHistory, getAnalysisHistory, isInitialized, archivePlan, getPlanHistory, deleteAnalysisFromHistory, logActivity } from '../services/firebase';
 import { getDownloadURL, ref, uploadBytes, deleteObject } from 'firebase/storage';
 import { useToasts } from './ToastContext';
 import * as firebaseAuth from 'firebase/auth';
@@ -27,6 +27,7 @@ interface AppContextType {
   updateCompetitions: (competitions: { id: string; name: string; date: string }[]) => void;
   currentPlan: TrainingPlan | null;
   setPlan: (plan: TrainingPlan) => void;
+  updateTrainingPlan: (planId: string, updatedPlan: TrainingPlan) => void;
   updateSession: (dayName: string, updates: Partial<any>) => void;
   logs: PerformanceLog[];
   addLog: (log: PerformanceLog) => void;
@@ -52,6 +53,7 @@ interface AppContextType {
   refreshUserData: () => void;
   updateRoster: (newRoster: string[]) => void;
   loginAsGuest: () => void;
+  logActivity: (userId: string, event: any) => Promise<void>;
 }
 
 const defaultProfile: UserProfile = {
@@ -275,6 +277,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (targetId && isInitialized) saveTrainingPlan(targetId, plan);
   };
 
+
+  const manualUpdatePlan = (planId: string, updatedPlan: TrainingPlan) => {
+    setCurrentPlan(updatedPlan);
+    if (targetId && isInitialized) saveTrainingPlan(targetId, updatedPlan);
+  };
+
   const resetPlan = async () => {
     if (!currentPlan) return;
     if (targetId && isInitialized) {
@@ -345,6 +353,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (targetId && isInitialized) deleteAnalysisFromHistory(targetId, id);
   };
 
+  const handleLogActivity = async (userId: string, event: any) => {
+    if (isInitialized) await logActivity(userId, event);
+  };
+
   const contextValue = useMemo(() => ({
     user,
     loadingAuth,
@@ -357,6 +369,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     updateCompetitions,
     currentPlan,
     setPlan,
+    updateTrainingPlan: manualUpdatePlan,
     updateSession,
     logs,
     addLog,
@@ -380,7 +393,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     loginAsGuest,
     deleteAnalysis,
     deletedAnalyses, // Export
-    resetPlan
+    resetPlan,
+    logActivity: handleLogActivity
   }), [
     user,
     loadingAuth,
