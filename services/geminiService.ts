@@ -45,9 +45,9 @@ const getModelInstance = (modelName: string) => {
 
 export const analyzeTechnique = async (images: string[], bioData: any, advancedMetrics: any, analysisMode: string, userProfile?: any, lastAnalysis?: any, currentSession?: any): Promise<any> => {
     const isMaster = analysisMode === 'External';
-    // ✅ UPGRADED: Gemini 2.0 Flash (faster and more accurate than Pro 1.5)
-    // ✅ UPGRADED: Gemini 2.0 Flash (Stable Exp)
-    const modelName = "gemini-2.0-flash-exp";
+    // Use Gemini 1.5 Pro for Deep Audit (Most Powerful Reasoning)
+    // Use Gemini 2.0 Flash for Quick Feedback (Fastest Multimodal)
+    const modelName = isMaster ? "gemini-1.5-pro" : "gemini-2.0-flash-exp";
     const model = getModelInstance(modelName);
     if (!model) return null;
 

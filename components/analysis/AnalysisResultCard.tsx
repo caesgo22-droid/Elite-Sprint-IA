@@ -59,11 +59,53 @@ export const AnalysisResultCard: React.FC<AnalysisResultCardProps> = ({
                     tooltip="Tiempo de Contacto. <0.10s es ideal para máxima velocidad."
                 />
                 <MetricBox
-                    label="EFF"
-                    value={`${analysis.kinetics?.forceApplicationIndex || '--'}%`}
-                    tooltip="Índice de Aplicación de Fuerza. % de fuerza útil horizontal."
+                    label="STIFF (kN/m)"
+                    value={`${analysis.kinetics?.forceApplicationIndex || '--'}`}
+                    tooltip="Leg Stiffness (Rigidez). Mayor rigidez = Mayor retorno de energía elástica."
                 />
             </div>
+
+            {/* Race Predictions based on Velocity */
+                (() => {
+                    const vel = parseFloat(analysis.kinetics?.comVelocity?.toString() || '0');
+                    if (vel > 0) {
+                        // Simple projections based on top speed maintenance models
+                        // 100m: Top Speed is roughly 1.1x Average Speed. Time ~ 100 / (Vel * 0.85)
+                        // This is VERY rough/heuristic but provides the requested "Prediction"
+                        const p100 = (100 / (vel * 0.88)).toFixed(2);
+                        const p200 = (200 / (vel * 0.82)).toFixed(2); // Speed decay
+                        const p400 = (400 / (vel * 0.70)).toFixed(2); // Speed decay
+
+                        return (
+                            <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800/50 space-y-2">
+                                <h4 className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2 cursor-help group relative w-fit">
+                                    <Play size={10} className="text-yellow-500" /> Race Predictions
+                                    <div className="absolute bottom-full mb-2 left-0 w-48 bg-black/90 border border-slate-700 p-2 rounded text-[9px] text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
+                                        Proyecciones estimadas según tu Velocidad Máxima actual y decadencia estándar.
+                                    </div>
+                                </h4>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div className="text-center group relative cursor-help">
+                                        <div className="text-[8px] text-slate-500 font-bold uppercase">100m</div>
+                                        <div className="text-xs font-black text-yellow-500">{p100}s</div>
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-black p-1 rounded text-[8px] text-white opacity-0 group-hover:opacity-100 whitespace-nowrap z-10">Potential</div>
+                                    </div>
+                                    <div className="text-center group relative cursor-help">
+                                        <div className="text-[8px] text-slate-500 font-bold uppercase">200m</div>
+                                        <div className="text-xs font-black text-white">{p200}s</div>
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-black p-1 rounded text-[8px] text-white opacity-0 group-hover:opacity-100 whitespace-nowrap z-10">Potential</div>
+                                    </div>
+                                    <div className="text-center group relative cursor-help">
+                                        <div className="text-[8px] text-slate-500 font-bold uppercase">400m</div>
+                                        <div className="text-xs font-black text-white">{p400}s</div>
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-black p-1 rounded text-[8px] text-white opacity-0 group-hover:opacity-100 whitespace-nowrap z-10">Potential</div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    }
+                    return null;
+                })()}
 
             {(analysis as any).jointAngles && (
                 <div className="bg-black/40 rounded-2xl p-4 border border-slate-800/50 space-y-3">

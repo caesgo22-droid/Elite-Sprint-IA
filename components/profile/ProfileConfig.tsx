@@ -196,8 +196,13 @@ export const ProfileConfig: React.FC<ProfileConfigProps> = ({
                     <h3 className="text-sm font-bold text-orange-400 uppercase tracking-wider flex items-center gap-2"><Trophy size={14} /> Marcas Personales (PB)</h3>
                     <div className="space-y-3">
                         {['100m', '200m', '400m'].map((ev: any) => (
-                            <div key={ev} className="flex items-center gap-3">
-                                <div className="w-16 text-xs font-bold text-slate-400 uppercase">{ev}</div>
+                            <div key={ev} className="flex items-center gap-3 relative group">
+                                <div className="w-16 text-xs font-bold text-slate-400 uppercase flex items-center gap-1 cursor-help">
+                                    {ev}
+                                    <span className="absolute bottom-full left-0 mb-2 w-48 bg-black border border-slate-700 p-2 rounded text-[10px] text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 font-normal normal-case">
+                                        Ingresa tu mejor marca personal reciente. Se usa para calcular tu Pace Score y predicciones.
+                                    </span>
+                                </div>
                                 <input type="text" value={tempProfile.pbs?.[ev as keyof typeof tempProfile.pbs]?.time || ''} onChange={e => updatePB(ev, 'time', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:border-orange-500 outline-none" placeholder="Tiempo (ej: 10.50)" />
                                 <input type="text" value={tempProfile.pbs?.[ev as keyof typeof tempProfile.pbs]?.date || ''} onChange={e => updatePB(ev, 'date', e.target.value)} className="w-32 bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:border-orange-500 outline-none" placeholder="Fecha" />
                             </div>
@@ -263,6 +268,88 @@ export const ProfileConfig: React.FC<ProfileConfigProps> = ({
                         <button onClick={() => setTempProfile({ ...tempProfile, injuries: [...(tempProfile.injuries || []), { type: '', location: '', severity: 'Leve', status: 'Activa' }] })} className="w-full py-2 border border-dashed border-slate-700 rounded-lg text-[10px] font-bold text-slate-500 hover:border-slate-500 hover:text-slate-400 transition-colors uppercase">
                             + Añadir Lesión
                         </button>
+                    </div>
+                </section>
+
+                <section className="space-y-4">
+                    <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-2">
+                        <Zap size={14} className="text-indigo-400" /> Configuración Neuronal (AI)
+                    </h3>
+                    <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 space-y-5">
+                        <div>
+                            <div className="flex justify-between items-center mb-2">
+                                <label className="text-xs text-slate-300 font-bold flex items-center gap-1 cursor-help group relative">
+                                    Bias de Volumen <Info size={12} className="text-slate-500" />
+                                    <span className="absolute bottom-full mb-2 left-0 w-48 bg-black border border-slate-700 p-2 rounded text-[10px] text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 font-normal normal-case">
+                                        Ajusta la carga total. &lt;1.0 prioriza recuperación, &gt;1.0 aumenta volumen de base.
+                                    </span>
+                                </label>
+                                <span className={`text-xs font-black ${(tempProfile.trainingPreferences?.volumeBias || 1.0) > 1 ? 'text-cyan-400' :
+                                    (tempProfile.trainingPreferences?.volumeBias || 1.0) < 1 ? 'text-emerald-400' : 'text-slate-400'
+                                    }`}>
+                                    {(tempProfile.trainingPreferences?.volumeBias || 1.0).toFixed(1)}x
+                                </span>
+                            </div>
+                            <input
+                                type="range"
+                                min="0.8"
+                                max="1.2"
+                                step="0.1"
+                                value={tempProfile.trainingPreferences?.volumeBias || 1.0}
+                                onChange={e => setTempProfile({ ...tempProfile, trainingPreferences: { ...tempProfile.trainingPreferences, volumeBias: parseFloat(e.target.value) } })}
+                                className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                            />
+                            <div className="flex justify-between text-[9px] text-slate-500 mt-1 uppercase font-bold tracking-wider">
+                                <span>Recovery</span>
+                                <span>Base</span>
+                                <span>Accumulation</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div className="flex justify-between items-center mb-2">
+                                <label className="text-xs text-slate-300 font-bold flex items-center gap-1 cursor-help group relative">
+                                    Bias de Intensidad <Info size={12} className="text-slate-500" />
+                                    <span className="absolute bottom-full mb-2 left-0 w-48 bg-black border border-slate-700 p-2 rounded text-[10px] text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 font-normal normal-case">
+                                        Modifica la intensidad de sesiones clave. 'Técnico' reduce estrés, 'Agresivo' maximiza estímulo.
+                                    </span>
+                                </label>
+                                <span className={`text-xs font-black ${(tempProfile.trainingPreferences?.intensityBias || 1.0) > 1 ? 'text-red-400' :
+                                    (tempProfile.trainingPreferences?.intensityBias || 1.0) < 1 ? 'text-blue-400' : 'text-slate-400'
+                                    }`}>
+                                    {(tempProfile.trainingPreferences?.intensityBias || 1.0).toFixed(1)}x
+                                </span>
+                            </div>
+                            <input
+                                type="range"
+                                min="0.8"
+                                max="1.2"
+                                step="0.1"
+                                value={tempProfile.trainingPreferences?.intensityBias || 1.0}
+                                onChange={e => setTempProfile({ ...tempProfile, trainingPreferences: { ...tempProfile.trainingPreferences, intensityBias: parseFloat(e.target.value) } })}
+                                className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-red-500"
+                            />
+                            <div className="flex justify-between text-[9px] text-slate-500 mt-1 uppercase font-bold tracking-wider">
+                                <span>Técnico</span>
+                                <span>Mix</span>
+                                <span>Power</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-xs text-slate-400 mb-2 block font-bold uppercase">Enfoque Técnico</label>
+                            <div className="flex gap-2">
+                                {['Balanced', 'Technique', 'Power'].map(focus => (
+                                    <button
+                                        key={focus}
+                                        onClick={() => setTempProfile({ ...tempProfile, trainingPreferences: { ...tempProfile.trainingPreferences, techniqueFocus: focus as any } })}
+                                        className={`flex-1 py-3 rounded-xl text-[9px] font-black border transition-all uppercase tracking-wider ${tempProfile.trainingPreferences?.techniqueFocus === focus ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-900 border-slate-700 text-slate-500 hover:border-slate-600'}`}
+                                    >
+                                        {focus === 'Balanced' ? 'Balance' : focus === 'Technique' ? 'Técnica' : 'Potencia'}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 </section>
 

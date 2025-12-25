@@ -576,20 +576,46 @@ const VideoAnalyzer: React.FC = () => {
                 }
 
                 if (showSkeleton) {
+                    const t = video.currentTime;
+                    // Attempt to find cached ghost frame first (most stable for history/replay)
+                    // We prioritize cached history if available and we are NOT in a fresh capture session (unless detection fails)
+                    let ghostFrame = activeAnalysis?.cycleHistory?.find((h: any) => Math.abs((h.timestamp / 1000) - t) < 0.05);
+
                     if (video.currentTime !== lastVideoTime) {
-                        if (video.currentTime < lastVideoTime) {
-                            try { poseLandmarker.reset(); } catch (e) { }
-                        }
                         lastVideoTime = video.currentTime;
+
+                        // Strategy: 
+                        // 1. Try Live Detection (Best for new videos)
+                        // 2. If fail, fall back to Ghost Frame (Best for playback stability)
+
+                        let drawn = false;
+
                         try {
-                            const result = poseLandmarker.detectForVideo(video, video.currentTime * 1000);
+                            // Only run live detection if we have a landmarker AND we are not purely in "History Mode" without new video scan
+                            // or if we prefer live. 
+                            // Actually, live detection is always better if video quality is good.
+                            const result = poseLandmarker?.detectForVideo(video, video.currentTime * 1000);
                             if (result?.landmarks?.[0]) {
                                 drawSkeleton(result.landmarks[0]);
-                            } else {
-                                const ctx = overlayRef.current?.getContext('2d');
-                                ctx?.clearRect(0, 0, overlayRef.current!.width, overlayRef.current!.height);
+                                drawn = true;
                             }
                         } catch (e) { }
+
+                        if (!drawn && ghostFrame && ghostFrame.landmarks) {
+                            // GHOST MODE FALLBACK
+                            drawSkeleton(ghostFrame.landmarks);
+                            drawn = true;
+                        }
+
+                        if (!drawn) {
+                            const ctx = overlayRef.current?.getContext('2d');
+                            // Don't clear immediately to prevent flicker, unless we are sure it's a scene change?
+                            // Better to clear if we can't track.
+                            ctx?.clearRect(0, 0, overlayRef.current!.width, overlayRef.current!.height);
+                        }
+                    } else if (video.paused && activeAnalysis?.cycleHistory) {
+                        // Enforce redraw on pause (seeking) using Ghost Data to be snappy
+                        if (ghostFrame?.landmarks) drawSkeleton(ghostFrame.landmarks);
                     }
                 }
             }
@@ -662,12 +688,19 @@ const VideoAnalyzer: React.FC = () => {
                         ) : (
                             <div className="w-full h-full relative">
                                 <img src={activeAnalysis?.thumbnail} className="w-full h-full object-contain opacity-40 grayscale" />
-                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                                     <div className="bg-indigo-900/40 p-6 rounded-full backdrop-blur-md border border-indigo-500/30 mb-4 animate-pulse">
                                         <History size={48} className="text-indigo-400" />
                                     </div>
                                     <p className="text-sm font-black uppercase tracking-widest text-indigo-300">Modo Historial</p>
                                     <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Video Original No Disponible</p>
+
+                                    {/* Ghost Player Canvas - If we have history data, we can at least show the skeleton! */}
+                                    {activeAnalysis?.cycleHistory && (
+                                        <div className="mt-4 bg-black/50 p-2 rounded text-[10px] text-emerald-400 font-bold uppercase border border-emerald-500/30">
+                                            Ghost Data: {activeAnalysis.cycleHistory.length} frames disponibles
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}

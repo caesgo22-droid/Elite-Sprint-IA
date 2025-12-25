@@ -391,11 +391,14 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
                         ))}
 
                         {/* Limits (Max/Min Rec) - Visual placeholders for now as data logic is complex */}
+                        {/* Limits (Max/Min Rec) - Visual placeholders for now as data logic is complex */}
                         <g className="group cursor-pointer">
-                            <line className="text-slate-500/50" stroke="currentColor" strokeDasharray="4 3" strokeWidth="1.5" x1="50" x2="750" y1="90" y2="90"></line>
+                            <line className="text-slate-500/30" stroke="currentColor" strokeDasharray="4 3" strokeWidth="1" x1="50" x2="750" y1="90" y2="90"></line>
+                            <text x="740" y="85" textAnchor="end" className="text-[8px] fill-slate-500 uppercase font-black opacity-50 group-hover:opacity-100 transition-opacity">Max Capacity (ACWR 1.5)</text>
                         </g>
                         <g className="group cursor-pointer">
-                            <line className="text-slate-500/50" stroke="currentColor" strokeDasharray="4 3" strokeWidth="1.5" x1="50" x2="750" y1="380" y2="380"></line>
+                            <line className="text-slate-500/30" stroke="currentColor" strokeDasharray="4 3" strokeWidth="1" x1="50" x2="750" y1="380" y2="380"></line>
+                            <text x="740" y="390" textAnchor="end" className="text-[8px] fill-slate-500 uppercase font-black opacity-50 group-hover:opacity-100 transition-opacity">Min Maintenance (ACWR 0.8)</text>
                         </g>
 
                         {/* Current Week Vertical Line */}
@@ -569,8 +572,11 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
                                     <circle className="fill-white" cx="50" cy="50" r="3" />
                                 </g>
 
-                                <text className="text-[7px] fill-emerald-500 font-bold" textAnchor="middle" x="15" y="62">BAJO</text>
-                                <text className="text-[7px] fill-red-500 font-bold" textAnchor="middle" x="85" y="62">ALTO</text>
+                                <text className="text-[7px] fill-emerald-500 font-bold" textAnchor="middle" x="15" y="62">0.8</text>
+                                <text className="text-[7px] fill-red-500 font-bold" textAnchor="middle" x="85" y="62">1.5</text>
+                                <text className="text-[7px] fill-slate-500 font-bold" textAnchor="middle" x="50" y="35">1.0</text>
+                                <line x1="30" y1="46" x2="30" y2="54" stroke="#fbbf24" strokeWidth="0.5" />
+                                <text className="text-[5px] fill-yellow-500 font-bold" textAnchor="middle" x="30" y="60">1.3</text>
                             </svg>
                             <div className="absolute -bottom-1 text-center w-full">
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${metrics.acwr > 1.3 ? 'text-red-400 bg-red-400/10' : metrics.acwr < 0.8 ? 'text-yellow-400 bg-yellow-400/10' : 'text-emerald-400 bg-emerald-400/10'}`}>
