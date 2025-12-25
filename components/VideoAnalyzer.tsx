@@ -188,7 +188,16 @@ const VideoAnalyzer: React.FC = () => {
 
             // Critical: Wait for data before starting
             if (video.readyState < 2) {
-                await new Promise(r => { video.onloadeddata = r; });
+                try {
+                    await new Promise((r, j) => {
+                        video.onloadeddata = r;
+                        video.onerror = () => j("Error al cargar video");
+                        setTimeout(() => j("Timeout cargando video"), 8000);
+                    });
+                } catch (e) {
+                    cleanup();
+                    return reject(e);
+                }
             }
 
             video.currentTime = 0;
@@ -199,6 +208,7 @@ const VideoAnalyzer: React.FC = () => {
                 await video.play();
             } catch (e) {
                 console.error("Play error:", e);
+                cleanup();
                 reject("No se pudo reproducir el video autom" + "\u00e1" + "ticamente.");
                 return;
             }
@@ -264,7 +274,12 @@ const VideoAnalyzer: React.FC = () => {
     };
 
     const handleAutoCapture = async () => {
-        if (!previewUrl || !videoRef.current || !poseLandmarker) return;
+        if (!previewUrl || !videoRef.current) return;
+
+        if (!poseLandmarker) {
+            showToast("El sistema de visión IA se está iniciando. Por favor espere 5 segundos e intente nuevamente.", "info");
+            return; // Don't crash
+        }
 
         setLoading(true);
         setDegradedMode(false);
@@ -278,7 +293,10 @@ const VideoAnalyzer: React.FC = () => {
             const scanHistory = await performScan(video);
 
             if (scanHistory.length < 3) {
-                throw new Error(`Detección insuficiente. Se capturaron ${scanHistory.length} poses. Asegúrate de que el atleta esté visible y en movimiento (mínimo 1-2 segundos).`);
+                if (scanHistory.length === 0) {
+                    throw new Error("No se detectó el atleta. Verifique que el cuerpo completo sea visible y haya buena iluminación.");
+                }
+                throw new Error(`Detección inestable (${scanHistory.length} poses). El video puede ser muy corto o el atleta no es visible claramente.`);
             }
 
             // PHASE 2: EXTRACT KEY FRAMES
