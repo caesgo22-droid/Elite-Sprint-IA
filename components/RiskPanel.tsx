@@ -26,7 +26,7 @@ export const RiskPanel: React.FC<RiskPanelProps> = ({ roster, onSelectAthlete })
                 </div>
                 <div>
                     <h3 className="text-lg font-black text-white uppercase tracking-tighter">Zona de Peligro</h3>
-                    <p className="text-[10px] text-red-300 font-bold uppercase tracking-widest">Atención Prioritaria Requerida</p>
+                    <p className="text-[10px] text-red-300 font-bold uppercase tracking-widest">Atención Prioritaria (Óptimo: 0.8 - 1.3)</p>
                 </div>
             </div>
 

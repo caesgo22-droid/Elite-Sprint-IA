@@ -3,10 +3,15 @@ import * as React from 'react';
 import { Microscope, ScanLine, ShieldCheck, AlertCircle, Play, Edit3, CheckCheck } from 'lucide-react';
 import { BiomechanicalAnalysis, UserProfile } from '../types';
 
-export const MetricBox = ({ label, value }: { label: string, value: string }) => (
-    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800/50 text-center shadow-inner">
+export const MetricBox = ({ label, value, tooltip }: { label: string, value: string, tooltip?: string }) => (
+    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800/50 text-center shadow-inner group relative cursor-help">
         <div className="text-[8px] text-slate-600 uppercase font-black tracking-widest mb-1">{label}</div>
         <div className="text-sm font-mono text-white font-black">{value}</div>
+        {tooltip && (
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-32 bg-black/90 border border-slate-700 p-2 rounded-lg text-[9px] text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 text-center">
+                {tooltip}
+            </div>
+        )}
     </div>
 );
 
@@ -43,9 +48,21 @@ export const AnalysisResultCard: React.FC<AnalysisResultCardProps> = ({
             </div>
 
             <div className="grid grid-cols-3 gap-2">
-                <MetricBox label="VEL (m/s)" value={analysis.kinetics?.comVelocity?.toString().split(' ')[0] || '--'} />
-                <MetricBox label="GCT (sec)" value={analysis.groundContactTimeEstimate || '--'} />
-                <MetricBox label="EFF" value={`${analysis.kinetics?.forceApplicationIndex || '--'}%`} />
+                <MetricBox
+                    label="VEL (m/s)"
+                    value={analysis.kinetics?.comVelocity?.toString().split(' ')[0] || '--'}
+                    tooltip="Velocidad del Centro de Masas. >9.0m/s indica nivel Elite."
+                />
+                <MetricBox
+                    label="GCT (sec)"
+                    value={analysis.groundContactTimeEstimate || '--'}
+                    tooltip="Tiempo de Contacto. <0.10s es ideal para máxima velocidad."
+                />
+                <MetricBox
+                    label="EFF"
+                    value={`${analysis.kinetics?.forceApplicationIndex || '--'}%`}
+                    tooltip="Índice de Aplicación de Fuerza. % de fuerza útil horizontal."
+                />
             </div>
 
             {(analysis as any).jointAngles && (

@@ -72,12 +72,17 @@ export const analyzeTechnique = async (images: string[], bioData: any, advancedM
             ? MASTER_AUDIT_PROMPT({ bioData, advancedMetrics }) + contextAddition
             : VIDEO_ANALYSIS_PROMPT({ bioData, advancedMetrics }) + contextAddition;
 
+        // Force 3-distance prediction instruction
+        const predictionInstruction = `\n\nINSTRUCCIÓN DE PREDICCIÓN DE CARRERA: Basado en la Cinemática (velocidad salida, mecánica de vuelo, GCT) y las métricas avanzadas, genera predicciones de tiempo POTENCIALES para: 100m, 200m, y 400m. Si el atleta no corre esa distancia, estima basado en su biomecánica.`;
+
+        const finalPrompt = prompt + predictionInstruction;
+
         const result = await model.generateContent({
             contents: [{
                 role: "user",
                 parts: [
                     ...imageParts,
-                    { text: prompt }
+                    { text: finalPrompt }
                 ]
             }],
             generationConfig: {

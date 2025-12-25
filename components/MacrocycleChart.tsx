@@ -324,8 +324,17 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
             {/* Chart Area */}
             <div className="flex-grow relative w-full overflow-visible z-10 flex flex-col justify-center -mt-1 -mb-1">
                 <div className="h-full w-full relative px-1">
-                    <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 800 480">
+                    <svg viewBox="0 0 1000 480" className="w-full h-full drop-shadow-2xl">
                         <defs>
+                            <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.5" />
+                                <stop offset="100%" stopColor="#22d3ee" stopOpacity="0" />
+                            </linearGradient>
+                            {/* Safe Zone Gradient Background */}
+                            <linearGradient id="safeZone" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#10b981" stopOpacity="0.05" />
+                                <stop offset="100%" stopColor="#10b981" stopOpacity="0.01" />
+                            </linearGradient>
                             <linearGradient id="projectedGradient" x1="0%" x2="0%" y1="0%" y2="100%">
                                 <stop offset="0%" stopColor="#818cf8" stopOpacity="0.2" />
                                 <stop offset="100%" stopColor="#818cf8" stopOpacity="0" />
