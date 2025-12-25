@@ -46,7 +46,7 @@ const HomeDashboard: React.FC = () => {
           const isRecent = Date.now() - timestamp < CACHE_DURATION;
 
           // STRICT CHECK: If snapshot is missing or differs significantly, it's STALE.
-          const acwrChanged = !snapshotACWR || Math.abs(snapshotACWR - acwrStats.ratio) > 0.05;
+          const acwrChanged = !snapshotACWR || Math.abs(snapshotACWR - (acwrStats?.ratio || 0)) > 0.05;
 
           if (isRecent && !acwrChanged && data) {
             setNexusInsight(data);
@@ -82,7 +82,7 @@ const HomeDashboard: React.FC = () => {
         localStorage.setItem(CACHE_KEY, JSON.stringify({
           timestamp: Date.now(),
           data: insight,
-          snapshotACWR: acwrStats.ratio
+          snapshotACWR: acwrStats?.ratio || 0
         }));
       } else {
         throw new Error("Invalid insight format from AI");
@@ -95,7 +95,7 @@ const HomeDashboard: React.FC = () => {
       if (cached) {
         try {
           const { data, snapshotACWR } = JSON.parse(cached);
-          const acwrChanged = !snapshotACWR || Math.abs(snapshotACWR - acwrStats.ratio) > 0.05;
+          const acwrChanged = !snapshotACWR || Math.abs(snapshotACWR - (acwrStats?.ratio || 0)) > 0.05;
 
           if (!acwrChanged && data) {
             setNexusInsight(data);
@@ -122,7 +122,7 @@ const HomeDashboard: React.FC = () => {
     // Simple verification: if we have more logs than what "might" be in cache? No, hard to know.
     // Strategy: If ACWR status is ALARMING (High Risk), we should be more aggressive with updates.
     fetchNexus();
-  }, [logs.length, lastAnalysis, acwrStats.ratio]);
+  }, [logs.length, lastAnalysis, acwrStats?.ratio]);
 
   const handleOpenKey = async () => {
     const aistudio = getAIStudio();
@@ -238,14 +238,14 @@ const HomeDashboard: React.FC = () => {
         ) : (
           <div className="text-center py-6 space-y-4">
             <div className="mx-auto w-12 h-12 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-center">
-              <Zap className={acwrStats.status === 'Alto Riesgo' ? 'text-red-400' : 'text-slate-600'} size={20} />
+              <Zap className={acwrStats?.status === 'Alto Riesgo' ? 'text-red-400' : 'text-slate-600'} size={20} />
             </div>
             <div>
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-tight">
                 {errorStatus === 'key_missing' ? 'Configura tu API Key para activar Nexus' : 'Sincronizando Auditoría...'}
               </p>
               <div className="mt-2 text-[9px] font-medium text-slate-500 uppercase tracking-tighter">
-                ACWR Actual: <span className={acwrStats.status === 'Alto Riesgo' ? 'text-red-400' : 'text-cyan-400'}>{acwrStats.ratio.toFixed(2)} ({acwrStats.status})</span>
+                ACWR Actual: <span className={acwrStats?.status === 'Alto Riesgo' ? 'text-red-400' : 'text-cyan-400'}>{(acwrStats?.ratio || 0).toFixed(2)} ({acwrStats?.status || 'Óptimo'})</span>
               </div>
             </div>
             {errorStatus === 'key_missing' ? (

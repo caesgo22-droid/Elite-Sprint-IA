@@ -9,6 +9,13 @@ import { useToasts } from './ToastContext';
 import { useAuth } from './AuthContext';
 import { calculateACWR } from '../utils/loadCalculator';
 
+const defaultACWR: LoadStats = {
+    acuteLoad: 0,
+    chronicLoad: 0,
+    ratio: 0,
+    status: 'Óptimo'
+};
+
 interface DataContextType {
     userProfile: UserProfile;
     updateProfile: (profile: UserProfile) => void;
@@ -88,7 +95,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [lastAnalysis, setLastAnalysis] = useState<BiomechanicalAnalysis | null>(null);
     const [analysisHistory, setAnalysisHistory] = useState<BiomechanicalAnalysis[]>([]);
 
-    const [acwrStats, setAcwrStats] = useState<LoadStats | null>(null);
+    const [acwrStats, setAcwrStats] = useState<LoadStats>(defaultACWR);
     const [nexusInsight, setNexusInsight] = useState<NexusInsight | null>(null);
 
     const [deletedAnalyses, setDeletedAnalyses] = useState<string[]>(() => {
@@ -153,11 +160,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // ACWR Calculation
     useEffect(() => {
-        if (currentPlan || planHistory.length > 0 || logs.length > 0) {
-            const allPlans = currentPlan ? [currentPlan, ...planHistory] : planHistory;
-            const stats = calculateACWR(allPlans, logs);
-            setAcwrStats(stats);
-        }
+        const allPlans = currentPlan ? [currentPlan, ...planHistory] : planHistory;
+        const stats = calculateACWR(allPlans, logs);
+        setAcwrStats(stats);
     }, [currentPlan, planHistory, logs]);
 
     const switchAthlete = async (uid: string | null) => {
