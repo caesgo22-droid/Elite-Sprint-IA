@@ -582,7 +582,7 @@ const VideoAnalyzer: React.FC = () => {
                         }
                         lastVideoTime = video.currentTime;
                         try {
-                            const result = poseLandmarker.detectForVideo(video, performance.now());
+                            const result = poseLandmarker.detectForVideo(video, video.currentTime * 1000);
                             if (result?.landmarks?.[0]) {
                                 drawSkeleton(result.landmarks[0]);
                             } else {
@@ -636,7 +636,7 @@ const VideoAnalyzer: React.FC = () => {
                 </div>
             )}
 
-            {!previewUrl ? (
+            {!previewUrl && !activeAnalysis ? (
                 <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-slate-700 rounded-[2.5rem] aspect-video flex flex-col items-center justify-center cursor-pointer hover:bg-slate-900/50 transition-all group overflow-hidden relative">
                     <input type="file" ref={fileInputRef} hidden onChange={handleFileChange} accept="video/*" />
                     <UploadCloud size={36} className="text-slate-500 group-hover:text-cyan-400 mb-4" />
@@ -646,11 +646,34 @@ const VideoAnalyzer: React.FC = () => {
                 <div className="space-y-6">
                     {/* Auto-load handles the existing analysis notification */}
                     <div className="relative rounded-[2rem] overflow-hidden bg-black aspect-video border border-slate-800 shadow-2xl group">
-                        <video ref={videoRef} src={previewUrl} className="w-full h-full object-contain" muted playsInline />
-                        <canvas ref={overlayRef} className="absolute inset-0 pointer-events-none w-full h-full" />
+                        {previewUrl ? (
+                            <>
+                                <video ref={videoRef} src={previewUrl} className="w-full h-full object-contain" muted playsInline />
+                                <canvas ref={overlayRef} className="absolute inset-0 pointer-events-none w-full h-full" />
+
+                                <div className="absolute top-4 right-4 flex gap-2">
+                                    <div className="relative group/overlay">
+                                        <button onClick={() => setShowSkeleton(!showSkeleton)} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${showSkeleton ? 'bg-cyan-500 border-cyan-400 text-white' : 'bg-black/60 border-white/20 text-white/60'}`}>
+                                            <Zap size={10} className="inline mr-1" /> Overlay {showSkeleton ? 'ON' : 'OFF'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="w-full h-full relative">
+                                <img src={activeAnalysis?.thumbnail} className="w-full h-full object-contain opacity-40 grayscale" />
+                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                    <div className="bg-indigo-900/40 p-6 rounded-full backdrop-blur-md border border-indigo-500/30 mb-4 animate-pulse">
+                                        <History size={48} className="text-indigo-400" />
+                                    </div>
+                                    <p className="text-sm font-black uppercase tracking-widest text-indigo-300">Modo Historial</p>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Video Original No Disponible</p>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Video Annotation Overlay */}
-                        {activeAnalysis && (
+                        {activeAnalysis && previewUrl && (
                             <VideoAnnotationOverlay
                                 currentTime={currentTime}
                                 duration={videoRef.current?.duration || 0}
@@ -659,14 +682,6 @@ const VideoAnalyzer: React.FC = () => {
                                 onSeek={(t) => { if (videoRef.current) videoRef.current.currentTime = t; }}
                             />
                         )}
-
-                        <div className="absolute top-4 right-4 flex gap-2">
-                            <div className="relative group/overlay">
-                                <button onClick={() => setShowSkeleton(!showSkeleton)} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${showSkeleton ? 'bg-cyan-500 border-cyan-400 text-white' : 'bg-black/60 border-white/20 text-white/60'}`}>
-                                    <Zap size={10} className="inline mr-1" /> Overlay {showSkeleton ? 'ON' : 'OFF'}
-                                </button>
-                            </div>
-                        </div>
 
                         {capturedFrames.length > 0 && (
                             <div className="absolute bottom-4 left-4 right-4 flex gap-1 overflow-x-auto p-2 bg-black/60 backdrop-blur-md rounded-xl border border-white/10 z-20">

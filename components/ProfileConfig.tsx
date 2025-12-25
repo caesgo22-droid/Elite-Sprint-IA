@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useRef, useState } from 'react';
-import { UserCog, X, User, Target, Calendar, Trophy, MapPin, Trash2, Plus, History, Zap } from 'lucide-react';
+import { UserCog, X, User, Target, Calendar, Trophy, MapPin, Trash2, Plus, History, Zap, Info } from 'lucide-react';
 import { UserProfile, Injury, Coach } from '../types';
 
 interface ProfileConfigProps {
@@ -271,7 +271,9 @@ export const ProfileConfig: React.FC<ProfileConfigProps> = ({
                     <div className="bg-slate-800/40 p-4 rounded-lg border border-slate-700/50 space-y-4">
                         <div>
                             <div className="flex justify-between items-center mb-1">
-                                <label className="text-xs text-slate-400">Bias de Volumen</label>
+                                <label className="text-xs text-slate-400 flex items-center gap-1 cursor-help" title="Ajusta la carga total de trabajo. Valores menores a 1.0 priorizan la recuperación; mayores a 1.0 aumentan el volumen para construcción de base.">
+                                    Bias de Volumen <Info size={10} className="text-slate-500" />
+                                </label>
                                 <span className="text-[10px] font-bold text-cyan-400">{(tempProfile.trainingPreferences?.volumeBias || 1.0).toFixed(1)}x</span>
                             </div>
                             <input
@@ -292,7 +294,9 @@ export const ProfileConfig: React.FC<ProfileConfigProps> = ({
 
                         <div>
                             <div className="flex justify-between items-center mb-1">
-                                <label className="text-xs text-slate-400">Bias de Intensidad</label>
+                                <label className="text-xs text-slate-400 flex items-center gap-1 cursor-help" title="Modifica la intensidad de las sesiones clave. 'Técnico' reduce el estrés mecánico; 'Agresivo' maximiza el estímulo neuromuscular.">
+                                    Bias de Intensidad <Info size={10} className="text-slate-500" />
+                                </label>
                                 <span className="text-[10px] font-bold text-cyan-400">{(tempProfile.trainingPreferences?.intensityBias || 1.0).toFixed(1)}x</span>
                             </div>
                             <input
