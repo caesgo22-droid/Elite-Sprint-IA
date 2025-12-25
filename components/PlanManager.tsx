@@ -13,7 +13,7 @@ import { RecoveryProtocolView } from './RecoveryProtocolView';
 
 const PlanManager: React.FC = () => {
     // Context & Hook
-    const { userProfile, adminProfile, updateProfile, resetPlan } = useApp();
+    const { userProfile, adminProfile, updateProfile, resetPlan, acwrStats, updateTrainingPlan } = useApp();
     const {
         currentPlan,
         planHistory,
@@ -170,6 +170,7 @@ const PlanManager: React.FC = () => {
                         therapyLogs={logs}
                         isStaff={isStaff}
                         onUpdatePlan={isStaff ? (updated) => updateTrainingPlan(userProfile.uid || '', updated) : undefined}
+                        acwrStats={acwrStats}
                     />
                     <div className="bg-slate-900 p-6 rounded-2xl border border-slate-700 shadow-xl">
                         <div className="flex items-center gap-2 mb-2">

@@ -12,6 +12,7 @@ interface MacrocycleChartProps {
     therapyLogs?: any[];
     isStaff?: boolean;
     onUpdatePlan?: (updatedPlan: any) => void;
+    acwrStats?: { ratio: number; status: string } | null;
 }
 
 // Helper to calculate smooth bezier curves
@@ -50,7 +51,8 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
     competitions,
     therapyLogs,
     isStaff = false, // Add isStaff prop
-    onUpdatePlan // Callback for updates
+    onUpdatePlan, // Callback for updates
+    acwrStats // Passed from context
 }) => {
     const [tooltip, setTooltip] = useState<{ x: number; y: number; content: React.ReactNode } | null>(null);
     const [editMode, setEditMode] = useState(false);
@@ -123,10 +125,11 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
             lastLoad = nextLoad;
         }
 
-        // Metrics Calculation - Use actual logs for ACWR consistency
+        // Metrics Calculation
         const acute = currentLoad;
         const chronic = rollingLoads.length > 0 ? rollingLoads.reduce((a, b) => a + b, 0) / rollingLoads.length : 1;
-        const acwr = chronic > 0 ? acute / chronic : 0;
+        // Use external ACWR as source of truth if available, otherwise fallback
+        const acwr = acwrStats ? acwrStats.ratio : (chronic > 0 ? acute / chronic : 0);
 
         // If therapyLogs are provided, calculate real ACWR from actual activity
         let realACWR = acwr;
