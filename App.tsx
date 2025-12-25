@@ -2,22 +2,23 @@ import React, { Component, ErrorInfo, ReactNode, lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './contexts/AppContext';
 import { ToastProvider } from './contexts/ToastContext';
+import { ProtectedRoute } from './components/shared/ProtectedRoute';
 import { Layout } from './components/ui/Layout';
-import HomeDashboard from './components/HomeDashboard'; // Keep eager - critical path
-import LoadingFallback from './components/LoadingFallback';
+import HomeDashboard from './components/dashboard/HomeDashboard'; // Keep eager - critical path
+import LoadingFallback from './components/shared/LoadingFallback';
 import { Loader2 } from 'lucide-react';
 
 // Lazy load heavy components
-const PlanManager = lazy(() => import('./components/PlanManager'));
-const VideoAnalyzer = lazy(() => import('./components/VideoAnalyzer'));
+const PlanManager = lazy(() => import('./components/planning/PlanManager'));
+const VideoAnalyzer = lazy(() => import('./components/analysis/VideoAnalyzer'));
 const LiveCoach = lazy(() => import('./components/LiveCoach').then(m => ({ default: m.LiveCoach })));
 const PerformanceTracker = lazy(() => import('./components/PerformanceTracker'));
-const StaffHub = lazy(() => import('./components/StaffHub'));
-const CoachDashboard = lazy(() => import('./components/CoachDashboard'));
+const StaffHub = lazy(() => import('./components/staff/StaffHub'));
+const CoachDashboard = lazy(() => import('./components/dashboard/CoachDashboard'));
 const BioTrendConnect = lazy(() => import('./components/BioTrendConnect').then(m => ({ default: m.BioTrendConnect })));
-const AthleteCV = lazy(() => import('./components/AthleteCV').then(m => ({ default: m.AthleteCV })));
+const AthleteCV = lazy(() => import('./components/profile/AthleteCV').then(m => ({ default: m.AthleteCV })));
 const DeepRecovery = lazy(() => import('./components/DeepRecovery').then(m => ({ default: m.DeepRecovery })));
-const AuthScreen = lazy(() => import('./components/AuthScreen').then(m => ({ default: m.AuthScreen })));
+const AuthScreen = lazy(() => import('./components/auth/AuthScreen').then(m => ({ default: m.AuthScreen })));
 const GeminiLive = lazy(() => import('./components/GeminiLive'));
 
 const AppContent: React.FC = () => {
@@ -49,8 +50,19 @@ const AppContent: React.FC = () => {
             <Route path="/plan" element={<PlanManager />} />
             <Route path="/video" element={<VideoAnalyzer />} />
             <Route path="/tracker" element={<PerformanceTracker />} />
-            <Route path="/staff" element={<StaffHub />} />
-            <Route path="/coach-dashboard" element={<CoachDashboard />} />
+
+            {/* Staff Protected Routes */}
+            <Route path="/staff" element={
+              <ProtectedRoute allowedRoles={['staff', 'coach', 'head coach', 'admin']}>
+                <StaffHub />
+              </ProtectedRoute>
+            } />
+            <Route path="/coach-dashboard" element={
+              <ProtectedRoute allowedRoles={['staff', 'coach', 'head coach', 'admin']}>
+                <CoachDashboard />
+              </ProtectedRoute>
+            } />
+
             <Route path="/chat" element={<LiveCoach />} />
             <Route path="/trends" element={<BioTrendConnect />} />
             <Route path="/cv" element={<AthleteCV />} />

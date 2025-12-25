@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useApp } from '../contexts/AppContext';
+import { useApp } from '../../contexts/AppContext';
 import { Users, UserPlus, Shield, Activity, Zap, MessageSquare, Clock, CheckCircle2, ChevronRight } from 'lucide-react';
-import { Coach, ActivityEvent } from '../types';
-import { getActivityFeed } from '../services/firebase';
+import { Coach, ActivityEvent } from '../../types';
+import { getActivityFeed } from '../../services/firebase';
 
 export const StaffHub: React.FC = () => {
     const { userProfile, updateProfile } = useApp();
@@ -126,8 +126,8 @@ export const StaffHub: React.FC = () => {
                     {displayFeed.map((event, i) => (
                         <div key={i} className="flex gap-4 p-4 rounded-2xl bg-slate-900/50 border border-slate-800/50 hover:bg-slate-900 hover:border-slate-700 transition-all group">
                             <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center border ${event.type === 'analysis' ? 'bg-cyan-900/20 border-cyan-500/30 text-cyan-400' :
-                                    event.type === 'plan' ? 'bg-purple-900/20 border-purple-500/30 text-purple-400' :
-                                        'bg-emerald-900/20 border-emerald-500/30 text-emerald-400'
+                                event.type === 'plan' ? 'bg-purple-900/20 border-purple-500/30 text-purple-400' :
+                                    'bg-emerald-900/20 border-emerald-500/30 text-emerald-400'
                                 } `}>
                                 {event.type === 'analysis' ? <Activity size={18} /> :
                                     event.type === 'plan' ? <Zap size={18} /> : <MessageSquare size={18} />}

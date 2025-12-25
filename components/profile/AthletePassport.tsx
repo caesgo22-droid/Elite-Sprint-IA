@@ -1,9 +1,9 @@
 
 import * as React from 'react';
 import { useState, useMemo } from 'react';
-import { UserProfile } from '../types';
+import { UserProfile } from '../../types';
 import { Shield, Info, ChevronLeft, ChevronRight, X, HelpCircle, Zap, Plus } from 'lucide-react';
-import { useApp } from '../contexts/AppContext';
+import { useApp } from '../../contexts/AppContext';
 
 const DEFINITIONS: Record<string, { title: string; desc: string }> = {
     PAC: { title: "Pace / Velocidad Pura", desc: "Velocidad máxima (m/s) detectada en tus logs de tiempos recientes comparada con los estándares de tu categoría." },

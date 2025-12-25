@@ -1,8 +1,8 @@
 
 import * as React from 'react';
 import { useState } from 'react';
-import { auth, googleProvider, saveUserProfile, db, isInitialized } from '../services/firebase';
-import { useApp } from '../contexts/AppContext';
+import { auth, googleProvider, saveUserProfile, db, isInitialized } from '../../services/firebase';
+import { useApp } from '../../contexts/AppContext';
 import * as firebaseAuth from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { Zap, Mail, Lock, LogIn, ArrowRight, UserCircle2, Briefcase } from 'lucide-react';

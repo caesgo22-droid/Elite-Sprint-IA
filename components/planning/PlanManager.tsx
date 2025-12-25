@@ -1,15 +1,15 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useApp } from '../contexts/AppContext';
+import { useApp } from '../../contexts/AppContext';
 import { UserCog, RotateCcw } from 'lucide-react';
-import { TrainingSession, UserProfile } from '../types';
+import { TrainingSession, UserProfile } from '../../types';
 import { MacrocycleChart } from './MacrocycleChart';
 import { SessionCard } from './SessionCard';
-import { useTrainingPlan } from '../hooks/useTrainingPlan';
-import { ProfileConfig } from './ProfileConfig';
-import { FeedbackModal } from './FeedbackModal';
-import { RecoveryProtocolView } from './RecoveryProtocolView';
+import { useTrainingPlan } from '../../hooks/useTrainingPlan';
+import { ProfileConfig } from '../profile/ProfileConfig';
+import { FeedbackModal } from '../FeedbackModal'; // Check location
+import { RecoveryProtocolView } from '../RecoveryProtocolView'; // Check location
 
 const PlanManager: React.FC = () => {
     // Context & Hook

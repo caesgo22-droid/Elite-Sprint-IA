@@ -1,7 +1,7 @@
 
 import * as React from 'react';
 import { useMemo, useState } from 'react';
-import { Injury } from '../types';
+import { Injury } from '../../types';
 import { Trophy, Activity, AlertCircle, Stethoscope, Info } from 'lucide-react';
 
 interface MacrocycleChartProps {

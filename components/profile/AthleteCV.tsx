@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { useApp } from '../contexts/AppContext';
+import { useApp } from '../../contexts/AppContext';
 import { ChevronLeft, MapPin, Calendar, Medal, Timer, Share2, Printer, Trophy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 

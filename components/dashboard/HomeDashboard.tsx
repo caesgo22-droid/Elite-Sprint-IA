@@ -1,15 +1,15 @@
 
 import * as React from 'react';
 import { useState, useEffect } from 'react';
-import { useApp } from '../contexts/AppContext';
+import { useApp } from '../../contexts/AppContext';
 import {
   Dumbbell, Play, Calendar, TrendingUp, Award, Settings, LogOut, Plus,
   ChevronRight, CalendarCheck, Zap, ArrowRight, BrainCircuit, RefreshCw, X, History, Stethoscope, Activity, HeartPulse, Trophy
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { generateNexusInsight } from '../services/geminiService';
-import { AthletePassport } from './AthletePassport';
-import { getEnv } from '../utils/env';
+import { generateNexusInsight } from '../../services/geminiService';
+import { AthletePassport } from '../profile/AthletePassport';
+import { getEnv } from '../../utils/env';
 
 const getAIStudio = () => (window as any).aistudio;
 
@@ -389,8 +389,8 @@ const HomeDashboard: React.FC = () => {
                       key={t}
                       onClick={() => setTherapyType(t)}
                       className={`p - 2 rounded - xl text - [9px] font - bold uppercase transition - all ${therapyType === t
-                          ? 'bg-blue-500/20 border-blue-500/50 text-blue-300 border'
-                          : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
+                        ? 'bg-blue-500/20 border-blue-500/50 text-blue-300 border'
+                        : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
                         } `}
                     >
                       {t}
@@ -417,8 +417,8 @@ const HomeDashboard: React.FC = () => {
                       key={m}
                       onClick={() => setTherapyMuscle(m)}
                       className={`p - 2 rounded - xl text - [8px] font - bold uppercase transition - all ${therapyMuscle === m
-                          ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 border'
-                          : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
+                        ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 border'
+                        : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
                         } `}
                     >
                       {m}
@@ -445,8 +445,8 @@ const HomeDashboard: React.FC = () => {
                       key={g.label}
                       onClick={() => setTherapyGrade(g.value)}
                       className={`p - 2 rounded - xl text - [9px] font - bold uppercase transition - all ${therapyGrade === g.value
-                          ? g.value === 0 ? 'bg-slate-600 border-slate-500 text-white border' : 'bg-red-500/20 border-red-500/50 text-red-300 border'
-                          : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
+                        ? g.value === 0 ? 'bg-slate-600 border-slate-500 text-white border' : 'bg-red-500/20 border-red-500/50 text-red-300 border'
+                        : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
                         } `}
                     >
                       {g.label}

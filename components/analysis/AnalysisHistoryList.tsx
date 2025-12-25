@@ -1,7 +1,7 @@
 
 import * as React from 'react';
 import { X, CheckCheck, Trash2 } from 'lucide-react';
-import { BiomechanicalAnalysis } from '../types';
+import { BiomechanicalAnalysis } from '../../types';
 
 interface AnalysisHistoryListProps {
     analysisHistory: BiomechanicalAnalysis[];

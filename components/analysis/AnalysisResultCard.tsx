@@ -1,7 +1,7 @@
 
 import * as React from 'react';
 import { Microscope, ScanLine, ShieldCheck, AlertCircle, Play, Edit3, CheckCheck } from 'lucide-react';
-import { BiomechanicalAnalysis, UserProfile } from '../types';
+import { BiomechanicalAnalysis, UserProfile } from '../../types';
 
 export const MetricBox = ({ label, value, tooltip }: { label: string, value: string, tooltip?: string }) => (
     <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800/50 text-center shadow-inner group relative cursor-help">

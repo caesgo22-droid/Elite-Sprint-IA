@@ -1,15 +1,15 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
-import { useApp } from '../contexts/AppContext';
-import { findAthleteByEmail, fetchUserData, getPlanHistory, getAnalysisHistory } from '../services/firebase';
+import { useApp } from '../../contexts/AppContext';
+import { findAthleteByEmail, fetchUserData, getPlanHistory, getAnalysisHistory } from '../../services/firebase';
 import { Users, Search, UserCircle2, Briefcase, Eye, Activity, ArrowLeft } from 'lucide-react';
-import { UserProfile } from '../types';
-import { calculateACWR } from '../utils/loadCalculator';
+import { UserProfile } from '../../types';
+import { calculateACWR } from '../../utils/loadCalculator';
 import { useNavigate } from 'react-router-dom';
-import TaskManager from './TaskManager';
-import { useToasts } from '../contexts/ToastContext';
-import { AthleteProfileDetail } from './AthleteProfileDetail';
-import { RiskPanel } from './RiskPanel';
+import TaskManager from '../TaskManager';
+import { useToasts } from '../../contexts/ToastContext';
+import { AthleteProfileDetail } from '../profile/AthleteProfileDetail';
+import { RiskPanel } from '../RiskPanel';
 
 const CoachDashboard: React.FC = () => {
     const { showToast } = useToasts();

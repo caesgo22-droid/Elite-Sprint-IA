@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { Mic, Send, X, Play, Pause, Trash2, MessageSquare, Clock } from 'lucide-react';
-import { VideoAnnotation } from '../types';
-import { useApp } from '../contexts/AppContext';
+import { VideoAnnotation } from '../../types';
+import { useApp } from '../../contexts/AppContext';
 
 interface VideoAnnotationOverlayProps {
     currentTime: number; // Current playback time in seconds

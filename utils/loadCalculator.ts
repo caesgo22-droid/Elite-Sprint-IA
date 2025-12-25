@@ -8,70 +8,57 @@ import { TrainingPlan, LoadStats, PerformanceLog } from "../types";
  */
 export const calculateACWR = (historyPlans: TrainingPlan[], logs: PerformanceLog[] = []): LoadStats => {
     // 1. Extract all completed sessions with feedback AND valid timestamp from Plans
+    // Complexity: O(Sessions)
     const planSessions = historyPlans.flatMap(p => p.sessions)
         .filter(s => s.feedback && s.feedback.completed && s.feedback.timestamp && !isNaN(new Date(s.feedback.timestamp).getTime()))
         .map(s => ({
-            date: new Date(s.feedback!.timestamp!),
+            dateStr: new Date(s.feedback!.timestamp!).toDateString(),
             load: (s.feedback?.rpe || 0) * (s.feedback?.duration || 0)
         }));
 
     // 2. Extract load from Performance Logs
-    // Note: PerformanceLogs (Therapy/Results) do not currently track RPE/Duration (Load).
-    // They are passed here for future compatibility or session counting, but currently contribute 0 load.
     const logSessions = logs
         .filter(l => l.date && !isNaN(new Date(l.date).getTime()) && (l.event === 'Therapy' || l.type === 'Training'))
         .map(l => ({
-            date: new Date(l.date),
+            dateStr: new Date(l.date).toDateString(),
             load: 0 // Explicitly 0 as per current Type definition
         }));
 
-    const allSessions = [...planSessions, ...logSessions];
+    // 3. Aggregate Daily Loads into a Map - O(N)
+    const dailyLoadMap = new Map<string, number>();
 
-    // Sort by date descending
-    allSessions.sort((a, b) => b.date.getTime() - a.date.getTime());
+    [...planSessions, ...logSessions].forEach(session => {
+        const current = dailyLoadMap.get(session.dateStr) || 0;
+        dailyLoadMap.set(session.dateStr, current + session.load);
+    });
 
     const today = new Date();
 
-    // Helper to get load for a specific window
+    // Helper to get average load efficiently - O(Window Size)
+    // No filtering inside loop
     const getAverageLoad = (days: number) => {
         let totalLoad = 0;
-
-        // Standard rolling average logic: Sum load in window / days
         for (let i = 0; i < days; i++) {
             const targetDate = new Date();
             targetDate.setDate(today.getDate() - i);
             const dateStr = targetDate.toDateString();
-
-            // Find sessions on this date
-            const dailySessions = allSessions.filter(s =>
-                s.date.toDateString() === dateStr
-            );
-
-            // Daily Load SUM
-            const dailyLoad = dailySessions.reduce((acc, s) => acc + s.load, 0);
-            totalLoad += dailyLoad;
+            totalLoad += dailyLoadMap.get(dateStr) || 0;
         }
-
         return totalLoad / days;
     };
 
-    // 3. Chronic Load Calculation with Cold-Start Protection
-    // If the athlete has < 14 days of history, we normalize chronic load to avoid artificial spikes.
-    // However, ACWR is Acute(7)/Chronic(28). 
-    // If sessions exist only in the last 7 days, Chronic load is very low, making Ratio very high.
-
-    // Logic: If active window is very short, be conservative.
+    // 4. Calculate Loads
     const chronicLoadRaw = getAverageLoad(28);
     const acuteLoad = getAverageLoad(7);
 
-    // Cold start adjustment: if chronic load is very low (e.g. first week), 
-    // we assume a "base" chronic load or Cap the ratio.
+    // Cold start adjustment
     let chronicLoad = chronicLoadRaw;
     let isColdStart = false;
 
-    const uniqueDays = new Set(allSessions.map(s => s.date.toDateString())).size;
+    // Check unique days with activity to detect cold start
+    const uniqueDays = dailyLoadMap.size;
+
     if (uniqueDays < 14 && chronicLoadRaw < (acuteLoad * 0.5)) {
-        // Assume at least 50% of acute to avoid spikes of 4.0
         chronicLoad = Math.max(chronicLoadRaw, acuteLoad / 1.1);
         isColdStart = true;
     }
@@ -81,7 +68,7 @@ export const calculateACWR = (historyPlans: TrainingPlan[], logs: PerformanceLog
     let status: 'Óptimo' | 'Alto Riesgo' | 'Carga Baja' = 'Óptimo';
 
     if (isColdStart && ratio > 1.3) {
-        status = 'Óptimo'; // Suppress alert during initial 2 weeks unless extreme
+        status = 'Óptimo';
     } else if (ratio > 1.5) {
         status = 'Alto Riesgo';
     } else if (ratio < 0.8 && ratio > 0) {

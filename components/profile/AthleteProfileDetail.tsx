@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useApp } from '../contexts/AppContext';
-import { getStaffBriefings, addStaffBriefing, addBriefingReply } from '../services/firebase';
+import { useApp } from '../../contexts/AppContext';
+import { getStaffBriefings, addStaffBriefing, addBriefingReply } from '../../services/firebase';
 import { ArrowLeft, CalendarCheck, Maximize2, Dumbbell, Plus, Trophy, Zap, Settings, Info, X } from 'lucide-react';
-import { UserProfile, StaffBriefing, StaffReply } from '../types';
-import { MacrocycleChart } from './MacrocycleChart';
+import { UserProfile, StaffBriefing, StaffReply } from '../../types';
+import { MacrocycleChart } from '../planning/MacrocycleChart';
 import { AthletePassport } from './AthletePassport';
 import { ProfileConfig } from './ProfileConfig';
 

@@ -1,21 +1,21 @@
 import * as React from 'react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useApp } from '../contexts/AppContext';
-import { analyzeTechnique } from '../services/geminiService';
-import { LocalExpert } from '../services/localExpert';
-import { ElitePhysicsEngine } from '../utils/biomechanicsUtils';
-import { captureFrameAtTimestamp } from '../utils/videoProcessing';
-import { TrainingSession, UserProfile, BiomechanicalAnalysis } from '../types';
+import { useApp } from '../../contexts/AppContext';
+import { analyzeTechnique } from '../../services/geminiService';
+import { LocalExpert } from '../../services/localExpert';
+import { ElitePhysicsEngine } from '../../utils/biomechanicsUtils';
+import { captureFrameAtTimestamp } from '../../utils/videoProcessing';
+import { TrainingSession, UserProfile, BiomechanicalAnalysis } from '../../types';
 import { Loader2, ScanLine, UploadCloud, History, Key, Info, X, ShieldCheck, AlertCircle, Zap, Columns, RotateCcw, CheckCheck, Images } from 'lucide-react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 import { AnalysisResultCard } from './AnalysisResultCard';
 import { AnalysisHistoryList } from './AnalysisHistoryList';
 import { VideoAnnotationOverlay } from './VideoAnnotationOverlay';
-import { addVideoAnnotation, getVideoAnnotations } from '../services/firebase';
-import { VideoAnnotation } from '../types';
-import { useToasts } from '../contexts/ToastContext';
-import { useVideoAnalysis } from '../hooks/useVideoAnalysis'; // Hook Import
+import { addVideoAnnotation, getVideoAnnotations } from '../../services/firebase';
+import { VideoAnnotation } from '../../types';
+import { useToasts } from '../../contexts/ToastContext';
+import { useVideoAnalysis } from '../../hooks/useVideoAnalysis'; // Hook Import
 
 const getAIStudio = () => (window as any).aistudio;
 

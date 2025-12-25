@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useRef, useState } from 'react';
 import { UserCog, X, User, Target, Calendar, Trophy, MapPin, Trash2, Plus, History, Zap, Info } from 'lucide-react';
-import { UserProfile, Injury, Coach } from '../types';
+import { UserProfile, Injury, Coach } from '../../types';
 
 interface ProfileConfigProps {
     userProfile: UserProfile;
