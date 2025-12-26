@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { generateTrainingPlan } from '../services/geminiService';
-import { calculateACWR } from '../utils/loadCalculator';
 import { calculateRecovery } from '../utils/recoveryEngine';
 import { TrainingSession, UserProfile } from '../types';
 import { useToasts } from '../contexts/ToastContext';
@@ -23,17 +22,9 @@ export const useTrainingPlan = () => {
 
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
-    const [acwr, setAcwr] = useState<{ ratio: number, status: string } | null>(null);
     const [viewingRecovery, setViewingRecovery] = useState<any>(null);
 
-    // Calculate ACWR whenever plan history changes
-    useEffect(() => {
-        if (currentPlan || planHistory.length > 0) {
-            const allPlans = currentPlan ? [currentPlan, ...planHistory] : planHistory;
-            const stats = calculateACWR(allPlans, logs); // Passed logs for completeness
-            setAcwr({ ratio: stats.ratio, status: stats.status });
-        }
-    }, [planHistory, currentPlan, logs]);
+    const { acwrStats } = useApp();
 
     const generatePlan = async (inputs: UseTrainingPlanProps) => {
         setLoading(true);
@@ -44,7 +35,7 @@ export const useTrainingPlan = () => {
                 inputs,
                 new Date().toLocaleDateString('es-ES'),
                 inputs.focusEvent,
-                acwr || undefined,
+                acwrStats || { ratio: 1.0, status: 'Óptimo' },
                 lastAnalysis,
                 logs
             );
@@ -78,7 +69,7 @@ export const useTrainingPlan = () => {
         planHistory,
         loading,
         errorMsg,
-        acwr,
+        acwr: acwrStats,
         maxHr: 220 - (userProfile.age || 20), // Simple utility
         viewingRecovery,
         generatePlan,

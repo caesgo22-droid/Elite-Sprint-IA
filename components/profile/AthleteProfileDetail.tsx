@@ -274,6 +274,7 @@ export const AthleteProfileDetail: React.FC<AthleteProfileDetailProps> = ({
                     injuries={profile.injuries}
                     competitions={profile.competitions}
                     therapyLogs={logs}
+                    acwrStats={displayAcwr}
                 />
             </div>
 
