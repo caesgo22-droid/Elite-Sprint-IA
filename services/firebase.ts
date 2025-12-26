@@ -117,7 +117,7 @@ export const getAnalysisHistory = async (uid: string) => {
 };
 
 export const fetchUserData = async (uid: string) => {
-  if (!db || !isInitialized) return { profile: null, currentPlan: null, logs: [] };
+  if (!db || !isInitialized) return { status: 'error', error: 'firebase_not_initialized', profile: null, currentPlan: null, logs: [] };
   try {
     const userDoc = await getDoc(doc(db, "users", uid));
     const logsQuery = query(collection(db, "users", uid, "logs"));
@@ -127,11 +127,15 @@ export const fetchUserData = async (uid: string) => {
     const userData = userDoc.exists() ? userDoc.data() : {};
 
     return {
+      status: 'success',
       profile: userData.profile || null,
       currentPlan: userData.currentPlan || null,
       logs: logs || []
     };
-  } catch (e) { console.error(e); return { profile: null, currentPlan: null, logs: [] }; }
+  } catch (e: any) {
+    console.error(e);
+    return { status: 'error', error: e.message, profile: null, currentPlan: null, logs: [] };
+  }
 };
 
 // --- STAFF / COACH FEATURES ---

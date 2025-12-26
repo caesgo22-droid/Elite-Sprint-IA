@@ -109,6 +109,11 @@ Genera un JSON con:
     "groundContactTimeEstimate": "segundos (vs Benchmark)",
     "forceApplicationIndex": 0-100
   },
+  "racePredictions": {
+    "100m": "Time (e.g. 10.5s)",
+    "200m": "Time (e.g. 21.2s)",
+    "400m": "Time (e.g. 48.0s)"
+  },
   "successes": ["Puntos fuertes observados"],
   "weaknesses": ["Errores críticos a corregir"],
   "correctiveDrills": [
@@ -150,6 +155,11 @@ SALIDA (JSON ESTRICTO):
     "verticalOscillation": "cm (Eficiencia)",
     "groundContactTimeEstimate": "ms (Comparar con Benchmark)",
     "forceApplicationIndex": "0-100 (Ratio Vertical/Horizontal - Stiffness Proxy)"
+  },
+  "racePredictions": {
+    "100m": "Time (e.g. 10.5s)",
+    "200m": "Time (e.g. 21.2s)",
+    "400m": "Time (e.g. 48.0s)"
   },
   "biomechanicalAudit": {
     "stiffness": "Nivel 1-10 (Reactive Strength) - BASADO EN FORCEFACTOR",

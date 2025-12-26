@@ -244,8 +244,9 @@ const HomeDashboard: React.FC = () => {
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-tight">
                 {errorStatus === 'key_missing' ? 'Configura tu API Key para activar Nexus' : 'Sincronizando Auditoría...'}
               </p>
-              <div className="mt-2 text-[9px] font-medium text-slate-500 uppercase tracking-tighter">
-                ACWR Actual: <span className={acwrStats?.status === 'Alto Riesgo' ? 'text-red-400' : 'text-cyan-400'}>{(acwrStats?.ratio || 0).toFixed(2)} ({acwrStats?.status || 'Óptimo'})</span>
+              <div className="mt-2 text-[9px] font-medium text-slate-500 uppercase tracking-tighter flex flex-col items-center">
+                <span>ACWR Actual: <span className={acwrStats?.status === 'Alto Riesgo' ? 'text-red-400' : 'text-cyan-400'}>{(acwrStats?.ratio || 0).toFixed(2)} ({acwrStats?.status || 'Óptimo'})</span></span>
+                <span className="text-[8px] text-slate-600 mt-0.5">Rango Óptimo: 0.8 - 1.3</span>
               </div>
             </div>
             {errorStatus === 'key_missing' ? (

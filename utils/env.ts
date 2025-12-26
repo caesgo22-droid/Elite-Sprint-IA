@@ -1,39 +1,20 @@
 
 export const getEnv = (key: string): string => {
-    // 1. Try Vite standard (import.meta.env)
+    // Strict Mode: Only use Vite's standard import.meta.env
+    // This prevents accidental leaks via window or process in client-side code.
     try {
         if (typeof import.meta !== 'undefined' && import.meta.env) {
-            // Try exact key
+            // Priority 1: Exact Key
             if (import.meta.env[key]) return import.meta.env[key];
-            // Try with VITE_ prefix if not provided
+
+            // Priority 2: VITE_ Prefix (Standard for exposed vars)
             if (!key.startsWith('VITE_') && import.meta.env[`VITE_${key}`]) {
                 return import.meta.env[`VITE_${key}`];
             }
         }
     } catch (e) {
-        // Ignore errors accessing import.meta
-    }
-
-    // 2. Try window (for runtime injection or browser overrides)
-    try {
-        if (typeof window !== 'undefined' && (window as any)._env_ && (window as any)._env_[key]) {
-            return (window as any)._env_[key];
-        }
-    } catch (e) {
-        // Ignore
-    }
-
-    // 3. Try process.env (safely)
-    try {
-        // @ts-ignore
-        if (typeof process !== 'undefined' && process.env) {
-            // @ts-ignore
-            if (process.env[key]) return process.env[key];
-            // @ts-ignore
-            if (!key.startsWith('VITE_') && process.env[`VITE_${key}`]) return process.env[`VITE_${key}`];
-        }
-    } catch (e) {
-        // Ignore
+        // Environment access error
+        console.warn(`Error accessing environment variable ${key}`, e);
     }
 
     return "";

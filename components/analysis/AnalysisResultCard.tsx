@@ -88,17 +88,23 @@ export const AnalysisResultCard: React.FC<AnalysisResultCardProps> = ({
                                     <div className="text-center group relative cursor-help">
                                         <div className="text-[8px] text-slate-500 font-bold uppercase">100m</div>
                                         <div className="text-xs font-black text-yellow-500">{p100}s</div>
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-black p-1 rounded text-[8px] text-white opacity-0 group-hover:opacity-100 whitespace-nowrap z-10">Potential</div>
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-black/90 border border-slate-700 p-2 rounded text-[8px] text-slate-300 opacity-0 group-hover:opacity-100 whitespace-nowrap z-30 pointer-events-none">
+                                            Est. base: Velocidad Máxima mantenida
+                                        </div>
                                     </div>
                                     <div className="text-center group relative cursor-help">
                                         <div className="text-[8px] text-slate-500 font-bold uppercase">200m</div>
                                         <div className="text-xs font-black text-white">{p200}s</div>
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-black p-1 rounded text-[8px] text-white opacity-0 group-hover:opacity-100 whitespace-nowrap z-10">Potential</div>
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-black/90 border border-slate-700 p-2 rounded text-[8px] text-slate-300 opacity-0 group-hover:opacity-100 whitespace-nowrap z-30 pointer-events-none">
+                                            Est. con factor de decaimiento (~18%)
+                                        </div>
                                     </div>
                                     <div className="text-center group relative cursor-help">
                                         <div className="text-[8px] text-slate-500 font-bold uppercase">400m</div>
                                         <div className="text-xs font-black text-white">{p400}s</div>
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-black p-1 rounded text-[8px] text-white opacity-0 group-hover:opacity-100 whitespace-nowrap z-10">Potential</div>
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-black/90 border border-slate-700 p-2 rounded text-[8px] text-slate-300 opacity-0 group-hover:opacity-100 whitespace-nowrap z-30 pointer-events-none">
+                                            Est. con resistencia a la velocidad (~30% fatiga)
+                                        </div>
                                     </div>
                                 </div>
                             </div>

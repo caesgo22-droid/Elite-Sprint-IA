@@ -125,53 +125,62 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
             lastLoad = nextLoad;
         }
 
+        // Limit Calculation Helpers
+        const getChronicLoad = (date: Date) => {
+            // Filter plans strictly before this date, up to 28 days back
+            const relevant = allPlans.filter(p => {
+                const d = new Date(p.createdAt);
+                const diff = (date.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
+                return diff >= 0 && diff <= 28;
+            });
+            if (relevant.length === 0) return 0;
+            const sum = relevant.reduce((acc, p) => acc + calcLoad(p), 0);
+            return sum / Math.max(relevant.length, 1); // Simple average of available points
+        };
+
         // Metrics Calculation
         const acute = currentLoad;
         const chronic = rollingLoads.length > 0 ? rollingLoads.reduce((a, b) => a + b, 0) / rollingLoads.length : 1;
         // Use external ACWR as source of truth if available, otherwise fallback
         const acwr = acwrStats ? acwrStats.ratio : (chronic > 0 ? acute / chronic : 0);
 
-        // If therapyLogs are provided, calculate real ACWR from actual activity
-        let realACWR = acwr;
-        if (therapyLogs && therapyLogs.length > 0) {
-            const last7Days = therapyLogs.filter((log: any) => {
-                const logDate = new Date(log.date || log.timestamp);
-                const daysDiff = (Date.now() - logDate.getTime()) / (1000 * 60 * 60 * 24);
-                return daysDiff <= 7;
-            });
-
-            const last28Days = therapyLogs.filter((log: any) => {
-                const logDate = new Date(log.date || log.timestamp);
-                const daysDiff = (Date.now() - logDate.getTime()) / (1000 * 60 * 60 * 24);
-                return daysDiff <= 28;
-            });
-
-            const acuteLoad = last7Days.reduce((sum: number, log: any) => sum + (log.load || 0), 0) / 7;
-            const chronicLoad = last28Days.reduce((sum: number, log: any) => sum + (log.load || 0), 0) / 28;
-
-            if (chronicLoad > 0) {
-                realACWR = acuteLoad / chronicLoad;
-            }
-        }
-
         const planLoad = 2200; // Mock or calculate from plan target
         const loadDeviation = planLoad > 0 ? ((currentLoad - planLoad) / planLoad) * 100 : 0;
 
         // Scaling
         const maxDataLoad = Math.max(...rawPoints.map(p => p.load), 100);
-        const padding = maxDataLoad * 0.2;
-        const scaleMax = maxDataLoad + padding;
+        // Estimate Max Limit for scaling (Max ACWR 1.5 * Max Chronic)
+        const estMaxLimit = maxDataLoad * 1.5;
+        const padding = estMaxLimit * 0.1;
+        const scaleMax = estMaxLimit + padding;
 
         const width = 800;
         const height = 480;
         const marginX = 50;
         const effectiveWidth = width - (marginX * 2);
 
-        const chartPoints = rawPoints.map((p, i) => ({
-            ...p,
-            x: marginX + (i * (effectiveWidth / (rawPoints.length - 1))),
-            y: height - ((p.load / scaleMax) * (height - 50)) - 30 // 30px bottom padding
-        }));
+        const chartPoints = rawPoints.map((p, i) => {
+            // Calculate local chronic load for this point
+            // For simplicity in this view, we use the rolling average of data points if sparse
+            // or fallback to previous point's chronic.
+            // Improved: Calculate Dynamic Limits
+            // We can approximate chronic load as the average of last 4 points including this one if history is sparse
+            let localChronic = getChronicLoad(p.date) || (p.load * 0.8); // Fallback
+            if (i === 0 && localChronic === 0) localChronic = p.load; // First point baseline
+
+            const minLoad = localChronic * 0.8;
+            const maxLoad = localChronic * 1.5;
+
+            return {
+                ...p,
+                x: marginX + (i * (effectiveWidth / (rawPoints.length - 1))),
+                y: height - ((p.load / scaleMax) * (height - 50)) - 30, // 30px bottom padding
+                yMin: height - ((minLoad / scaleMax) * (height - 50)) - 30,
+                yMax: height - ((maxLoad / scaleMax) * (height - 50)) - 30,
+                minLoad,
+                maxLoad
+            };
+        });
 
         // Milestones
         const computedMilestones: any[] = [];
@@ -269,6 +278,8 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
     // Line paths
     const realLinePath = getPathFromPoints(realPoints.map(p => ({ x: p.x, y: p.y })));
     const projectedLinePath = getPathFromPoints(projectedPoints.map(p => ({ x: p.x, y: p.y })));
+    const minLimitPath = getPathFromPoints(chartPoints.map(p => ({ x: p.x, y: p.yMin })));
+    const maxLimitPath = getPathFromPoints(chartPoints.map(p => ({ x: p.x, y: p.yMax })));
 
     return (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col min-h-[500px]">
@@ -310,14 +321,12 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
                     <span>Transición</span>
                 </div>
                 <div className="flex items-center space-x-1">
-                    <span className="w-3 h-0 border-t-2 border-dotted border-slate-500"></span>
-                    <span>Límites</span>
+                    <span className="w-3 h-0 border-t-2 border-dashed border-red-500/50"></span>
+                    <span>Max (1.5)</span>
                 </div>
                 <div className="flex items-center space-x-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-red-500/20 flex items-center justify-center text-[7px] text-red-500 border border-red-500/50">I</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/20 flex items-center justify-center text-[7px] text-emerald-500 border border-emerald-500/50">T</span>
+                    <span className="w-3 h-0 border-t-2 border-dashed border-yellow-500/50"></span>
+                    <span>Min (0.8)</span>
                 </div>
             </div>
 
@@ -390,16 +399,12 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
                             <rect key={i} x={m.x - 20} y="50" width="40" height="400" fill="url(#injuryZoneGradient)" className="animate-pulse" />
                         ))}
 
-                        {/* Limits (Max/Min Rec) - Visual placeholders for now as data logic is complex */}
-                        {/* Limits (Max/Min Rec) - Visual placeholders for now as data logic is complex */}
-                        <g className="group cursor-pointer">
-                            <line className="text-slate-500/30" stroke="currentColor" strokeDasharray="4 3" strokeWidth="1" x1="50" x2="750" y1="90" y2="90"></line>
-                            <text x="740" y="85" textAnchor="end" className="text-[8px] fill-slate-500 uppercase font-black opacity-50 group-hover:opacity-100 transition-opacity">Max Capacity (ACWR 1.5)</text>
-                        </g>
-                        <g className="group cursor-pointer">
-                            <line className="text-slate-500/30" stroke="currentColor" strokeDasharray="4 3" strokeWidth="1" x1="50" x2="750" y1="380" y2="380"></line>
-                            <text x="740" y="390" textAnchor="end" className="text-[8px] fill-slate-500 uppercase font-black opacity-50 group-hover:opacity-100 transition-opacity">Min Maintenance (ACWR 0.8)</text>
-                        </g>
+                        {/* Dynamic ACWR Limits */}
+                        <path d={maxLimitPath} fill="none" stroke="#f87171" strokeWidth="1.5" strokeDasharray="4 4" opacity="0.6" />
+                        <text x={chartPoints[chartPoints.length - 1].x} y={chartPoints[chartPoints.length - 1].yMax - 5} textAnchor="end" className="fill-red-400 text-[8px] font-bold uppercase opacity-80">Max (1.5)</text>
+
+                        <path d={minLimitPath} fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeDasharray="4 4" opacity="0.6" />
+                        <text x={chartPoints[chartPoints.length - 1].x} y={chartPoints[chartPoints.length - 1].yMin + 10} textAnchor="end" className="fill-yellow-400 text-[8px] font-bold uppercase opacity-80">Min (0.8)</text>
 
                         {/* Current Week Vertical Line */}
                         {chartPoints.find(p => p.type === 'current') && (

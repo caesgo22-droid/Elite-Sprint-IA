@@ -1,7 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { TrainingPlan, NexusInsight, UserProfile } from "../types";
-import { COACH_PERSONA, PLAN_GENERATION_PROMPT, VIDEO_ANALYSIS_PROMPT, ANALYSIS_SYSTEM_INSTRUCTION, MASTER_AUDIT_PROMPT, MASTER_ANALYSIS_SYSTEM_INSTRUCTION, getSystemInstruction } from "../utils/prompts";
-
+import { COACH_PERSONA, VIDEO_ANALYSIS_PROMPT, ANALYSIS_SYSTEM_INSTRUCTION, MASTER_AUDIT_PROMPT, MASTER_ANALYSIS_SYSTEM_INSTRUCTION, getSystemInstruction } from "../utils/prompts";
 import { getEnv } from "../utils/env";
 
 const cleanAndParseJSON = (text: string) => {
@@ -21,22 +20,17 @@ const cleanAndParseJSON = (text: string) => {
 };
 
 const getModelInstance = (modelName: string) => {
-    const apiKey = (window as any).aistudio?.apiKey || getEnv("GEMINI_API_KEY") || getEnv("VITE_GEMINI_API_KEY") || getEnv("API_KEY");
+    const apiKey = getEnv("GEMINI_API_KEY") || getEnv("VITE_GEMINI_API_KEY") || getEnv("API_KEY");
 
     if (!apiKey) {
-        console.error("❌ CRITICAL: No API Key found in env or window.aistudio");
-        console.log("Env Dump:", {
-            VITE_GEMINI: !!getEnv("VITE_GEMINI_API_KEY"),
-            GEMINI: !!getEnv("GEMINI_API_KEY"),
-            AISTUDIO: !!(window as any).aistudio?.apiKey
-        });
+        console.error("❌ CRITICAL: No API Key found in env.");
         return null;
     }
     const genAI = new GoogleGenerativeAI(apiKey);
     return genAI.getGenerativeModel({
         model: modelName,
         generationConfig: {
-            temperature: 0.1,  // More deterministic for technical analysis
+            temperature: 0.1,
             topP: 0.95,
             topK: 40,
         }
@@ -45,9 +39,7 @@ const getModelInstance = (modelName: string) => {
 
 export const analyzeTechnique = async (images: string[], bioData: any, advancedMetrics: any, analysisMode: string, userProfile?: any, lastAnalysis?: any, currentSession?: any): Promise<any> => {
     const isMaster = analysisMode === 'External';
-    // Use Gemini 1.5 Pro for Deep Audit (Most Powerful Reasoning)
-    // Use Gemini 2.0 Flash for Quick Feedback (Fastest Multimodal)
-    const modelName = isMaster ? "gemini-1.5-pro" : "gemini-2.0-flash-exp";
+    const modelName = isMaster ? "gemini-1.5-pro-002" : "gemini-1.5-flash-002";
     const model = getModelInstance(modelName);
     if (!model) return null;
 
@@ -56,7 +48,6 @@ export const analyzeTechnique = async (images: string[], bioData: any, advancedM
             inlineData: { mimeType: "image/jpeg", data: img }
         }));
 
-        // Build enriched prompt with athlete context
         let contextAddition = "";
         if (userProfile) {
             const activeInjuries = userProfile.injuries?.filter((i: any) => i.status === 'Activa').map((i: any) => i.location).join(', ') || 'Ninguna';
@@ -72,8 +63,7 @@ export const analyzeTechnique = async (images: string[], bioData: any, advancedM
             ? MASTER_AUDIT_PROMPT({ bioData, advancedMetrics }) + contextAddition
             : VIDEO_ANALYSIS_PROMPT({ bioData, advancedMetrics }) + contextAddition;
 
-        // Force 3-distance prediction instruction
-        const predictionInstruction = `\n\nINSTRUCCIÓN DE PREDICCIÓN DE CARRERA: Basado en la Cinemática (velocidad salida, mecánica de vuelo, GCT) y las métricas avanzadas, genera predicciones de tiempo POTENCIALES para: 100m, 200m, y 400m. Si el atleta no corre esa distancia, estima basado en su biomecánica.`;
+        const predictionInstruction = `\n\nINSTRUCCIÓN DE PREDICCIÓN DE CARRERA: Basado en la Cinemática y fuerza, llena el campo 'racePredictions' en el JSON con tiempos para 100m, 200m y 400m. Es OBLIGATORIO.`;
 
         const finalPrompt = prompt + predictionInstruction;
 
@@ -101,13 +91,12 @@ export const analyzeTechnique = async (images: string[], bioData: any, advancedM
 };
 
 export const generateNexusInsight = async (logs: any[], readiness: any, analysisHistory: any[], acwr: any, profile?: UserProfile): Promise<NexusInsight | null> => {
-    const model = getModelInstance("gemini-2.0-flash-exp");
+    const model = getModelInstance("gemini-1.5-flash-002");
     if (!model) return null;
 
     const acwrRatio = acwr?.ratio || 0;
     const therapyLogs = logs.filter(l => l.type === 'Recovery' || l.event === 'Therapy').slice(-3);
 
-    // Extract medical and competition context from profile
     const activeInjuries = profile?.injuries?.filter((inj: any) => inj.status === 'Activa').map((inj: any) => `${inj.location} (${inj.type})`).join(', ') || 'Ninguna';
     const upcomingComps = profile?.competitions?.map((c: any) => `${c.name} (${c.date})`).join(', ') || 'Ninguna';
 
@@ -148,76 +137,59 @@ export const generateNexusInsight = async (logs: any[], readiness: any, analysis
     }
 };
 
-import { PeriodizationEngine } from "../utils/periodizationEngine";
+// --- ELITE 5 MULTI-AGENT ORCHESTRATION ---
+import { HeadCoachOrchestrator } from "./agents/HeadCoachOrchestrator";
 
-export const generateTrainingPlan = async (profile: UserProfile, readiness: any, currentDate: string, focusEvent?: string, acwr?: any, lastAnalysis?: any, logs?: any[]): Promise<TrainingPlan | null> => {
-    const model = getModelInstance("gemini-2.0-flash-exp");
-    if (!model) return null;
-
+export const generateTrainingPlan = async (
+    profile: UserProfile,
+    readiness: any,
+    currentDate: string,
+    _focusEvent?: string,
+    acwr?: any,
+    _lastAnalysis?: any,
+    _logs?: any[]
+): Promise<TrainingPlan | null> => {
     try {
-        // PERDIODIZATION ENGINE INTEGRATION
-        const structuralPhase = PeriodizationEngine.calculateCurrentPhase(profile.competitions || [], new Date());
+        const orchestrator = new HeadCoachOrchestrator();
 
-        const therapyLogs = logs?.filter((l: any) => l.type === 'Recovery' || l.event === 'Therapy').slice(-3);
-        const enrichedProfile = {
-            ...profile,
-            recentTherapy: therapyLogs?.map((l: any) => `${l.date}: ${l.notes || l.activity || l.event}`).join(' | ')
+        let daysToRace = 90;
+        if (profile.competitions && profile.competitions.length > 0) {
+            const nextComp = profile.competitions.find((c: any) => new Date(c.date) > new Date());
+            if (nextComp) {
+                const diff = new Date(nextComp.date).getTime() - new Date().getTime();
+                daysToRace = Math.ceil(diff / (1000 * 3600 * 24));
+            }
+        }
+
+        const athleteData = {
+            acwr: acwr?.ratio || 1.0,
+            hrv: readiness?.hrvStatus || 'average',
+            sleep: readiness?.sleepHours || 8,
+            painLevel: readiness?.painLevel || 0,
+            phase: (profile.competitions && profile.competitions.length > 0) ? "Auto-Calculated" : "General Prep",
+            event: profile.events?.[0] || '100m',
+            daysToRace: daysToRace
         };
 
-        // Inject Phase Directives
-        // The prompt function needs to be updated or we append the instruction here.
-        // Assuming PLAN_GENERATION_PROMPT takes standard args, we will append a "STRICT INSTRUCTION" block.
+        const result = await orchestrator.generateDailyPlan(athleteData);
 
-        let prompt = PLAN_GENERATION_PROMPT(enrichedProfile, readiness, focusEvent || "100m", acwr?.ratio, lastAnalysis);
+        return {
+            id: Date.now().toString(),
+            createdAt: new Date().toISOString(),
+            phase: athleteData.daysToRace < 14 ? 'Competition' : 'General Prep',
+            sessions: [result.finalPlan as any],
+            weeklyGoal: `Optimización Elite 5: ${result.finalPlan.focus}`,
+            rationale: result.coachRationale
+        };
 
-        prompt += `\n\n[MANDATORY PERIODIZATION FRAMEWORK]
-        CURRENT PHASE: ${structuralPhase.name} (Calculated based on Race Date: ${structuralPhase.weeksToRace} weeks out).
-        PRIMARY FOCUS: ${structuralPhase.focus}.
-        INTENSITY: ${structuralPhase.intensity}.
-        VOLUME: ${structuralPhase.volume}.
-        ENERGY SYSTEM: ${structuralPhase.primaryEnergySystem}.
-        
-        CRITICAL INSTRUCTION: You MUST ignore any generic phase requests. Build the plan SPECIFICALLY for the '${structuralPhase.name}' phase.
-        if (Phase is 'Taper', volume must be reduced by 40-60%.
-        If Phase is 'Competition', focus on neural activation and rest.
-
-        [AI TUNING PARAMETERS]
-        The coach has explicitly tuned your behavior for this specific athlete:
-        - VOLUME BIAS: ${(profile.trainingPreferences?.volumeBias || 1.0).toFixed(1)}x (Multiply standard volume by this factor).
-        - INTENSITY BIAS: ${(profile.trainingPreferences?.intensityBias || 1.0).toFixed(1)}x (Adjust prescribed intensities by this factor, capping at 100%).
-        - TECHNIQUE FOCUS: ${profile.trainingPreferences?.techniqueFocus || 'Balanced'} (If 'Technique', prioritize drills over raw output. If 'Power', prioritize explosive movements).
-        
-        Apply these biases to the generated sessions.
-        `;
-
-        const result = await model.generateContent({
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: {
-                responseMimeType: "application/json",
-            },
-            systemInstruction: COACH_PERSONA
-        });
-
-        const response = await result.response;
-        const plan = cleanAndParseJSON(response.text());
-        if (plan && plan.sessions && plan.sessions.length > 0) {
-            return {
-                ...plan,
-                phase: structuralPhase.name, // ENFORCE calculated phase
-                startDate: new Date().toISOString(), // Add start date for reference
-                id: Date.now().toString(),
-                createdAt: new Date().toISOString()
-            };
-        }
-        return null;
-    } catch (e) {
-        console.error("Plan Gen Error:", e);
+    } catch (error) {
+        console.error("Orchestrator Failed:", error);
         return null;
     }
 };
 
 export const chatWithCoach = async (history: any[], message: string, context: any, persona: string = 'Coach'): Promise<any> => {
-    const model = getModelInstance("gemini-2.0-flash-exp");
+    const model = getModelInstance("gemini-1.5-flash-002");
     if (!model) return { text: "Sistema Offline." };
 
     try {

@@ -53,7 +53,7 @@ const AppContent: React.FC = () => {
 
             {/* Staff Protected Routes */}
             <Route path="/staff" element={
-              <ProtectedRoute allowedRoles={['staff', 'coach', 'head coach', 'admin']}>
+              <ProtectedRoute allowedRoles={['staff', 'coach', 'head coach', 'admin', 'athlete']}>
                 <StaffHub />
               </ProtectedRoute>
             } />

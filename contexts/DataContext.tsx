@@ -103,6 +103,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return saved ? JSON.parse(saved) : [];
     });
 
+    const [isDataLoaded, setIsDataLoaded] = useState(false); // Guard against overwriting data with defaults
+
     // Sync userProfile with adminProfile if viewing self
     useEffect(() => {
         if (!viewingAthleteId) {
@@ -121,6 +123,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const loadData = async (uid: string) => {
         try {
             const data = await fetchUserData(uid);
+
+            if (data.status === 'error') {
+                console.error("Critical: Failed to load user data. Writes disabled to prevent data loss.");
+                showToast("Error de conexión. Modo solo lectura activado.", "error");
+                setIsDataLoaded(false);
+                return;
+            }
+
             const profile = processProfileData(data);
 
             setUserProfile(profile);
@@ -135,8 +145,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setPlanHistory(pHist as TrainingPlan[]);
 
             setNexusInsight(null);
+            setIsDataLoaded(true);
         } catch (error) {
             console.error("Error fetching data:", error);
+            setIsDataLoaded(false);
         }
     };
 
@@ -155,6 +167,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setLogs([]);
             setAnalysisHistory([]);
             setPlanHistory([]);
+            setIsDataLoaded(false);
         }
     }, [viewingAthleteId, user, loadingAuth]);
 
@@ -177,7 +190,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!viewingAthleteId) {
             updateAdminProfile(profile);
         }
-        if (targetId && isInitialized) saveUserProfile(targetId, profile);
+        // Guard: Only save if data was successfully loaded to avoid overwriting with defaults
+        if (targetId && isInitialized && isDataLoaded) saveUserProfile(targetId, profile);
+        else if (targetId && !isDataLoaded) console.warn("Save blocked: Data not loaded.");
     };
 
     const updateCompetitions = (competitions: { id: string; name: string; date: string }[]) => {
@@ -186,22 +201,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const setPlanFn = (plan: TrainingPlan) => {
-        if (currentPlan && targetId && isInitialized) {
+        if (currentPlan && targetId && isInitialized && isDataLoaded) {
             archivePlan(targetId, currentPlan);
             setPlanHistory(prev => [currentPlan, ...prev]);
         }
         setCurrentPlan(plan);
-        if (targetId && isInitialized) saveTrainingPlan(targetId, plan);
+        if (targetId && isInitialized && isDataLoaded) saveTrainingPlan(targetId, plan);
     };
 
     const updateTrainingPlan = (planId: string, updatedPlan: TrainingPlan) => {
         setCurrentPlan(updatedPlan);
-        if (targetId && isInitialized) saveTrainingPlan(targetId, updatedPlan);
+        if (targetId && isInitialized && isDataLoaded) saveTrainingPlan(targetId, updatedPlan);
     };
 
     const resetPlan = async () => {
         if (!currentPlan) return;
-        if (targetId && isInitialized) {
+        if (targetId && isInitialized && isDataLoaded) {
             await archivePlan(targetId, currentPlan);
             setPlanHistory(prev => [currentPlan, ...prev]);
             await saveTrainingPlan(targetId, null);
@@ -222,17 +237,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const newPlan = { ...currentPlan, sessions: updatedSessions };
         setCurrentPlan(newPlan);
-        if (targetId && isInitialized) saveTrainingPlan(targetId, newPlan);
+        if (targetId && isInitialized && isDataLoaded) saveTrainingPlan(targetId, newPlan);
     };
 
     const addLog = (log: PerformanceLog) => {
         setLogs(prev => [...prev, log]);
-        if (targetId && isInitialized) addPerformanceLog(targetId, log);
+        if (targetId && isInitialized && isDataLoaded) addPerformanceLog(targetId, log);
     };
 
     const editLog = (updatedLog: PerformanceLog) => {
         setLogs(prev => prev.map(log => log.id === updatedLog.id ? updatedLog : log));
-        if (targetId && isInitialized) updatePerformanceLog(targetId, updatedLog);
+        if (targetId && isInitialized && isDataLoaded) updatePerformanceLog(targetId, updatedLog);
     };
 
     const deleteLog = (id: string) => {

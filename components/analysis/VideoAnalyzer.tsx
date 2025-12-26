@@ -2,21 +2,7 @@ import * as React from 'react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useApp } from '../../contexts/AppContext';
-import { analyzeTechnique } from '../../services/geminiService';
-import { LocalExpert } from '../../services/localExpert';
-import { ElitePhysicsEngine } from '../../utils/biomechanicsUtils';
-import { captureFrameAtTimestamp } from '../../utils/videoProcessing';
-import { TrainingSession, UserProfile, BiomechanicalAnalysis } from '../../types';
-import { Loader2, ScanLine, UploadCloud, History, Key, Info, X, ShieldCheck, AlertCircle, Zap, Columns, RotateCcw, CheckCheck, Images } from 'lucide-react';
-import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
-import { AnalysisResultCard } from './AnalysisResultCard';
-import { AnalysisHistoryList } from './AnalysisHistoryList';
-import { VideoAnnotationOverlay } from './VideoAnnotationOverlay';
-import { addVideoAnnotation, getVideoAnnotations } from '../../services/firebase';
-import { VideoAnnotation } from '../../types';
 import { useToasts } from '../../contexts/ToastContext';
-import { useVideoAnalysis } from '../../hooks/useVideoAnalysis'; // Hook Import
-
 const getAIStudio = () => (window as any).aistudio;
 
 const VideoAnalyzer: React.FC = () => {
@@ -468,6 +454,30 @@ const VideoAnalyzer: React.FC = () => {
 
         ctx.clearRect(0, 0, displayWidth, displayHeight);
 
+        // --- ASPECT RATIO CORRECTION (Object-Contain) ---
+        // MediaPipe coords are relative to the video frame (0.0 - 1.0).
+        // Since video is object-contain, it might have black bars (letterbox/pillarbox).
+        // We must calculate the actual screen area of the video image.
+        let drawWidth = displayWidth;
+        let drawHeight = displayHeight;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+            const videoRatio = video.videoWidth / video.videoHeight;
+            const elementRatio = displayWidth / displayHeight;
+
+            if (elementRatio > videoRatio) {
+                // Container is WIDER than video (Pillarbox: Bars on sides)
+                drawWidth = displayHeight * videoRatio;
+                offsetX = (displayWidth - drawWidth) / 2;
+            } else {
+                // Container is NARROWER/TALLER than video (Letterbox: Bars top/bottom)
+                drawHeight = displayWidth / videoRatio;
+                offsetY = (displayHeight - drawHeight) / 2;
+            }
+        }
+
         // Color-coded connection groups
         const torsoConnections = [
             [11, 12], [11, 23], [12, 24], [23, 24] // Shoulders and core
@@ -482,54 +492,42 @@ const VideoAnalyzer: React.FC = () => {
             [27, 31], [28, 32], [27, 29], [28, 30]  // Feet
         ];
 
+        const toScreen = (p: { x: number, y: number }) => ({
+            x: offsetX + (p.x * drawWidth),
+            y: offsetY + (p.y * drawHeight)
+        });
+
         ctx.lineWidth = 3;
         ctx.lineCap = 'round';
 
-        // Draw torso (cyan)
-        ctx.strokeStyle = '#22d3ee';
-        torsoConnections.forEach(([i, j]) => {
-            const p1 = landmarks[i];
-            const p2 = landmarks[j];
-            if (p1 && p2 && p1.visibility > 0.5 && p2.visibility > 0.5) {
-                ctx.beginPath();
-                ctx.moveTo(p1.x * displayWidth, p1.y * displayHeight);
-                ctx.lineTo(p2.x * displayWidth, p2.y * displayHeight);
-                ctx.stroke();
-            }
-        });
+        // Helper to draw segment
+        const drawSegment = (connections: number[][], color: string) => {
+            ctx.strokeStyle = color;
+            connections.forEach(([i, j]) => {
+                const p1 = landmarks[i];
+                const p2 = landmarks[j];
+                if (p1 && p2 && p1.visibility > 0.5 && p2.visibility > 0.5) {
+                    const s1 = toScreen(p1);
+                    const s2 = toScreen(p2);
+                    ctx.beginPath();
+                    ctx.moveTo(s1.x, s1.y);
+                    ctx.lineTo(s2.x, s2.y);
+                    ctx.stroke();
+                }
+            });
+        };
 
-        // Draw arms (magenta)
-        ctx.strokeStyle = '#ff00ff';
-        armConnections.forEach(([i, j]) => {
-            const p1 = landmarks[i];
-            const p2 = landmarks[j];
-            if (p1 && p2 && p1.visibility > 0.5 && p2.visibility > 0.5) {
-                ctx.beginPath();
-                ctx.moveTo(p1.x * displayWidth, p1.y * displayHeight);
-                ctx.lineTo(p2.x * displayWidth, p2.y * displayHeight);
-                ctx.stroke();
-            }
-        });
-
-        // Draw legs (yellow)
-        ctx.strokeStyle = '#fbbf24';
-        legConnections.forEach(([i, j]) => {
-            const p1 = landmarks[i];
-            const p2 = landmarks[j];
-            if (p1 && p2 && p1.visibility > 0.5 && p2.visibility > 0.5) {
-                ctx.beginPath();
-                ctx.moveTo(p1.x * displayWidth, p1.y * displayHeight);
-                ctx.lineTo(p2.x * displayWidth, p2.y * displayHeight);
-                ctx.stroke();
-            }
-        });
+        drawSegment(torsoConnections, '#22d3ee'); // Cyan
+        drawSegment(armConnections, '#ff00ff');   // Magenta
+        drawSegment(legConnections, '#fbbf24');   // Yellow
 
         // Draw joints (red dots)
         ctx.fillStyle = '#ff0000';
-        landmarks.forEach((p) => {
+        landmarks.forEach((p: any) => {
             if (p.visibility > 0.5) {
+                const s = toScreen(p);
                 ctx.beginPath();
-                ctx.arc(p.x * displayWidth, p.y * displayHeight, 4, 0, 2 * Math.PI);
+                ctx.arc(s.x, s.y, 4, 0, 2 * Math.PI);
                 ctx.fill();
             }
         });
