@@ -13,7 +13,7 @@ export class BaseAgent {
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        this.modelName = "gemini-2.0-flash-exp"; // 1.5 unavailable
+        this.modelName = "gemini-1.5-flash"; // More stable for high-frequency reasoning
         this.model = genAI.getGenerativeModel({ model: this.modelName });
     }
 

@@ -99,7 +99,7 @@ export const analyzeTechnique = async (images: string[], bioData: any, advancedM
 };
 
 export const generateNexusInsight = async (logs: any[], readiness: any, analysisHistory: any[], acwr: any, profile?: UserProfile): Promise<NexusInsight | null> => {
-    const model = getModelInstance("gemini-2.0-flash-exp");
+    const model = getModelInstance("gemini-1.5-flash");
     if (!model) return null;
 
     const acwrRatio = acwr?.ratio || 0;
@@ -148,6 +148,8 @@ export const generateNexusInsight = async (logs: any[], readiness: any, analysis
 // --- ELITE 5 MULTI-AGENT ORCHESTRATION ---
 import { HeadCoachOrchestrator } from "./agents/HeadCoachOrchestrator";
 
+const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
 export const generateTrainingPlan = async (
     profile: UserProfile,
     readiness: any,
@@ -190,6 +192,8 @@ export const generateTrainingPlan = async (
                 ...result.finalPlan,
                 day: day
             });
+            // Throttling to avoid 429 Errors
+            await delay(1000);
         }
 
         return {
@@ -208,7 +212,7 @@ export const generateTrainingPlan = async (
 };
 
 export const chatWithCoach = async (history: any[], message: string, context: any, persona: string = 'Coach'): Promise<any> => {
-    const model = getModelInstance("gemini-2.0-flash-exp");
+    const model = getModelInstance("gemini-1.5-flash");
     if (!model) return { text: "Sistema Offline." };
 
     try {
