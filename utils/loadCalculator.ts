@@ -54,16 +54,41 @@ export const calculateACWR = (historyPlans: TrainingPlan[], logs: PerformanceLog
     // A. From Plans
     historyPlans.forEach(plan => {
         plan.sessions.forEach(session => {
-            // Use feedback timestamp if available, else plan creation date + day offset (approx)
-            // Ideally we rely on feedback timestamp for accuracy.
+            // Priority 1: Use actual feedback timestamp if available
             if (session.feedback?.completed && session.feedback.timestamp) {
                 addLoad(new Date(session.feedback.timestamp), getSessionLoad(session));
-            } else if (plan.createdAt) {
-                // If no feedback date, we might skip or estimate. 
-                // For "Planned" load visualization we might want this, but ACWR is usually "done" work.
-                // We'll skip incomplete sessions for ACWR strictly, 
-                // BUT for the chart we might want to see them?
-                // Strict approach: ACWR is risk based on WORK DONE.
+            }
+            // Priority 2: Use plan creation date as estimate for planned sessions
+            // This ensures the chart shows SOMETHING even if no sessions are completed
+            else if (plan.createdAt) {
+                // Estimate: Distribute sessions across the week starting from plan creation
+                // Use a simple heuristic: if session.day exists, map it to a day offset
+                const planDate = new Date(plan.createdAt);
+                const dayMap: Record<string, number> = {
+                    'lun': 0, 'mon': 0, 'monday': 0, 'lunes': 0,
+                    'mar': 1, 'tue': 1, 'tuesday': 1, 'martes': 1,
+                    'mie': 2, 'wed': 2, 'wednesday': 2, 'miercoles': 2,
+                    'jue': 3, 'thu': 3, 'thursday': 3, 'jueves': 3,
+                    'vie': 4, 'fri': 4, 'friday': 4, 'viernes': 4,
+                    'sab': 5, 'sat': 5, 'saturday': 5, 'sabado': 5,
+                    'dom': 6, 'sun': 6, 'sunday': 6, 'domingo': 6
+                };
+
+                const sessionDay = session.day?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") || '';
+                let dayOffset = 0;
+
+                for (const [key, offset] of Object.entries(dayMap)) {
+                    if (sessionDay.includes(key)) {
+                        dayOffset = offset;
+                        break;
+                    }
+                }
+
+                const estimatedDate = new Date(planDate);
+                estimatedDate.setDate(planDate.getDate() + dayOffset);
+
+                // Add as estimated load (will be overwritten by actual feedback if it exists)
+                addLoad(estimatedDate, getSessionLoad(session));
             }
         });
     });
