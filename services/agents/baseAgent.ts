@@ -6,8 +6,11 @@ export class BaseAgent {
     protected modelName: string;
 
     constructor(role: 'Pro' | 'Flash' = 'Flash') {
-        const apiKey = getEnv("FIREBASE_API_KEY") || getEnv("VITE_FIREBASE_API_KEY"); // Fallback to existing env key
-        if (!apiKey) console.warn("Agent initialized without API Key");
+        const apiKey = getEnv("GEMINI_API_KEY") || getEnv("VITE_GEMINI_API_KEY") || getEnv("API_KEY");
+        if (!apiKey) {
+            console.error("❌ CRITICAL: BaseAgent initialized without API Key!");
+            throw new Error("Gemini API Key not found");
+        }
 
         const genAI = new GoogleGenerativeAI(apiKey);
         this.modelName = role === 'Pro' ? "gemini-1.5-pro-002" : "gemini-1.5-flash-002";

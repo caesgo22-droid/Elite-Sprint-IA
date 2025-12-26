@@ -141,8 +141,13 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
         // Metrics Calculation
         const acute = currentLoad;
         const chronic = rollingLoads.length > 0 ? rollingLoads.reduce((a, b) => a + b, 0) / rollingLoads.length : 1;
-        // Use external ACWR as source of truth if available, otherwise fallback
-        const acwr = acwrStats ? acwrStats.ratio : (chronic > 0 ? acute / chronic : 0);
+
+        // CRITICAL: Use ONLY the passed acwrStats (single source of truth from loadCalculator.ts)
+        const acwr = acwrStats?.ratio || 0;
+
+        if (!acwrStats) {
+            console.warn("MacrocycleChart: acwrStats prop is missing! This should never happen.");
+        }
 
         const planLoad = 2200; // Mock or calculate from plan target
         const loadDeviation = planLoad > 0 ? ((currentLoad - planLoad) / planLoad) * 100 : 0;
