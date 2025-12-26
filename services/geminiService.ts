@@ -38,68 +38,67 @@ const getModelInstance = (modelName: string) => {
     });
 };
 
-export const analyzeTechnique = async (images: string[], bioData: any, advancedMetrics: any, analysisMode: string, userProfile?: any, lastAnalysis?: any, currentSession?: any): Promise<any> => {
-    const isMaster = analysisMode === 'External';
-    const modelName = isMaster ? "gemini-1.5-pro" : "gemini-1.5-flash";
-    const model = getModelInstance(modelName);
-    if (!model) return null;
+const isMaster = analysisMode === 'External';
+const modelName = "gemini-2.0-flash-exp"; // 1.5 unavailable, 2.0 working
+const model = getModelInstance(modelName);
+if (!model) return null;
 
-    try {
-        const imageParts = images.map(img => ({
-            inlineData: { mimeType: "image/jpeg", data: img }
-        }));
+try {
+    const imageParts = images.map(img => ({
+        inlineData: { mimeType: "image/jpeg", data: img }
+    }));
 
-        let contextAddition = "";
-        if (userProfile) {
-            const activeInjuries = userProfile.injuries?.filter((i: any) => i.status === 'Activa').map((i: any) => i.location).join(', ') || 'Ninguna';
-            const mainEvent = userProfile.events?.[0] || '100m';
-            const pb = userProfile.pbs?.[mainEvent]?.time || 'N/A';
-            const lastErrors = lastAnalysis?.criticalErrors?.join(', ') || 'Primer análisis';
-            const sessionFocus = currentSession?.biomechanicsKpi || 'General';
+    let contextAddition = "";
+    if (userProfile) {
+        const activeInjuries = userProfile.injuries?.filter((i: any) => i.status === 'Activa').map((i: any) => i.location).join(', ') || 'Ninguna';
+        const mainEvent = userProfile.events?.[0] || '100m';
+        const pb = userProfile.pbs?.[mainEvent]?.time || 'N/A';
+        const lastErrors = lastAnalysis?.criticalErrors?.join(', ') || 'Primer análisis';
+        const sessionFocus = currentSession?.biomechanicsKpi || 'General';
 
-            contextAddition = `\n\nCONTEXTO DEL ATLETA:\n- Evento Principal: ${mainEvent}\n- PB Actual: ${pb}\n- Lesiones Activas: ${activeInjuries}\n- Último Análisis: ${lastErrors}\n- Objetivo de Sesión: ${sessionFocus}\n`;
-        }
-
-        const prompt = isMaster
-            ? MASTER_AUDIT_PROMPT({ bioData, advancedMetrics }) + contextAddition
-            : VIDEO_ANALYSIS_PROMPT({ bioData, advancedMetrics }) + contextAddition;
-
-        const predictionInstruction = `\n\nINSTRUCCIÓN DE PREDICCIÓN DE CARRERA: Basado en la Cinemática y fuerza, llena el campo 'racePredictions' en el JSON con tiempos para 100m, 200m y 400m. Es OBLIGATORIO.`;
-
-        const finalPrompt = prompt + predictionInstruction;
-
-        const result = await model.generateContent({
-            contents: [{
-                role: "user",
-                parts: [
-                    ...imageParts,
-                    { text: finalPrompt }
-                ]
-            }],
-            generationConfig: {
-                responseMimeType: "application/json",
-                temperature: 0.1,
-            },
-            systemInstruction: isMaster ? MASTER_ANALYSIS_SYSTEM_INSTRUCTION : ANALYSIS_SYSTEM_INSTRUCTION,
-        });
-
-        const response = await result.response;
-        const parsedResult = cleanAndParseJSON(response.text());
-
-        if (!parsedResult) {
-            console.error("Failed to parse AI response:", response.text());
-        }
-
-        return parsedResult;
-    } catch (e: any) {
-        console.error("AI Analysis Error:", e);
-        console.error("Error details:", e.message, e.stack);
-        return null;
+        contextAddition = `\n\nCONTEXTO DEL ATLETA:\n- Evento Principal: ${mainEvent}\n- PB Actual: ${pb}\n- Lesiones Activas: ${activeInjuries}\n- Último Análisis: ${lastErrors}\n- Objetivo de Sesión: ${sessionFocus}\n`;
     }
+
+    const prompt = isMaster
+        ? MASTER_AUDIT_PROMPT({ bioData, advancedMetrics }) + contextAddition
+        : VIDEO_ANALYSIS_PROMPT({ bioData, advancedMetrics }) + contextAddition;
+
+    const predictionInstruction = `\n\nINSTRUCCIÓN DE PREDICCIÓN DE CARRERA: Basado en la Cinemática y fuerza, llena el campo 'racePredictions' en el JSON con tiempos para 100m, 200m y 400m. Es OBLIGATORIO.`;
+
+    const finalPrompt = prompt + predictionInstruction;
+
+    const result = await model.generateContent({
+        contents: [{
+            role: "user",
+            parts: [
+                ...imageParts,
+                { text: finalPrompt }
+            ]
+        }],
+        generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.1,
+        },
+        systemInstruction: isMaster ? MASTER_ANALYSIS_SYSTEM_INSTRUCTION : ANALYSIS_SYSTEM_INSTRUCTION,
+    });
+
+    const response = await result.response;
+    const parsedResult = cleanAndParseJSON(response.text());
+
+    if (!parsedResult) {
+        console.error("Failed to parse AI response:", response.text());
+    }
+
+    return parsedResult;
+} catch (e: any) {
+    console.error("AI Analysis Error:", e);
+    console.error("Error details:", e.message, e.stack);
+    return null;
+}
 };
 
 export const generateNexusInsight = async (logs: any[], readiness: any, analysisHistory: any[], acwr: any, profile?: UserProfile): Promise<NexusInsight | null> => {
-    const model = getModelInstance("gemini-1.5-flash");
+    const model = getModelInstance("gemini-2.0-flash-exp");
     if (!model) return null;
 
     const acwrRatio = acwr?.ratio || 0;
@@ -197,7 +196,7 @@ export const generateTrainingPlan = async (
 };
 
 export const chatWithCoach = async (history: any[], message: string, context: any, persona: string = 'Coach'): Promise<any> => {
-    const model = getModelInstance("gemini-1.5-flash");
+    const model = getModelInstance("gemini-2.0-flash-exp");
     if (!model) return { text: "Sistema Offline." };
 
     try {

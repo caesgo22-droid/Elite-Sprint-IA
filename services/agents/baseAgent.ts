@@ -13,7 +13,7 @@ export class BaseAgent {
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        this.modelName = role === 'Pro' ? "gemini-1.5-pro" : "gemini-1.5-flash";
+        this.modelName = "gemini-2.0-flash-exp"; // 1.5 unavailable
         this.model = genAI.getGenerativeModel({ model: this.modelName });
     }
 
