@@ -236,26 +236,28 @@ const VideoAnalyzer: React.FC = () => {
                 lastAnalysis
             );
 
-            if (aiResult) {
-                const analysis: BiomechanicalAnalysis = {
-                    ...aiResult,
-                    id: Date.now().toString(),
-                    type: analysisMode === 'External' ? 'MasterAudit' : 'Filmstrip',
-                    category: analysisMode,
-                    thumbnail: frames[1],
-                    timestamp: primaryFrame.timestamp / 1000,
-                    videoFingerprint: videoFingerprint || undefined,
-                    kinetics: {
-                        comVelocity: primaryFrame.advanced.velocity,
-                        forceApplicationIndex: stats.legStiffness,
-                        verticalOscillation: primaryFrame.advanced.verticalOscillation,
-                        groundContactTime: `${stats.realGCT.toFixed(3)}s`
-                    }
-                };
-                setSessionAnalyses(prev => [analysis, ...prev]);
-                saveAnalysis(analysis);
-                showToast("Análisis completo", "success");
+            if (!aiResult) {
+                throw new Error("El análisis de IA no generó resultados. Revisa la consola del navegador para más detalles.");
             }
+
+            const analysis: BiomechanicalAnalysis = {
+                ...aiResult,
+                id: Date.now().toString(),
+                type: analysisMode === 'External' ? 'MasterAudit' : 'Filmstrip',
+                category: analysisMode,
+                thumbnail: frames[1],
+                timestamp: primaryFrame.timestamp / 1000,
+                videoFingerprint: videoFingerprint || undefined,
+                kinetics: {
+                    comVelocity: primaryFrame.advanced.velocity,
+                    forceApplicationIndex: stats.legStiffness,
+                    verticalOscillation: primaryFrame.advanced.verticalOscillation,
+                    groundContactTime: `${stats.realGCT.toFixed(3)}s`
+                }
+            };
+            setSessionAnalyses(prev => [analysis, ...prev]);
+            saveAnalysis(analysis);
+            showToast("Análisis completo", "success");
 
         } catch (e: any) {
             showToast(e.message, "error");

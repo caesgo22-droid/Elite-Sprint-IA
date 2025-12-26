@@ -15,6 +15,7 @@ const cleanAndParseJSON = (text: string) => {
         return JSON.parse(cleaned);
     } catch (e) {
         console.error("JSON Parse Fail:", e);
+        console.error("Raw response (first 500 chars):", text?.substring(0, 500));
         return null;
     }
 };
@@ -83,9 +84,16 @@ export const analyzeTechnique = async (images: string[], bioData: any, advancedM
         });
 
         const response = await result.response;
-        return cleanAndParseJSON(response.text());
+        const parsedResult = cleanAndParseJSON(response.text());
+
+        if (!parsedResult) {
+            console.error("Failed to parse AI response:", response.text());
+        }
+
+        return parsedResult;
     } catch (e: any) {
         console.error("AI Analysis Error:", e);
+        console.error("Error details:", e.message, e.stack);
         return null;
     }
 };
