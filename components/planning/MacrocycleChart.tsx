@@ -76,12 +76,16 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
                     const date = new Date(day.dateStr);
                     const isToday = date.toDateString() === new Date().toDateString();
 
+                    const diffDays = Math.floor((new Date().getTime() - date.getTime()) / (1000 * 3600 * 24));
+                    const weekNum = Math.floor(diffDays / 7);
+                    const isMonday = date.getDay() === 1;
+
                     rawPoints.push({
                         type: isToday ? 'current' : 'history',
                         load: day.acute * 7, // Visualizing Weekly Volume Equivalent
                         chronicLine: day.chronic * 7,
                         date: date,
-                        label: isToday ? 'Actual' : (date.getDay() === 1 ? 'Lun' : '') // Label Mondays
+                        label: isToday ? 'Actual' : (isMonday ? `S-${weekNum}` : '') // Label Weeks (S-1, S-2...)
                     });
                 }
             });
