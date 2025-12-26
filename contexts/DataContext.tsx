@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import { UserProfile, TrainingPlan, PerformanceLog, ChatMessage, BiomechanicalAnalysis, NexusInsight, LoadStats } from '../types';
+import { UserProfile, TrainingPlan, PerformanceLog, ChatMessage, BiomechanicalAnalysis, NexusInsight, ACWROutput } from '../types';
 import {
     saveUserProfile, saveTrainingPlan, addPerformanceLog, updatePerformanceLog, deletePerformanceLog,
     fetchUserData, saveAnalysisToHistory, getAnalysisHistory, archivePlan, getPlanHistory,
@@ -9,11 +9,13 @@ import { useToasts } from './ToastContext';
 import { useAuth } from './AuthContext';
 import { calculateACWR } from '../utils/loadCalculator';
 
-const defaultACWR: LoadStats = {
+const defaultACWR: ACWROutput = {
     acuteLoad: 0,
     chronicLoad: 0,
     ratio: 0,
-    status: 'Óptimo'
+    status: 'Óptimo',
+    history: [],
+    limits: { minMsg: '0.8', maxMsg: '1.5' }
 };
 
 interface DataContextType {
@@ -44,7 +46,7 @@ interface DataContextType {
     deleteAnalysis: (id: string) => void;
     deletedAnalyses: string[];
 
-    acwrStats: LoadStats | null;
+    acwrStats: ACWROutput | null;
     nexusInsight: NexusInsight | null;
     setNexusInsight: (insight: NexusInsight | null) => void;
 
@@ -97,7 +99,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [lastAnalysis, setLastAnalysis] = useState<BiomechanicalAnalysis | null>(null);
     const [analysisHistory, setAnalysisHistory] = useState<BiomechanicalAnalysis[]>([]);
 
-    const [acwrStats, setAcwrStats] = useState<LoadStats>(defaultACWR);
+    const [acwrStats, setAcwrStats] = useState<ACWROutput>(defaultACWR);
     const [nexusInsight, setNexusInsight] = useState<NexusInsight | null>(null);
 
     const [deletedAnalyses, setDeletedAnalyses] = useState<string[]>(() => {

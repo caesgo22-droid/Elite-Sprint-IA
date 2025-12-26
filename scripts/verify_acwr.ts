@@ -58,7 +58,18 @@ if (plannedLoad === 480 && actualLoad === 810) {
 // Test calculateACWR
 console.log("\n--- Testing calculateACWR with unified logic ---");
 const result = calculateACWR(mockPlans, mockLogs);
-console.log("ACWR Result:", JSON.stringify(result, null, 2));
+console.log("ACWR Status:", result.status);
+console.log("ACWR Ratio:", result.ratio);
+
+if (result.history && result.history.length > 0) {
+    console.log(`SUCCESS: History generated (${result.history.length} days).`);
+    // Check if limits are present
+    if (result.limits) {
+        console.log("SUCCESS: Limits present.");
+    }
+} else {
+    console.error("FAILURE: History missing.");
+}
 
 if (result.acuteLoad > 0) {
     console.log("SUCCESS: Acute load detected.");

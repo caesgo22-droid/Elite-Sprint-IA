@@ -176,6 +176,23 @@ export interface LoadStats {
   status: 'Óptimo' | 'Alto Riesgo' | 'Carga Baja';
 }
 
+export interface DayStats {
+  dateStr: string;
+  load: number;
+  acute: number;
+  chronic: number;
+  ratio: number;
+}
+
+export interface ACWROutput extends LoadStats {
+  history: DayStats[];
+  limits: {
+    minMsg: string;
+    maxMsg: string;
+  }
+}
+
+
 export interface Drill { name: string; category: 'Accel' | 'MaxV' | 'Plyo' | 'Strength' | 'Recovery'; intensity: number; videoKeyword: string; }
 export interface PhaseTemplate { name: string; focusPoints: string[]; weeklyStructure: { [day: string]: string }; }
 export interface Vector2D { x: number; y: number; }

@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useMemo, useState } from 'react';
 import { Injury } from '../../types';
-import { calculateACWR, getSessionLoad } from '../../utils/loadCalculator';
+import { getSessionLoad } from '../../utils/loadCalculator';
 import { Trophy, Activity, AlertCircle, Stethoscope, Info } from 'lucide-react';
 
 interface MacrocycleChartProps {
@@ -13,7 +13,7 @@ interface MacrocycleChartProps {
     therapyLogs?: any[];
     isStaff?: boolean;
     onUpdatePlan?: (updatedPlan: any) => void;
-    acwrStats?: { ratio: number; status: string } | null;
+    acwrStats?: any; // Using any to avoid strict type issues with customized extended interface if not fully propagated, but effectively ACWROutput
 }
 
 // Helper to calculate smooth bezier curves
@@ -51,113 +51,96 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
     injuries,
     competitions,
     therapyLogs,
-    isStaff = false, // Add isStaff prop
-    onUpdatePlan, // Callback for updates
-    acwrStats // Passed from context
+    isStaff = false,
+    onUpdatePlan,
+    acwrStats
 }) => {
     const [tooltip, setTooltip] = useState<{ x: number; y: number; content: React.ReactNode } | null>(null);
     const [editMode, setEditMode] = useState(false);
 
     // 1. Process Data
     const { chartPoints, milestones, metrics, maxLoad, rawPoints } = useMemo(() => {
-        // Collect data similar to previous implementation
-        const allPlans = [...history].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-        // Show last 4 weeks + current + 3 projected = 8 data points ideally
-        const recentHistory = allPlans.slice(-4);
-
-        const calcLoad = (plan: any) => {
-            let load = 0;
-            if (plan && plan.sessions) {
-                plan.sessions.forEach((s: any) => {
-                    load += getSessionLoad(s);
-                });
-            }
-            return load;
-        };
-
         const rawPoints: any[] = [];
-        let rollingLoads: number[] = [];
 
-        // Historical Data
-        recentHistory.forEach((plan, i) => {
-            const load = calcLoad(plan);
-            rollingLoads.push(load);
-            rawPoints.push({
-                type: 'history',
-                load,
-                date: new Date(plan.createdAt),
-                label: `S${-1 * (recentHistory.length - i)}`
+        // 1. History & Current (From United Source of Truth)
+        if (acwrStats && (acwrStats as any).history) {
+            const historyStats = (acwrStats as any).history as any[];
+
+            // Optimize: Sample every 7th day for clarity, or just dump the last 30 days
+            // Let's show the last 35 days (5 weeks)
+            const daysToShow = 35;
+            const relevantFn = (i: number) => i > historyStats.length - daysToShow;
+
+            historyStats.forEach((day: any, i: number) => {
+                if (relevantFn(i)) {
+                    const date = new Date(day.dateStr);
+                    const isToday = date.toDateString() === new Date().toDateString();
+
+                    rawPoints.push({
+                        type: isToday ? 'current' : 'history',
+                        load: day.acute * 7, // Visualizing Weekly Volume Equivalent
+                        chronicLine: day.chronic * 7,
+                        date: date,
+                        label: isToday ? 'Actual' : (date.getDay() === 1 ? 'Lun' : '') // Label Mondays
+                    });
+                }
             });
-        });
+        } else {
+            // Fallback if no history (shouldn't happen with new logic, but safe render)
+            rawPoints.push({
+                type: 'current',
+                load: 0,
+                chronicLine: 0,
+                date: new Date(),
+                label: 'Actual'
+            });
+        }
 
-        // Current Data
-        const currentLoad = currentPlan ? calcLoad(currentPlan) : 0;
-        rollingLoads.push(currentLoad);
-        rawPoints.push({
-            type: 'current',
-            load: currentLoad,
-            date: new Date(),
-            label: 'Actual'
-        });
+        // 2. Projected (Future)
+        let lastPoint = rawPoints[rawPoints.length - 1];
+        let lastChronic = lastPoint ? lastPoint.chronicLine / 7 : 0; // Back to daily for math
+        let lastAcute = lastPoint ? lastPoint.load / 7 : 0;
 
-        // Projected Data
-        let lastLoad = currentLoad || 150;
         const phase = currentPlan?.phase || 'General Prep';
+
+        // Create 3 Weeks of Projection
         for (let i = 1; i <= 3; i++) {
-            let nextLoad = lastLoad;
+            let targetLoad = lastAcute;
+
             if (phase.includes('Specific') || phase.includes('Pre-Comp')) {
-                if (i === 3) nextLoad = lastLoad * 0.7;
-                else nextLoad = lastLoad * 1.05;
+                if (i === 3) targetLoad *= 0.7; // Deload
+                else targetLoad *= 1.05; // Build
             } else if (phase.includes('Competition')) {
-                nextLoad = lastLoad * 0.85;
+                targetLoad *= 0.85; // Maintenance
             } else if (phase.includes('Transition')) {
-                nextLoad = lastLoad * 0.6; // Heavy de-load for transition
+                targetLoad *= 0.6;
             } else {
-                nextLoad = lastLoad * 1.02;
+                targetLoad *= 1.02; // General build
             }
+
+            lastChronic = (lastChronic * 0.75) + (targetLoad * 0.25);
 
             rawPoints.push({
                 type: 'projected',
-                load: Math.round(nextLoad),
+                load: Math.round(targetLoad * 7),
+                chronicLine: Math.round(lastChronic * 7),
                 date: new Date(Date.now() + (i * 7 * 24 * 60 * 60 * 1000)),
-                label: `S${i}`
+                label: `S+${i}`
             });
-            lastLoad = nextLoad;
+
+            lastAcute = targetLoad;
         }
 
-        // Limit Calculation Helpers
-        const getChronicLoad = (date: Date) => {
-            // Filter plans strictly before this date, up to 28 days back
-            const relevant = allPlans.filter(p => {
-                const d = new Date(p.createdAt);
-                const diff = (date.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
-                return diff >= 0 && diff <= 28;
-            });
-            if (relevant.length === 0) return 0;
-            const sum = relevant.reduce((acc, p) => acc + calcLoad(p), 0);
-            return sum / Math.max(relevant.length, 1); // Simple average of available points
-        };
-
-        // Metrics Calculation
-        const acute = currentLoad;
-        const chronic = rollingLoads.length > 0 ? rollingLoads.reduce((a, b) => a + b, 0) / rollingLoads.length : 1;
-
-        // CRITICAL: Use ONLY the passed acwrStats (single source of truth from loadCalculator.ts)
+        // Metrics from Source of Truth
         const acwr = acwrStats?.ratio || 0;
-
-        if (!acwrStats) {
-            console.warn("MacrocycleChart: acwrStats prop is missing! This should never happen.");
-        }
-
-        const planLoad = 2200; // Mock or calculate from plan target
+        const currentLoad = (acwrStats?.acuteLoad || 0) * 7;
+        const planLoad = 2200;
         const loadDeviation = planLoad > 0 ? ((currentLoad - planLoad) / planLoad) * 100 : 0;
 
         // Scaling
         const maxDataLoad = Math.max(...rawPoints.map(p => p.load), 100);
-        // Estimate Max Limit for scaling (Max ACWR 1.5 * Max Chronic)
-        const estMaxLimit = maxDataLoad * 1.5;
-        const padding = estMaxLimit * 0.1;
-        const scaleMax = estMaxLimit + padding;
+        const maxLimitVis = Math.max(...rawPoints.map(p => p.chronicLine * 1.5), 100);
+        const scaleMax = Math.max(maxDataLoad, maxLimitVis) * 1.1;
 
         const width = 800;
         const height = 480;
@@ -165,21 +148,14 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
         const effectiveWidth = width - (marginX * 2);
 
         const chartPoints = rawPoints.map((p, i) => {
-            // Calculate local chronic load for this point
-            // For simplicity in this view, we use the rolling average of data points if sparse
-            // or fallback to previous point's chronic.
-            // Improved: Calculate Dynamic Limits
-            // We can approximate chronic load as the average of last 4 points including this one if history is sparse
-            let localChronic = getChronicLoad(p.date) || (p.load * 0.8); // Fallback
-            if (i === 0 && localChronic === 0) localChronic = p.load; // First point baseline
-
-            const minLoad = localChronic * 0.8;
-            const maxLoad = localChronic * 1.5;
+            const chronic = p.chronicLine;
+            const minLoad = chronic * 0.8;
+            const maxLoad = chronic * 1.5;
 
             return {
                 ...p,
                 x: marginX + (i * (effectiveWidth / (rawPoints.length - 1))),
-                y: height - ((p.load / scaleMax) * (height - 50)) - 30, // 30px bottom padding
+                y: height - ((p.load / scaleMax) * (height - 50)) - 30,
                 yMin: height - ((minLoad / scaleMax) * (height - 50)) - 30,
                 yMax: height - ((maxLoad / scaleMax) * (height - 50)) - 30,
                 minLoad,
@@ -190,65 +166,58 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
         // Milestones
         const computedMilestones: any[] = [];
 
-        // Injuries
+        // Helper to find closest point to date
+        const findClosestPoint = (date: Date) => {
+            const time = date.getTime();
+            let closest = null;
+            let minDiff = Infinity;
+
+            chartPoints.forEach(p => {
+                const diff = Math.abs(p.date.getTime() - time);
+                if (diff < minDiff && diff < (3 * 24 * 60 * 60 * 1000)) { // Within 3 days
+                    minDiff = diff;
+                    closest = p;
+                }
+            });
+            return closest;
+        };
+
         injuries?.filter(inj => inj.diagnosedDate).forEach(inj => {
             const date = new Date(inj.diagnosedDate!);
-            const weekPoint = chartPoints.find(p => {
-                const wStart = new Date(p.date);
-                wStart.setDate(wStart.getDate() - 3);
-                const wEnd = new Date(p.date);
-                wEnd.setDate(wEnd.getDate() + 4);
-                return date >= wStart && date <= wEnd;
-            });
-
-            if (weekPoint) {
+            const p = findClosestPoint(date);
+            if (p) {
                 computedMilestones.push({
                     type: 'injury',
-                    x: weekPoint.x,
-                    y: weekPoint.y,
+                    x: (p as any).x,
+                    y: (p as any).y,
                     label: inj.type,
                     date: date.toLocaleDateString()
                 });
             }
         });
 
-        // Competitions
         competitions?.forEach(comp => {
             const date = new Date(comp.date);
-            const weekPoint = chartPoints.find(p => {
-                const wStart = new Date(p.date);
-                wStart.setDate(wStart.getDate() - 3);
-                const wEnd = new Date(p.date);
-                wEnd.setDate(wEnd.getDate() + 4);
-                return date >= wStart && date <= wEnd;
-            });
-
-            if (weekPoint) {
+            const p = findClosestPoint(date);
+            if (p) {
                 computedMilestones.push({
                     type: 'competition',
-                    x: weekPoint.x,
-                    y: weekPoint.y - 40, // Float above
+                    x: (p as any).x,
+                    y: (p as any).y - 40,
                     label: comp.name,
                     date: date.toLocaleDateString()
                 });
             }
         });
 
-        // Therapy
         therapyLogs?.filter(log => log.type === 'Recovery' || log.event === 'Therapy').forEach(log => {
             const date = new Date(log.date);
-            const weekPoint = chartPoints.find(p => {
-                const wStart = new Date(p.date);
-                wStart.setDate(wStart.getDate() - 3);
-                const wEnd = new Date(p.date);
-                wEnd.setDate(wEnd.getDate() + 4);
-                return date >= wStart && date <= wEnd;
-            });
-            if (weekPoint && !computedMilestones.find(m => m.type === 'therapy' && m.x === weekPoint.x)) {
+            const p = findClosestPoint(date);
+            if (p && !computedMilestones.find(m => m.type === 'therapy' && m.x === (p as any).x)) {
                 computedMilestones.push({
                     type: 'therapy',
-                    x: weekPoint.x,
-                    y: weekPoint.y,
+                    x: (p as any).x,
+                    y: (p as any).y,
                     label: 'Terapia',
                     date: date.toLocaleDateString()
                 });
@@ -262,25 +231,18 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
             maxLoad: scaleMax,
             rawPoints // Export rawPoints
         };
-    }, [history, currentPlan, injuries, competitions, therapyLogs]);
+    }, [history, currentPlan, injuries, competitions, therapyLogs, acwrStats]);
 
     // Paths
-    const projectedData = chartPoints; // Use all points for one smooth line, but visual diff handled by masks or split
-    // Actually, to match design having dash line for projected, we might split visually
-    // The design shows a continuous filled area with gradient, and a line on top.
-
-    // We will separate the "Real" path (history + current) and "Projected" path (current + future)
     const realPoints = chartPoints.filter(p => p.type !== 'projected');
-    // Ensure connectivity: include the 'current' point as first point of projected
     const projectedPoints = [
-        chartPoints.find(p => p.type === 'current')!,
+        chartPoints.find(p => p.type === 'current') || chartPoints[chartPoints.length - 1],
         ...chartPoints.filter(p => p.type === 'projected')
     ].filter(Boolean);
 
     const fullPathPoints = chartPoints.map(p => ({ x: p.x, y: p.y }));
     const areaPath = getPathFromPoints(fullPathPoints, true);
 
-    // Line paths
     const realLinePath = getPathFromPoints(realPoints.map(p => ({ x: p.x, y: p.y })));
     const projectedLinePath = getPathFromPoints(projectedPoints.map(p => ({ x: p.x, y: p.y })));
     const minLimitPath = getPathFromPoints(chartPoints.map(p => ({ x: p.x, y: p.yMin })));
@@ -377,7 +339,7 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
                                 const nextP = chartPoints[i + 1];
                                 // We'll infer phase based on weeks to race or just label
                                 // Simple mapping for visualization:
-                                const weeksOut = (chartPoints.length - 1 - i);
+                                const weeksOut = (chartPoints.length - 1 - i) / 7; // Approx
                                 let color = "#3b82f6"; // General (Blue)
                                 const pName = currentPlan?.phase || 'General Prep';
 
@@ -406,10 +368,9 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
 
                         {/* Dynamic ACWR Limits */}
                         <path d={maxLimitPath} fill="none" stroke="#f87171" strokeWidth="1.5" strokeDasharray="4 4" opacity="0.6" />
-                        <text x={chartPoints[chartPoints.length - 1].x} y={chartPoints[chartPoints.length - 1].yMax - 5} textAnchor="end" className="fill-red-400 text-[8px] font-bold uppercase opacity-80">Max (1.5)</text>
 
                         <path d={minLimitPath} fill="none" stroke="#fbbf24" strokeWidth="1.5" strokeDasharray="4 4" opacity="0.6" />
-                        <text x={chartPoints[chartPoints.length - 1].x} y={chartPoints[chartPoints.length - 1].yMin + 10} textAnchor="end" className="fill-yellow-400 text-[8px] font-bold uppercase opacity-80">Min (0.8)</text>
+
 
                         {/* Current Week Vertical Line */}
                         {chartPoints.find(p => p.type === 'current') && (
@@ -441,9 +402,6 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
                         {/* Paths */}
                         <path d={projectedLinePath} fill="none" opacity="0.6" stroke="#818cf8" strokeDasharray="5 5" strokeWidth="2" />
                         <path d={realLinePath} fill="none" filter="url(#glow)" stroke="#22d3ee" strokeWidth="3" />
-
-                        {/* Area under Real (Gradient) - complex without closing, simple overlay */}
-                        {/* To do this accurately we need to construct closed path for just real points */}
 
                         {/* Points */}
                         {rawPoints.map((p, i) => {

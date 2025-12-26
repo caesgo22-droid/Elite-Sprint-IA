@@ -52,6 +52,7 @@ export const AthletePassport: React.FC<AthletePassportProps> = ({ profile, histo
             if (acwrStats) {
                 if (acwrStats.status === 'Óptimo') form = 90;
                 else if (acwrStats.status === 'Carga Baja') form = 70;
+                else if (acwrStats.status === 'Alto Riesgo') form = 50;
                 else form = 50;
             }
             const iq = Math.min(99, 50 + ((userProfile.yearsExperience || 1) * 5));
