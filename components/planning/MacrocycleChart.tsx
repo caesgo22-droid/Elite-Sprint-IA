@@ -1,4 +1,4 @@
-
+// Macrocycle Chart - Optimized for 8-week visualization
 import * as React from 'react';
 import { useMemo, useState } from 'react';
 import { Injury } from '../../types';

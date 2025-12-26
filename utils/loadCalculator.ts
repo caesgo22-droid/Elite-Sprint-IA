@@ -1,3 +1,4 @@
+// ACWR Calculation Logic - Updated to 8-week history range
 import { TrainingPlan, LoadStats, PerformanceLog } from "../types";
 
 export interface DayStats {
