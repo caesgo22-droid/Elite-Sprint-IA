@@ -6,6 +6,27 @@ import { TrainingPlan, LoadStats, PerformanceLog } from "../types";
  * Calculates the Acute:Chronic Workload Ratio (ACWR)
  * Logic: Load = RPE * Duration (mins)
  */
+
+export const getSessionLoad = (session: any): number => {
+    // 1. Actual Load (Prioritize Feedback)
+    if (session.feedback?.completed && session.feedback.rpe) {
+        const duration = session.feedback.duration || 60;
+        return session.feedback.rpe * duration;
+    }
+
+    // 2. Planned/Estimated Load
+    const intensityMap: Record<string, number> = {
+        'Low': 3,
+        'Medium': 5,
+        'High': 8,
+        'Max': 9.5
+    };
+    const rpeEstimate = intensityMap[session.intensity] || 5;
+    const durationEstimate = session.duration || 60; // Default to 60m if not specified
+
+    return rpeEstimate * durationEstimate;
+};
+
 export const calculateACWR = (historyPlans: TrainingPlan[], logs: PerformanceLog[] = []): LoadStats => {
     // 1. Extract all completed sessions with feedback AND valid timestamp from Plans
     // Complexity: O(Sessions)
@@ -13,7 +34,7 @@ export const calculateACWR = (historyPlans: TrainingPlan[], logs: PerformanceLog
         .filter(s => s.feedback && s.feedback.completed && s.feedback.timestamp && !isNaN(new Date(s.feedback.timestamp).getTime()))
         .map(s => ({
             dateStr: new Date(s.feedback!.timestamp!).toDateString(),
-            load: (s.feedback?.rpe || 0) * (s.feedback?.duration || 0)
+            load: getSessionLoad(s)
         }));
 
     // 2. Extract load from Performance Logs
@@ -21,7 +42,7 @@ export const calculateACWR = (historyPlans: TrainingPlan[], logs: PerformanceLog
         .filter(l => l.date && !isNaN(new Date(l.date).getTime()) && (l.event === 'Therapy' || l.type === 'Training'))
         .map(l => ({
             dateStr: new Date(l.date).toDateString(),
-            load: 0 // Explicitly 0 as per current Type definition
+            load: (l.rpe && l.duration) ? l.rpe * l.duration : 0
         }));
 
     // 3. Aggregate Daily Loads into a Map - O(N)

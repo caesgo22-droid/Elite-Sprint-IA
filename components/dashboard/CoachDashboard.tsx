@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../../contexts/AppContext';
-import { findAthleteByEmail, fetchUserData, getPlanHistory, getAnalysisHistory } from '../../services/firebase';
+import { useData } from '../../contexts/DataContext';
+import { findAthleteByEmail } from '../../services/firebase';
 import { Users, Search, UserCircle2, Briefcase, Eye, Activity, ArrowLeft } from 'lucide-react';
-import { UserProfile } from '../../types';
-import { calculateACWR } from '../../utils/loadCalculator';
+import { UserProfile, RosterItem } from '../../types';
 import { useNavigate } from 'react-router-dom';
 import TaskManager from '../TaskManager';
 import { useToasts } from '../../contexts/ToastContext';
@@ -13,58 +13,11 @@ import { RiskPanel } from '../RiskPanel';
 
 const CoachDashboard: React.FC = () => {
     const { showToast } = useToasts();
-    const { adminProfile, updateRoster, viewingAthleteId, switchAthlete, t, deletedAnalyses } = useApp();
+    const { adminProfile, updateRoster, viewingAthleteId, switchAthlete, t } = useApp();
+    const { rosterData, loadingRoster } = useData();
     const navigate = useNavigate();
     const [emailQuery, setEmailQuery] = useState('');
     const [searching, setSearching] = useState(false);
-    const [rosterData, setRosterData] = useState<{ uid: string, profile: UserProfile, risk: 'High' | 'Low' | 'Optimal', acwrRatio: number, pendingReviews: number, lastActive: string }[]>([]);
-    const [loadingRoster, setLoadingRoster] = useState(false);
-
-    useEffect(() => {
-        const loadRoster = async () => {
-            if (!adminProfile.roster || adminProfile.roster.length === 0) {
-                setRosterData([]);
-                return;
-            }
-            setLoadingRoster(true);
-            const profiles = [];
-            for (const uid of adminProfile.roster) {
-                try {
-                    const data = await fetchUserData(uid);
-                    const pHist = await getPlanHistory(uid);
-                    const aHist = await getAnalysisHistory(uid);
-
-                    let risk: 'High' | 'Low' | 'Optimal' = 'Optimal';
-                    let acwrRatio = 0;
-                    if (data.currentPlan) {
-                        const acwr = calculateACWR([data.currentPlan as any, ...pHist as any], (data.logs || []) as any[]);
-                        acwrRatio = acwr.ratio;
-                        if (acwr.status === 'Alto Riesgo') risk = 'High';
-                        else if (acwr.status === 'Carga Baja') risk = 'Low';
-                    }
-
-                    const fourteenDaysAgo = Date.now() - (14 * 24 * 60 * 60 * 1000);
-                    const pendingReviews = aHist.filter((a: any) => {
-                        if (deletedAnalyses.includes(a.id)) return false; // Respect local deletion
-                        const savedAt = a.savedAt ? new Date(a.savedAt).getTime() : 0;
-                        return a.reviewStatus === 'Pending' && savedAt > fourteenDaysAgo;
-                    }).length;
-
-                    const lastLog = data.logs && data.logs.length > 0 ? data.logs[data.logs.length - 1] : null;
-                    const lastActive = lastLog ? lastLog.date : 'Inactivo';
-
-                    if (data.profile) {
-                        profiles.push({ uid, profile: data.profile as UserProfile, risk, acwrRatio, pendingReviews, lastActive });
-                    }
-                } catch (e) {
-                    console.error("Error loading roster item:", uid, e);
-                }
-            }
-            setRosterData(profiles);
-            setLoadingRoster(false);
-        };
-        loadRoster();
-    }, [adminProfile.roster, viewingAthleteId]); // Reload roster on return from athlete view to sync deletions
 
     const handleAddAthlete = async () => {
         if (!emailQuery.trim()) return;

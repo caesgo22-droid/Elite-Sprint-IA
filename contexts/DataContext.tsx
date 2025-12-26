@@ -52,6 +52,8 @@ interface DataContextType {
     switchAthlete: (uid: string | null) => void;
     refreshUserData: () => void;
     logActivity: (userId: string, event: any) => Promise<void>;
+    rosterData: import('../types').RosterItem[];
+    loadingRoster: boolean;
 }
 
 const defaultProfile: UserProfile = {
@@ -292,6 +294,63 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         else if (user) loadData(user.uid);
     }
 
+    const [rosterData, setRosterData] = useState<any[]>([]);
+    const [loadingRoster, setLoadingRoster] = useState(false);
+
+    // Load Roster Data (Coach View)
+    useEffect(() => {
+        const loadRoster = async () => {
+            if (!adminProfile?.roster || adminProfile.roster.length === 0) {
+                setRosterData([]);
+                return;
+            }
+            // Only load if we are staff/admin or if specifically requested (optimization: check role)
+            // But checking adminProfile.roster presence is enough signal.
+
+            setLoadingRoster(true);
+            const profiles: any[] = [];
+            for (const uid of adminProfile.roster) {
+                try {
+                    // Optimization: Could use Promise.all but might hit rate limits. Sequential is safer for now.
+                    const data = await fetchUserData(uid);
+                    const pHist = await getPlanHistory(uid);
+                    const aHist = await getAnalysisHistory(uid);
+
+                    let risk: 'High' | 'Low' | 'Optimal' = 'Optimal';
+                    let acwrRatio = 0;
+                    if (data.currentPlan) {
+                        const acwr = calculateACWR([data.currentPlan as any, ...pHist as any], (data.logs || []) as any[]);
+                        acwrRatio = acwr.ratio;
+                        if (acwr.status === 'Alto Riesgo') risk = 'High';
+                        else if (acwr.status === 'Carga Baja') risk = 'Low';
+                    }
+
+                    const fourteenDaysAgo = Date.now() - (14 * 24 * 60 * 60 * 1000);
+                    const pendingReviews = (aHist as any[]).filter((a: any) => {
+                        if (deletedAnalyses.includes(a.id)) return false;
+                        const savedAt = a.savedAt ? new Date(a.savedAt).getTime() : 0;
+                        return a.reviewStatus === 'Pending' && savedAt > fourteenDaysAgo;
+                    }).length;
+
+                    const lastLog = data.logs && data.logs.length > 0 ? data.logs[data.logs.length - 1] : null;
+                    const lastActive = lastLog ? lastLog.date : 'Inactivo';
+
+                    if (data.profile) {
+                        profiles.push({ uid, profile: data.profile, risk, acwrRatio, pendingReviews, lastActive });
+                    }
+                } catch (e) {
+                    console.error("Error loading roster item:", uid, e);
+                }
+            }
+            setRosterData(profiles);
+            setLoadingRoster(false);
+        };
+
+        if (adminProfile?.roster) {
+            loadRoster();
+        }
+    }, [adminProfile?.roster, deletedAnalyses]); // Reload if roster changes or if we delete an analysis locally
+
     const value = useMemo(() => ({
         userProfile,
         updateProfile,
@@ -321,10 +380,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         viewingAthleteId,
         switchAthlete,
         refreshUserData,
-        logActivity: handleLogActivity
+        logActivity: handleLogActivity,
+        rosterData,
+        loadingRoster
     }), [
         userProfile, currentPlan, planHistory, logs, chatHistory, lastAnalysis, analysisHistory,
-        acwrStats, nexusInsight, viewingAthleteId, deletedAnalyses
+        acwrStats, nexusInsight, viewingAthleteId, deletedAnalyses, rosterData, loadingRoster
     ]);
 
     return (

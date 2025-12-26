@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { useMemo, useState } from 'react';
 import { Injury } from '../../types';
+import { calculateACWR, getSessionLoad } from '../../utils/loadCalculator';
 import { Trophy, Activity, AlertCircle, Stethoscope, Info } from 'lucide-react';
 
 interface MacrocycleChartProps {
@@ -68,8 +69,7 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
             let load = 0;
             if (plan && plan.sessions) {
                 plan.sessions.forEach((s: any) => {
-                    const factor = s.intensity === 'Max' ? 5 : s.intensity === 'High' ? 4 : s.intensity === 'Medium' ? 3 : 1;
-                    load += factor * 10;
+                    load += getSessionLoad(s);
                 });
             }
             return load;

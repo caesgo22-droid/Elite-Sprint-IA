@@ -40,7 +40,7 @@ const getModelInstance = (modelName: string) => {
 
 export const analyzeTechnique = async (images: string[], bioData: any, advancedMetrics: any, analysisMode: string, userProfile?: any, lastAnalysis?: any, currentSession?: any): Promise<any> => {
     const isMaster = analysisMode === 'External';
-    const modelName = isMaster ? "gemini-1.5-pro-002" : "gemini-1.5-flash-002";
+    const modelName = isMaster ? "gemini-1.5-pro" : "gemini-1.5-flash";
     const model = getModelInstance(modelName);
     if (!model) return null;
 
@@ -99,7 +99,7 @@ export const analyzeTechnique = async (images: string[], bioData: any, advancedM
 };
 
 export const generateNexusInsight = async (logs: any[], readiness: any, analysisHistory: any[], acwr: any, profile?: UserProfile): Promise<NexusInsight | null> => {
-    const model = getModelInstance("gemini-1.5-flash-002");
+    const model = getModelInstance("gemini-1.5-flash");
     if (!model) return null;
 
     const acwrRatio = acwr?.ratio || 0;
@@ -197,7 +197,7 @@ export const generateTrainingPlan = async (
 };
 
 export const chatWithCoach = async (history: any[], message: string, context: any, persona: string = 'Coach'): Promise<any> => {
-    const model = getModelInstance("gemini-1.5-flash-002");
+    const model = getModelInstance("gemini-1.5-flash");
     if (!model) return { text: "Sistema Offline." };
 
     try {

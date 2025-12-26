@@ -147,7 +147,9 @@ export interface PerformanceLog {
   event: '100m' | '200m' | '400m' | 'Therapy'; // Added Therapy
   type: 'Training' | 'Competition' | 'Recovery'; // Added Recovery
   location: string;
-  time: number; // 0 for therapy
+  time: number; // Race time in seconds or 0 for non-race
+  rpe?: number; // 0-10 intensity
+  duration?: number; // Session duration in minutes for load calc
   notes: string;
 }
 
@@ -289,4 +291,13 @@ export interface DailyPrescription {
   coachNote?: string;
   sessions?: string[];
   recoveryTips?: string[];
+}
+
+export interface RosterItem {
+  uid: string;
+  profile: UserProfile;
+  risk: 'High' | 'Low' | 'Optimal';
+  acwrRatio: number;
+  pendingReviews: number;
+  lastActive: string;
 }
