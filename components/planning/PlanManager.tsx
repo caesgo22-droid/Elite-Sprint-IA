@@ -96,7 +96,10 @@ const PlanManager: React.FC = () => {
         <div key={currentPlan?.id || 'no-plan'} className="space-y-6 animate-in fade-in duration-500 pb-16">
             <div className="flex justify-between items-end border-b border-slate-800/50 pb-4">
                 <div>
-                    <h2 className="text-2xl font-black text-white uppercase tracking-tight">Macrociclo (8S)</h2>
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-2xl font-black text-white uppercase tracking-tight">Macrociclo (8S)</h2>
+                        <span className="px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-[8px] font-black rounded-full animate-pulse">BUILD: 8-WEEKS-READY</span>
+                    </div>
                     <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Nivel V World Athletics</p>
                 </div>
                 <div className="flex items-center gap-2">
