@@ -12,8 +12,8 @@ import {
 import { BiomechanicalAnalysis, VideoAnnotation } from '../../types';
 
 // Components
-import AnalysisResultCard from './AnalysisResultCard';
-import VideoAnnotationOverlay from './VideoAnnotationOverlay';
+import { AnalysisResultCard } from './AnalysisResultCard';
+import { VideoAnnotationOverlay } from './VideoAnnotationOverlay';
 
 // Services & Utils
 import { analyzeTechnique } from '../../services/geminiService';
