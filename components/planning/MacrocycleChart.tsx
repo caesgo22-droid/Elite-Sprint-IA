@@ -67,8 +67,8 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
             const historyStats = (acwrStats as any).history as any[];
 
             // Optimize: Sample every 7th day for clarity, or just dump the last 30 days
-            // Let's show the last 35 days (5 weeks)
-            const daysToShow = 35;
+            // Let's show the last 56 days (8 weeks)
+            const daysToShow = 56;
             const relevantFn = (i: number) => i > historyStats.length - daysToShow;
 
             historyStats.forEach((day: any, i: number) => {

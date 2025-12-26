@@ -105,8 +105,8 @@ export const calculateACWR = (historyPlans: TrainingPlan[], logs: PerformanceLog
     const history: DayStats[] = [];
     const today = new Date();
     // We want to generate history for the chart (e.g. last 6 weeks to show trends)
-    // Let's go back 42 days (6 weeks) for the chart, but calculation needs 28 days prior to THAT.
-    const chartDays = 42;
+    // Let's go back 56 days (8 weeks) for the chart, but calculation needs 28 days prior to THAT.
+    const chartDays = 56;
 
     // Determine range
     // Earliest needed data point is Today - ChartDays - 28 days (for chronic of the first chart point)
