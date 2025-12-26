@@ -58,8 +58,6 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
     const [tooltip, setTooltip] = useState<{ x: number; y: number; content: React.ReactNode } | null>(null);
     const [editMode, setEditMode] = useState(false);
 
-    console.log("📊 MacrocycleChart v56D-8S Loaded");
-
     // 1. Process Data
     const { chartPoints, milestones, metrics, maxLoad, rawPoints } = useMemo(() => {
         const rawPoints: any[] = [];
@@ -260,7 +258,7 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
             <div className="flex justify-between items-center z-10 relative mb-4">
                 <div>
                     <h2 className="text-[10px] font-bold tracking-widest text-cyan-400 uppercase mb-0.5">Entrenamiento</h2>
-                    <h1 className="text-xl font-black tracking-tight text-white leading-tight">Macrociclo (8S)</h1>
+                    <h1 className="text-xl font-black tracking-tight text-white leading-tight">Macrociclo</h1>
                 </div>
             </div>
 
