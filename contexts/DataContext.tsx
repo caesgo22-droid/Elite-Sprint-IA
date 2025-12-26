@@ -366,6 +366,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     if (data.profile) {
                         profiles.push({ uid, profile: data.profile, risk, acwrRatio, pendingReviews, lastActive });
+                    } else {
+                        console.warn(`⚠️ Athlete ${uid} exists in roster but has no profile data. Skipping display.`);
+                        console.warn(`Data received:`, data);
                     }
                 } catch (e) {
                     console.error("Error loading roster item:", uid, e);

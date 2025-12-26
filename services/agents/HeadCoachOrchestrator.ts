@@ -19,7 +19,8 @@ export class HeadCoachOrchestrator {
             phase: string;
             event: string;
             daysToRace: number;
-        }
+        },
+        day?: string
     ) {
         console.log("🏟️ Board Meeting Started (Elite 5 Workflow)...");
 
@@ -39,7 +40,7 @@ export class HeadCoachOrchestrator {
         if (safetyCheck.safetyClearance === 'RED') {
             return {
                 finalPlan: {
-                    day: "Hoy",
+                    day: day || "Hoy",
                     focus: "Recuperación / Gestión de Dolor",
                     warmup: ["Movilidad articular suave", "Estiramientos dinámicos"],
                     mainSet: ["Descanso total o caminata suave (20 min)", "Hielo/Compresión en zona de dolor"],
@@ -77,7 +78,7 @@ export class HeadCoachOrchestrator {
         // Map Strategist strings to TrainingSession arrays
         return {
             finalPlan: {
-                day: "Hoy",
+                day: day || "Hoy",
                 focus: sessionDesign.sessionPlan.intensity,
                 warmup: [sessionDesign.sessionPlan.warmup],
                 mainSet: [sessionDesign.sessionPlan.mainSet],

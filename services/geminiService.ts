@@ -179,15 +179,26 @@ export const generateTrainingPlan = async (
             daysToRace: daysToRace
         };
 
-        const result = await orchestrator.generateDailyPlan(athleteData);
+        // Use trainingDays from profile, fallback to default
+        const trainingDays = profile.trainingDays || ['Mon', 'Wed', 'Fri'];
+
+        // Generate a session for EACH training day
+        const sessions = [];
+        for (const day of trainingDays) {
+            const result = await orchestrator.generateDailyPlan(athleteData, day);
+            sessions.push({
+                ...result.finalPlan,
+                day: day
+            });
+        }
 
         return {
             id: Date.now().toString(),
             createdAt: new Date().toISOString(),
             phase: athleteData.daysToRace < 14 ? 'Competition' : 'General Prep',
-            sessions: [result.finalPlan as any],
-            weeklyGoal: `Optimización Elite 5: ${result.finalPlan.focus}`,
-            rationale: result.coachRationale
+            sessions: sessions,
+            weeklyGoal: `Plan Elite 5: ${trainingDays.length} sesiones/semana`,
+            rationale: `Generado con ${trainingDays.length} días: ${trainingDays.join(', ')}`
         };
 
     } catch (error) {
