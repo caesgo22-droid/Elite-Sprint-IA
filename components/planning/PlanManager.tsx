@@ -180,7 +180,9 @@ const PlanManager: React.FC = () => {
                         <h3 className="text-xl font-bold text-white mb-2">{currentPlan.weeklyGoal}</h3>
                         {currentPlan.rationale && (
                             <div className="mt-4 p-4 bg-slate-950/50 rounded-xl border border-slate-800/50">
-                                <p className="text-xs text-slate-400 leading-relaxed italic"><span className="text-cyan-500 font-bold not-italic font-mono mr-2">LOGICA:</span>{currentPlan.rationale}</p>
+                                <div className="mt-4 p-4 bg-slate-950/50 rounded-xl border border-slate-800/50">
+                                    <p className="text-xs text-slate-400 leading-relaxed italic"><span className="text-cyan-500 font-bold not-italic font-mono mr-2">LOGICA (Al crear el plan):</span>{currentPlan.rationale}</p>
+                                </div>
                             </div>
                         )}
                     </div>

@@ -7,6 +7,7 @@ import { UserProfile, StaffBriefing, StaffReply } from '../../types';
 import { MacrocycleChart } from '../planning/MacrocycleChart';
 import { AthletePassport } from './AthletePassport';
 import { ProfileConfig } from './ProfileConfig';
+import { calculateACWR } from '../../utils/loadCalculator';
 
 interface AthleteProfileDetailProps {
     uid: string;
@@ -43,15 +44,23 @@ export const AthleteProfileDetail: React.FC<AthleteProfileDetailProps> = ({
         getStaffBriefings(uid).then(setBriefings);
     }, [uid]);
 
-    const displayAcwr = useMemo(() => {
-        if (athleteRef) {
-            return {
-                ratio: athleteRef.acwrRatio,
-                status: athleteRef.risk === 'High' ? 'Alto Riesgo' : athleteRef.risk === 'Low' ? 'Carga Baja' : 'Óptimo' as 'Óptimo' | 'Alto Riesgo' | 'Carga Baja'
-            };
+    // Recalculate ACWR explicitly to ensure we have the full history for the chart
+    // athleteRef is just a summary from the roster, it lacks the daily history array.
+    const calculatedStats = useMemo(() => {
+        if (currentPlan || planHistory.length > 0 || logs.length > 0) {
+            return calculateACWR(currentPlan ? [currentPlan, ...planHistory] : planHistory, logs);
         }
-        return acwrStats || { ratio: 0, status: 'Óptimo' as 'Óptimo' | 'Alto Riesgo' | 'Carga Baja' };
-    }, [athleteRef, acwrStats]);
+        return acwrStats || {
+            ratio: 0,
+            status: 'Óptimo' as 'Óptimo' | 'Alto Riesgo' | 'Carga Baja',
+            acuteLoad: 0,
+            chronicLoad: 0,
+            history: [],
+            limits: { minMsg: '0.8', maxMsg: '1.5' }
+        };
+    }, [currentPlan, planHistory, logs, acwrStats]);
+
+    const displayAcwr = calculatedStats;
 
     const handlePostBriefing = async () => {
         if (!newBriefing.trim()) return;

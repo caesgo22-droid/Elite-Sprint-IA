@@ -199,6 +199,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         else if (targetId && !isDataLoaded) console.warn("Save blocked: Data not loaded.");
     };
 
+    const updateRosterEntry = (uid: string, newLogs: PerformanceLog[], newPlan: TrainingPlan | null, newPlanHistory: TrainingPlan[]) => {
+        setRosterData(prev => prev.map(item => {
+            if (item.uid === uid) {
+                const allPlans = newPlan ? [newPlan, ...newPlanHistory] : newPlanHistory;
+                const acwr = calculateACWR(allPlans, newLogs);
+                const lastLog = newLogs.length > 0 ? newLogs[newLogs.length - 1] : null;
+                return {
+                    ...item,
+                    acwrRatio: acwr.ratio,
+                    risk: acwr.status === 'Alto Riesgo' ? 'High' : acwr.status === 'Carga Baja' ? 'Low' : 'Optimal',
+                    lastActive: lastLog ? lastLog.date : 'Inactivo'
+                };
+            }
+            return item;
+        }));
+    };
+
     const updateCompetitions = (competitions: { id: string; name: string; date: string }[]) => {
         const newProfile = { ...userProfile, competitions };
         updateProfile(newProfile);
@@ -211,11 +228,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         setCurrentPlan(plan);
         if (targetId && isInitialized && isDataLoaded) saveTrainingPlan(targetId, plan);
+        if (targetId) updateRosterEntry(targetId, logs, plan, currentPlan ? [currentPlan, ...planHistory] : planHistory);
     };
 
     const updateTrainingPlan = (planId: string, updatedPlan: TrainingPlan) => {
         setCurrentPlan(updatedPlan);
         if (targetId && isInitialized && isDataLoaded) saveTrainingPlan(targetId, updatedPlan);
+        if (targetId) updateRosterEntry(targetId, logs, updatedPlan, planHistory);
     };
 
     const resetPlan = async () => {
@@ -226,6 +245,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await saveTrainingPlan(targetId, null);
         }
         setCurrentPlan(null);
+        if (targetId) updateRosterEntry(targetId, logs, null, [currentPlan, ...planHistory]);
     };
 
     const updateSession = (dayName: string, updates: Partial<any>) => {
@@ -242,21 +262,28 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const newPlan = { ...currentPlan, sessions: updatedSessions };
         setCurrentPlan(newPlan);
         if (targetId && isInitialized && isDataLoaded) saveTrainingPlan(targetId, newPlan);
+        if (targetId) updateRosterEntry(targetId, logs, newPlan, planHistory);
     };
 
     const addLog = (log: PerformanceLog) => {
-        setLogs(prev => [...prev, log]);
+        const newLogs = [...logs, log];
+        setLogs(newLogs);
         if (targetId && isInitialized && isDataLoaded) addPerformanceLog(targetId, log);
+        if (targetId) updateRosterEntry(targetId, newLogs, currentPlan, planHistory);
     };
 
     const editLog = (updatedLog: PerformanceLog) => {
-        setLogs(prev => prev.map(log => log.id === updatedLog.id ? updatedLog : log));
+        const newLogs = logs.map(log => log.id === updatedLog.id ? updatedLog : log);
+        setLogs(newLogs);
         if (targetId && isInitialized && isDataLoaded) updatePerformanceLog(targetId, updatedLog);
+        if (targetId) updateRosterEntry(targetId, newLogs, currentPlan, planHistory);
     };
 
     const deleteLog = (id: string) => {
-        setLogs(prev => prev.filter(l => l.id !== id));
+        const newLogs = logs.filter(l => l.id !== id);
+        setLogs(newLogs);
         if (targetId && isInitialized) deletePerformanceLog(targetId, id);
+        if (targetId) updateRosterEntry(targetId, newLogs, currentPlan, planHistory);
     };
 
     const addChatMessage = (msg: ChatMessage) => setChatHistory(prev => [...prev, msg]);
