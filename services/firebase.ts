@@ -1,7 +1,8 @@
 import * as firebaseApp from "firebase/app";
 import * as firebaseAuth from "firebase/auth";
-import { getFirestore, doc, setDoc, getDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc, Firestore, where, limit } from "firebase/firestore";
+import { getFirestore, doc, setDoc, getDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc, Firestore, where, limit, onSnapshot } from "firebase/firestore";
 import { getEnv } from "../utils/env";
+import { UserProfileSchema, TrainingPlanSchema, PerformanceLogSchema } from "../utils/validators";
 
 const firebaseConfig = {
   apiKey: getEnv("FIREBASE_API_KEY") || getEnv("VITE_FIREBASE_API_KEY"),
@@ -81,7 +82,9 @@ export const getPlanHistory = async (uid: string) => {
 
 export const addPerformanceLog = async (uid: string, log: any) => {
   if (!db || !isInitialized) return;
-  try { await setDoc(doc(db, "users", uid, "logs", log.id), log); } catch (e) { console.error(e); }
+  // Let the caller handle errors for optimistic, or we return status?
+  // Ideally we throw so the caller knows to rollback.
+  await setDoc(doc(db, "users", uid, "logs", log.id), log);
 };
 
 export const updatePerformanceLog = async (uid: string, log: any) => {
@@ -123,19 +126,111 @@ export const fetchUserData = async (uid: string) => {
     const logsQuery = query(collection(db, "users", uid, "logs"));
     const logsSnapshot = await getDocs(logsQuery);
 
-    const logs = logsSnapshot.docs.map(d => d.data());
+    const logs = logsSnapshot.docs.map(d => {
+      const data = d.data();
+      const result = PerformanceLogSchema.safeParse(data);
+      if (!result.success) {
+        console.warn(`⚠️ Log ${d.id} validation failed:`, result.error.format());
+        // Return data anyway to prevent data loss perception, but marked?
+        return { ...data, id: d.id };
+      }
+      return data; // already includes id? No, d.data() usually doesn't unless saved.
+    });
+
     const userData = userDoc.exists() ? userDoc.data() : {};
+
+    // Validate Profile
+    let validatedProfile = null;
+    if (userData.profile) {
+      const profileResult = UserProfileSchema.safeParse(userData.profile);
+      if (profileResult.success) {
+        validatedProfile = profileResult.data;
+      } else {
+        console.error("❌ Profile Validation Error:", profileResult.error.format());
+        // Fallback: return raw profile but warn
+        validatedProfile = userData.profile;
+      }
+    }
+
+    // Validate Plan
+    let validatedPlan = null;
+    if (userData.currentPlan) {
+      const planResult = TrainingPlanSchema.safeParse(userData.currentPlan);
+      if (planResult.success) {
+        validatedPlan = planResult.data;
+      } else {
+        console.error("❌ Plan Validation Error:", planResult.error.format());
+        validatedPlan = userData.currentPlan;
+      }
+    }
 
     return {
       status: 'success',
-      profile: userData.profile || null,
-      currentPlan: userData.currentPlan || null,
+      profile: validatedProfile,
+      currentPlan: validatedPlan,
       logs: logs || []
     };
   } catch (e: any) {
     console.error(e);
     return { status: 'error', error: e.message, profile: null, currentPlan: null, logs: [] };
   }
+};
+
+// --- Real-time Subscriptions (Phase 2) ---
+
+export const subscribeToUserData = (uid: string, callback: (data: any) => void) => {
+  if (!db || !isInitialized) return () => { };
+
+  // 1. Subscribe to User Profile & Plan
+  const userUnsub = onSnapshot(doc(db, "users", uid), (docSnap) => {
+    const userData = docSnap.exists() ? docSnap.data() : {};
+
+    // Validate Profile
+    let validatedProfile = null;
+    if (userData.profile) {
+      const profileResult = UserProfileSchema.safeParse(userData.profile);
+      if (profileResult.success) {
+        validatedProfile = profileResult.data;
+      } else {
+        console.error("❌ Real-time Profile Error:", profileResult.error.format());
+        validatedProfile = userData.profile;
+      }
+    }
+
+    // Validate Plan
+    let validatedPlan = null;
+    if (userData.currentPlan) {
+      const planResult = TrainingPlanSchema.safeParse(userData.currentPlan);
+      if (planResult.success) {
+        validatedPlan = planResult.data;
+      } else {
+        console.error("❌ Real-time Plan Error:", planResult.error.format());
+        validatedPlan = userData.currentPlan;
+      }
+    }
+
+    callback({ type: 'user', profile: validatedProfile, currentPlan: validatedPlan });
+  });
+
+  // 2. Subscribe to Logs
+  const logsUnsub = onSnapshot(query(collection(db, "users", uid, "logs")), (snapshot) => {
+    const logs = snapshot.docs.map(d => {
+      const data = d.data();
+      const result = PerformanceLogSchema.safeParse(data);
+      if (!result.success) {
+        console.warn(`⚠️ Real-time Log Error ${d.id}:`, result.error.format());
+        return { ...data, id: d.id };
+      }
+      return data;
+    });
+    callback({ type: 'logs', logs });
+  });
+
+  // Return unsubscriber for both
+  return () => {
+    userUnsub();
+    logsUnsub();
+  };
 };
 
 // --- STAFF / COACH FEATURES ---
