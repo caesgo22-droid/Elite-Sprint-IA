@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 
 export const useMediaPipe = () => {
@@ -39,5 +39,17 @@ export const useMediaPipe = () => {
         init();
     }, []);
 
-    return { poseLandmarker, isReady, error };
+    const reset = useCallback(() => {
+        if (poseLandmarker) {
+            try {
+                poseLandmarker.close(); // Close and we will recreate or just use reset if available
+                // Re-initialization would be better if it crashes, but let's try calling the internal reset if it exists
+                (poseLandmarker as any).reset?.();
+            } catch (e) {
+                console.warn("MediaPipe reset failed:", e);
+            }
+        }
+    }, [poseLandmarker]);
+
+    return { poseLandmarker, isReady, error, reset };
 };

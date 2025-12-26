@@ -12,8 +12,10 @@ export const useSkeletonOverlay = () => {
         displayWidth: number,
         displayHeight: number
     ) => {
-        if (!landmarks || landmarks.length === 0) return;
+        if (!landmarks || landmarks.length === 0 || videoWidth === 0) return;
 
+        ctx.canvas.width = displayWidth;
+        ctx.canvas.height = displayHeight;
         ctx.clearRect(0, 0, displayWidth, displayHeight);
 
         // Calculate aspect ratios for "object-contain" scaling

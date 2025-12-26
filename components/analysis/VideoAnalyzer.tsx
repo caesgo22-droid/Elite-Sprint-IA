@@ -126,6 +126,8 @@ const VideoAnalyzer: React.FC = () => {
         }
     };
 
+    const lastTimestampRef = useRef<number>(-1);
+
     // Scan Implementation (Uses local engine but could be hooked further)
     const performBiomechanicalScan = async (video: HTMLVideoElement): Promise<any[]> => {
         return new Promise(async (resolve, reject) => {
@@ -134,39 +136,61 @@ const VideoAnalyzer: React.FC = () => {
             setStatusMessage("Escanenado Biomecánica...");
             const tempHistory: any[] = [];
             physicsEngine.current.reset();
+            lastTimestampRef.current = -1; // Reset for new scan
 
             const onEnded = () => {
                 isScanningInternal.current = false;
+                video.pause();
                 resolve(tempHistory);
+            };
+
+            const cleanup = () => {
+                isScanningInternal.current = false;
+                video.removeEventListener('ended', onEnded);
             };
 
             video.addEventListener('ended', onEnded, { once: true });
             video.currentTime = 0;
             isScanningInternal.current = true;
 
-            try { await video.play(); } catch (e) { reject(e); return; }
+            try { await video.play(); } catch (e) { cleanup(); reject(e); return; }
 
             const processFrame = () => {
-                if (!isScanningInternal.current || video.ended || video.paused) return;
+                if (!isScanningInternal.current || video.ended || video.paused) {
+                    cleanup();
+                    resolve(tempHistory);
+                    return;
+                }
 
-                const result = poseLandmarker.detectForVideo(video, video.currentTime * 1000);
-                if (result?.landmarks?.[0]) {
-                    const lms = result.landmarks[0];
-                    const com = physicsEngine.current.calculateCenterOfMass(lms);
-                    const mechanics = physicsEngine.current.calculateSprintMechanics(lms);
-                    const advanced = physicsEngine.current.estimateStrideParams(lms, userProfile.height || 175, video.currentTime * 1000, com);
+                const timestamp = video.currentTime * 1000;
 
-                    tempHistory.push({ landmarks: lms, mechanics, advanced, com, timestamp: video.currentTime * 1000 });
+                // CRITICAL: MediaPipe requires strictly increasing timestamps
+                if (timestamp > lastTimestampRef.current) {
+                    try {
+                        const result = poseLandmarker.detectForVideo(video, timestamp);
+                        lastTimestampRef.current = timestamp;
 
-                    // Draw live skeleton
-                    if (showSkeleton && overlayRef.current) {
-                        const ctx = overlayRef.current.getContext('2d');
-                        if (ctx) {
-                            drawSkeleton(
-                                ctx, [lms], video.videoWidth, video.videoHeight,
-                                video.clientWidth, video.clientHeight
-                            );
+                        if (result?.landmarks?.[0]) {
+                            const lms = result.landmarks[0];
+                            const com = physicsEngine.current.calculateCenterOfMass(lms);
+                            const mechanics = physicsEngine.current.calculateSprintMechanics(lms);
+                            const advanced = physicsEngine.current.estimateStrideParams(lms, userProfile.height || 175, timestamp, com);
+
+                            tempHistory.push({ landmarks: lms, mechanics, advanced, com, timestamp });
+
+                            // Draw live skeleton
+                            if (showSkeleton && overlayRef.current) {
+                                const ctx = overlayRef.current.getContext('2d');
+                                if (ctx) {
+                                    drawSkeleton(
+                                        ctx, [lms], video.videoWidth, video.videoHeight,
+                                        video.clientWidth, video.clientHeight
+                                    );
+                                }
+                            }
                         }
+                    } catch (e) {
+                        console.warn("MediaPipe Frame Error:", e);
                     }
                 }
                 requestAnimationFrame(processFrame);
@@ -242,22 +266,40 @@ const VideoAnalyzer: React.FC = () => {
     };
 
     // UI Effects
+    const lastUiTimestampRef = useRef<number>(-1);
+
     useEffect(() => {
-        if (!videoRef.current || isScanningInternal.current) return;
+        if (!videoRef.current || !poseLandmarker) return;
 
         const loop = () => {
-            if (videoRef.current && showSkeleton && overlayRef.current) {
-                setCurrentTime(videoRef.current.currentTime);
-                const result = poseLandmarker?.detectForVideo(videoRef.current, videoRef.current.currentTime * 1000);
-                if (result?.landmarks?.[0]) {
-                    const ctx = overlayRef.current.getContext('2d');
-                    if (ctx) {
-                        drawSkeleton(
-                            ctx, [result.landmarks[0]], videoRef.current.videoWidth,
-                            videoRef.current.videoHeight, videoRef.current.clientWidth,
-                            videoRef.current.clientHeight
-                        );
+            if (videoRef.current && showSkeleton && overlayRef.current && !isScanningInternal.current) {
+                const video = videoRef.current;
+                setCurrentTime(video.currentTime);
+                const timestamp = video.currentTime * 1000;
+
+                // Handle seeks or loops by checking non-monotonic timestamps
+                if (timestamp > lastUiTimestampRef.current) {
+                    try {
+                        const result = poseLandmarker.detectForVideo(video, timestamp);
+                        lastUiTimestampRef.current = timestamp;
+
+                        if (result?.landmarks?.[0]) {
+                            const ctx = overlayRef.current.getContext('2d');
+                            if (ctx) {
+                                drawSkeleton(
+                                    ctx, [result.landmarks[0]], video.videoWidth,
+                                    video.videoHeight, video.clientWidth,
+                                    video.clientHeight
+                                );
+                            }
+                        }
+                    } catch (e) {
+                        // If we hit the timestamp error, reset internal ref
+                        lastUiTimestampRef.current = -1;
                     }
+                } else if (timestamp < lastUiTimestampRef.current - 100) {
+                    // Reset if we seeked back significantly
+                    lastUiTimestampRef.current = -1;
                 }
             }
             requestAnimationFrame(loop);
