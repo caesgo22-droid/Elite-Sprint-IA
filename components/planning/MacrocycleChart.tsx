@@ -58,6 +58,8 @@ export const MacrocycleChart: React.FC<MacrocycleChartProps> = ({
     const [tooltip, setTooltip] = useState<{ x: number; y: number; content: React.ReactNode } | null>(null);
     const [editMode, setEditMode] = useState(false);
 
+    console.log("📊 MacrocycleChart v56D-8S Loaded");
+
     // 1. Process Data
     const { chartPoints, milestones, metrics, maxLoad, rawPoints } = useMemo(() => {
         const rawPoints: any[] = [];
